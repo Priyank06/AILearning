@@ -49,3 +49,4 @@ appsettings.Development.json
 *.secret
 .env
 keys/
+ai-learning.code-workspace
