@@ -1,0 +1,51 @@
+## .NET
+bin/
+obj/
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+.vs/
+.vscode/settings.json
+
+## Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+build/
+bld/
+[Bb]in/
+[Oo]bj/
+
+## NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+
+## Logs
+*.log
+logs/
+
+## Temporary files
+*.tmp
+*~
+.DS_Store
+Thumbs.db
+
+## AI Learning specific
+temp/
+experiments/
+Archive/*.tar.gz
+*.backup
+
+## Azure/API Keys (IMPORTANT!)
+appsettings.Development.json
+*.secret
+.env
+keys/
