@@ -4,58 +4,81 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject IMultiFileAnalysisService MultiFileAnalysisService
 @inject IFileDownloadService FileDownloadService
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
 
-<PageTitle>Project Analysis</PageTitle>
+<PageTitle>Enterprise Project Analysis</PageTitle>
 
 <div class="container-fluid">
     <div class="row mb-4">
         <div class="col-12 text-center">
-            <h1 class="display-4 mb-2"><span class="oi oi-folder"></span> Project Analysis</h1>
-            <p class="lead text-muted">AI-Powered Legacy Project Assessment</p>
+            <h1 class="display-4 mb-2">Enterprise Project Analysis</h1>
+            <p class="lead text-muted">Advanced Legacy System Assessment Platform</p>
         </div>
     </div>
 
     <div class="row">
         <!-- Upload Section -->
-        <div class="col-lg-6">
+        <div class="col-lg-4">
             <div class="card shadow">
                 <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0"><span class="oi oi-folder"></span> Upload Project Files</h5>
+                    <h5 class="mb-0">Project File Upload</h5>
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
                         <label class="form-label">Analysis Type:</label>
                         <select class="form-select" @bind="selectedAnalysisType">
-                            <option value="general"><span class="oi oi-magnifying-glass"></span> General Assessment</option>
-                            <option value="security"><span class="oi oi-shield"></span> Security Audit</option>
-                            <option value="performance"><span class="oi oi-flash"></span> Performance Analysis</option>
-                            <option value="migration"><span class="oi oi-loop-circular"></span> Migration Readiness</option>
+                            <option value="general">General Code Assessment</option>
+                            <option value="security">Security Analysis</option>
+                            <option value="performance">Performance Review</option>
+                            <option value="migration">Migration Readiness</option>
                         </select>
                     </div>
 
                     <div class="upload-area mb-3" @ondragover="HandleDragOver" @ondragover:preventDefault="true"
                          @ondrop="HandleFileDrop" @ondrop:preventDefault="true">
                         <div class="text-center p-4">
-                            <div style="font-size: 3rem;" class="text-muted mb-3"><span class="oi oi-folder"></span></div>
-                            <h6>Drop C# Files Here</h6>
-                            <p class="text-muted mb-3">Or click to browse (max 10 files)</p>
-                            <InputFile id="fileInput" OnChange="HandleFileSelection" multiple accept=".cs" class="d-none" />
-                            <label for="fileInput" class="btn btn-primary"><span class="oi oi-folder"></span> Browse Files</label>
+                            <div style="font-size: 3rem;" class="text-muted mb-3">
+                                <i class="bi bi-folder2-open"></i>
+                            </div>
+                            <h6>Upload C# Project Files</h6>
+                            <p class="text-muted mb-3">Select multiple C# files from your project folder</p>
+
+                            <!-- Enhanced file input to allow folder-like selection -->
+                            <InputFile id="fileInput" OnChange="HandleFileSelection" multiple accept=".cs" class="d-none" webkitdirectory />
+                            <label for="fileInput" class="btn btn-primary me-2">
+                                <i class="bi bi-folder-plus"></i> Select Project Folder
+                            </label>
+
+                            <!-- Alternative individual file selection -->
+                            <InputFile id="individualFiles" OnChange="HandleIndividualFileSelection" multiple accept=".cs" class="d-none" />
+                            <label for="individualFiles" class="btn btn-outline-secondary">
+                                <i class="bi bi-file-plus"></i> Select Individual Files
+                            </label>
+
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <strong>Folder:</strong> Automatically finds all .cs files in project<br>
+                                    <strong>Individual:</strong> Select specific files manually
+                                </small>
+                            </div>
                         </div>
                     </div>
 
                     @if (selectedFiles.Any())
                     {
                         <div class="mb-3">
-                            <h6><span class="oi oi-document"></span> Selected Files (@selectedFiles.Count):</h6>
+                            <h6>Selected Files (@selectedFiles.Count):</h6>
                             <div style="max-height: 200px; overflow-y: auto;">
                                 @foreach (var file in selectedFiles)
                                 {
                                     <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-1">
-                                        <span><span class="oi oi-document"></span> @file.Name</span>
+                                        <span><i class="bi bi-file-earmark-code"></i> @file.Name</span>
                                         <div>
                                             <small class="text-muted me-2">@FormatFileSize(file.Size)</small>
-                                            <button class="btn btn-sm btn-outline-danger" @onclick="@(() => RemoveFile(file))"><span class="oi oi-x"></span></button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="@(() => RemoveFile(file))">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
                                         </div>
                                     </div>
                                 }
@@ -67,21 +90,28 @@
                                 @if (isAnalyzing)
                                 {
                                     <span class="spinner-border spinner-border-sm me-2"></span>
-                                    <text>Analyzing @selectedFiles.Count files...</text>
+                                    <text>Processing @selectedFiles.Count files...</text>
                                 }
                                 else
                                 {
-                                    <text><span class="oi oi-media-play"></span> Analyze Project (@selectedFiles.Count files)</text>
+                                    <text><i class="bi bi-play-circle"></i> Analyze Project (@selectedFiles.Count files)</text>
                                 }
                             </button>
-                            <button class="btn btn-outline-secondary" @onclick="ClearFiles"><span class="oi oi-trash"></span> Clear All</button>
+                            <button class="btn btn-outline-secondary" @onclick="ClearFiles">
+                                <i class="bi bi-trash"></i> Clear All
+                            </button>
                         </div>
                     }
 
-                    @if (!string.IsNullOrEmpty(statusMessage))
+                    @if (analysisResult != null)
                     {
-                        <div class="alert alert-info mt-3">
-                            <small>@statusMessage</small>
+                        <div class="mt-3">
+                            <button class="btn btn-outline-info btn-sm me-2" @onclick="TestSimpleCharts">
+                                Test Simple Charts
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" @onclick="DebugChartElements">
+                                Debug Elements
+                            </button>
                         </div>
                     }
                 </div>
@@ -89,13 +119,13 @@
         </div>
 
         <!-- Results Section -->
-        <div class="col-lg-6">
+        <div class="col-lg-8">
             @if (analysisResult != null)
             {
-                <!-- Project Summary -->
+                <!-- Project Summary Cards -->
                 <div class="card shadow mb-3">
                     <div class="card-header bg-success text-white">
-                        <h5 class="mb-0"><span class="oi oi-bar-chart"></span> Project Summary</h5>
+                        <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Project Summary</h5>
                     </div>
                     <div class="card-body">
                         <div class="row">
@@ -103,7 +133,7 @@
                                 <div class="card bg-primary text-white text-center">
                                     <div class="card-body p-2">
                                         <h4>@analysisResult.TotalFiles</h4>
-                                        <small>Files</small>
+                                        <small>Source Files</small>
                                     </div>
                                 </div>
                             </div>
@@ -135,27 +165,179 @@
                     </div>
                 </div>
 
-                <!-- Risk Assessment -->
+                <!-- Charts Section -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <h5 class="alert-heading mb-3"><i class="bi bi-graph-up"></i> Executive Dashboard</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card border-primary">
+                                        <div class="card-header bg-primary text-white">
+                                            <h6 class="mb-0">Priority Files for Review</h6>
+                                            <small>Files requiring immediate technical attention</small>
+                                        </div>
+                                        <div class="card-body" style="height: 300px;">
+                                            <canvas id="complexityChart" width="400" height="250"></canvas>
+                                        </div>
+                                        <div class="card-footer text-muted">
+                                            <small><strong>Action:</strong> Focus development effort on highest-scoring files first</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-warning">
+                                        <div class="card-header bg-warning text-dark">
+                                            <h6 class="mb-0">Project Risk Overview</h6>
+                                            <small>Overall project risk assessment distribution</small>
+                                        </div>
+                                        <div class="card-body" style="height: 300px;">
+                                            <canvas id="riskChart" width="400" height="250"></canvas>
+                                        </div>
+                                        <div class="card-footer text-muted">
+                                            <small><strong>Insight:</strong> Risk distribution indicates project complexity level</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="card shadow">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0">File Size vs Complexity Analysis</h6>
+                                <small>Relationship between file size and complexity</small>
+                            </div>
+                            <div class="card-body" style="height: 250px; padding: 10px;">
+                                <!-- Simple visual representation instead of complex chart -->
+                                <div class="row text-center">
+                                    @foreach (var file in analysisResult.FileResults.Take(6))
+                                    {
+                                        <div class="col-2">
+                                            <div class="card @GetComplexityCardClass(file.ComplexityScore) text-white">
+                                                <div class="card-body p-2">
+                                                    <small class="d-block">@(file.FileName.Length > 12 ? file.FileName.Substring(0, 12) + "..." : file.FileName)</small>
+                                                    <strong>@file.ComplexityScore</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ADD: Place this BEFORE your "Risk Assessment Summary" section -->
+                <!-- Clean, properly formatted Executive Summary -->
+                @if (analysisResult != null)
+                {
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card shadow border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-clipboard-check"></i> Executive Summary & Recommendations
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <!-- Left Column: Assessment & Actions -->
+                                        <div class="col-md-8">
+                                            <h6 class="text-success mb-3">
+                                                <i class="bi bi-graph-up"></i> Project Assessment
+                                            </h6>
+                                            <p class="mb-3">
+                                                Analysis of <strong>@analysisResult.TotalFiles files</strong> containing
+                                                <strong>@analysisResult.TotalClasses classes</strong> and
+                                                <strong>@analysisResult.TotalMethods methods</strong>.
+                                                Overall risk level:
+                                                <span class="badge bg-@(GetRiskBadgeClass())">
+                                                    @analysisResult.OverallRiskLevel
+                                                </span>
+                                            </p>
+
+                                            <h6 class="text-primary mb-3">
+                                                <i class="bi bi-target"></i> Priority Actions
+                                            </h6>
+
+                                            @if (analysisResult.KeyRecommendations.Any())
+                                            {
+                                                <ul class="list-unstyled">
+                                                    @foreach (var recommendation in analysisResult.KeyRecommendations.Take(3))
+                                                    {
+                                                        <li class="mb-2">
+                                                            <i class="bi bi-arrow-right text-primary"></i>
+                                                            <strong>@recommendation</strong>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            }
+                                            else
+                                            {
+                                                <div class="alert alert-success">
+                                                    <strong>Recommended Approach:</strong>
+                                                    Standard development practices suitable for this project complexity level.
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <!-- Right Column: Business Impact -->
+                                        <div class="col-md-4">
+                                            <div class="card bg-light">
+                                                <div class="card-body text-center">
+                                                    <h6 class="card-title">Business Impact</h6>
+
+                                                    <div class="display-6 text-@(GetComplexityTextClass()) mb-2">
+                                                        @analysisResult.OverallComplexityScore<small>/100</small>
+                                                    </div>
+                                                    <small class="text-muted">Complexity Score</small>
+
+                                                    <hr />
+
+                                                    <div class="mt-3">
+                                                        <strong class="text-@(GetTimelineColorClass())">
+                                                            @GetExecutiveTimeline()
+                                                        </strong>
+                                                        <br />
+                                                        <small class="text-muted">Estimated Timeline</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Risk Assessment Summary -->
                 <div class="card shadow mb-3">
-                    <div class="card-header bg-info text-white">
-                        <h5 class="mb-0"><span class="oi oi-warning"></span> Risk Assessment</h5>
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="bi bi-shield-check"></i> Risk Assessment Summary</h5>
                     </div>
                     <div class="card-body">
                         <div class="row">
                             <div class="col-md-6">
-                                <h6>Complexity Score</h6>
+                                <h6>Overall Complexity Score</h6>
                                 <div class="progress mb-2" style="height: 25px;">
                                     <div class="progress-bar @GetComplexityColorClass(analysisResult.OverallComplexityScore)"
                                          style="width: @(analysisResult.OverallComplexityScore)%">
                                         @analysisResult.OverallComplexityScore/100
                                     </div>
                                 </div>
+                                <small class="text-muted">Assessment based on code structure and dependencies</small>
                             </div>
                             <div class="col-md-6">
-                                <h6>Risk Level</h6>
+                                <h6>Migration Risk Level</h6>
                                 <h3 class="@GetRiskTextColorClass(analysisResult.OverallRiskLevel)">
                                     @analysisResult.OverallRiskLevel
                                 </h3>
+                                <small class="text-muted">@GetRiskDescription(analysisResult.OverallRiskLevel)</small>
                             </div>
                         </div>
                     </div>
@@ -166,62 +348,113 @@
                 {
                     <div class="card shadow mb-3">
                         <div class="card-header bg-info text-white">
-                            <h5 class="mb-0"><span class="oi oi-brain"></span> AI Assessment</h5>
+                            <h5 class="mb-0"><i class="bi bi-cpu"></i> Intelligent Assessment Summary</h5>
                         </div>
                         <div class="card-body">
-                            <p>@analysisResult.OverallAssessment</p>
+                            <p class="mb-0">@analysisResult.OverallAssessment</p>
                         </div>
                     </div>
                 }
 
-                <!-- Key Recommendations -->
+                <!-- Strategic Recommendations -->
                 @if (analysisResult.KeyRecommendations.Any())
                 {
                     <div class="card shadow mb-3">
-                        <div class="card-header bg-warning text-dark">
-                            <h5 class="mb-0"><span class="oi oi-lightbulb"></span> Key Recommendations</h5>
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0"><i class="bi bi-lightbulb"></i> Strategic Recommendations</h5>
                         </div>
                         <div class="card-body">
                             @foreach (var recommendation in analysisResult.KeyRecommendations)
                             {
-                                <div class="alert alert-light">
-                                    <small>&bull; @recommendation</small>
+                                <div class="alert alert-light border-start border-primary border-3">
+                                    <small><i class="bi bi-arrow-right"></i> @recommendation</small>
                                 </div>
                             }
                         </div>
                     </div>
                 }
 
-                <!-- File Details -->
+                <!-- Detailed File Analysis -->
                 <div class="card shadow">
                     <div class="card-header bg-dark text-white">
-                        <h5 class="mb-0"><span class="oi oi-document"></span> File Analysis Details</h5>
+                        <h5 class="mb-0"><i class="bi bi-list-ul"></i> Detailed File Analysis</h5>
                     </div>
                     <div class="card-body">
                         <div style="max-height: 400px; overflow-y: auto;">
-                            @foreach (var fileResult in analysisResult.FileResults)
+                            @foreach (var fileResult in analysisResult.FileResults.OrderByDescending(f => f.ComplexityScore))
                             {
                                 <div class="card mb-2">
-                                    <div class="card-body p-2">
-                                        <h6 class="card-title">@fileResult.FileName</h6>
-                                        <div class="row">
-                                            <div class="col-3">
-                                                <small>Classes: <strong>@fileResult.StaticAnalysis.ClassCount</strong></small>
+                                    <div class="card-body p-3">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="flex-grow-1">
+                                                <h6 class="card-title mb-1">
+                                                    <i class="bi bi-file-earmark-code"></i> @fileResult.FileName
+                                                </h6>
+                                                <div class="row mb-2">
+                                                    <div class="col-3">
+                                                        <small class="text-muted">Classes:</small>
+                                                        <strong class="d-block">@fileResult.StaticAnalysis.ClassCount</strong>
+                                                    </div>
+                                                    <div class="col-3">
+                                                        <small class="text-muted">Methods:</small>
+                                                        <strong class="d-block">@fileResult.StaticAnalysis.MethodCount</strong>
+                                                    </div>
+                                                    <div class="col-3">
+                                                        <small class="text-muted">Properties:</small>
+                                                        <strong class="d-block">@fileResult.StaticAnalysis.PropertyCount</strong>
+                                                    </div>
+                                                    <div class="col-3">
+                                                        <small class="text-muted">Complexity:</small>
+                                                        <strong class="d-block @GetComplexityTextColor(fileResult.ComplexityScore)">
+                                                            @fileResult.ComplexityScore/100
+                                                        </strong>
+                                                    </div>
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(fileResult.AIInsight))
+                                                {
+                                                    <div class="bg-light p-3 rounded mt-2">
+                                                        <h6 class="text-muted mb-2">
+                                                            <i class="bi bi-cpu"></i> Assessment Summary
+                                                        </h6>
+                                                        <div class="text-dark" style="line-height: 1.6;">
+                                                            @((MarkupString)FormatAIInsight(fileResult.AIInsight))
+                                                        </div>
+                                                    </div>
+                                                }
                                             </div>
-                                            <div class="col-3">
-                                                <small>Methods: <strong>@fileResult.StaticAnalysis.MethodCount</strong></small>
-                                            </div>
-                                            <div class="col-6">
-                                                <small>Complexity: <strong>@fileResult.ComplexityScore</strong></small>
+                                            <div class="ms-3">
+                                                <span class="badge @GetComplexityBadgeClass(fileResult.ComplexityScore)">
+                                                    @GetComplexityLabel(fileResult.ComplexityScore)
+                                                </span>
                                             </div>
                                         </div>
-                                        @if (!string.IsNullOrEmpty(fileResult.AIInsight))
-                                        {
-                                            <small class="text-muted"><span class="oi oi-brain"></span> @fileResult.AIInsight</small>
-                                        }
                                     </div>
                                 </div>
                             }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Executive Actions -->
+                <div class="card shadow mt-3">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-download"></i> Executive Reporting</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">Comprehensive Analysis Report</h6>
+                                <small class="text-muted">
+                                    Professional assessment report for stakeholder distribution
+                                </small>
+                            </div>
+                            <button class="btn btn-success" @onclick="DownloadExecutiveReport" disabled="@isGeneratingReport">
+                                @if (isGeneratingReport)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="bi bi-file-earmark-pdf"></i> Generate Report
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -246,22 +479,80 @@
             border-color: #0d6efd;
             background-color: #f8f9fa;
         }
+
+    /* Improve card spacing and alignment */
+    .card {
+        margin-bottom: 1rem;
+    }
+
+    /* Better text formatting for AI insights */
+    .ai-insight-text {
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: #495057;
+    }
+
+    /* Improve file list display */
+    .file-list-item {
+        transition: background-color 0.2s ease;
+    }
+
+        .file-list-item:hover {
+            background-color: #f8f9fa !important;
+        }
+
+    /* Center align charts better */
+    .chart-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 250px;
+    }
 </style>
 
 @code {
     private string selectedAnalysisType = "general";
     private bool isAnalyzing = false;
+    private bool isGeneratingReport = false;
     private string statusMessage = "";
     private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
     private MultiFileAnalysisResult? analysisResult;
 
     private async Task HandleFileSelection(InputFileChangeEventArgs e)
     {
-        var newFiles = e.GetMultipleFiles(10);
+        var newFiles = e.GetMultipleFiles(50); // Allow more files for folder selection
         var csFiles = newFiles.Where(f => f.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)).ToList();
 
-        selectedFiles.AddRange(csFiles);
-        statusMessage = $"Added {csFiles.Count} C# files. Total: {selectedFiles.Count}";
+        // Filter out generated/designer files that aren't useful for analysis
+        var sourceFiles = csFiles.Where(f =>
+            !f.Name.Contains(".Designer.") &&
+            !f.Name.Contains(".g.cs") &&
+            !f.Name.Contains(".g.i.cs") &&
+            !f.Name.Contains("AssemblyInfo.cs") &&
+            !f.Name.Contains("GlobalAssemblyInfo.cs") &&
+            !f.Name.StartsWith("Temp", StringComparison.OrdinalIgnoreCase) &&
+            !f.Name.Contains("obj\\Debug") &&
+            !f.Name.Contains("obj\\Release")
+        ).ToList();
+
+        if (sourceFiles.Count != newFiles.Count())
+        {
+            statusMessage = $"Folder selection: Found {sourceFiles.Count} relevant C# source files from {newFiles.Count()} total files.";
+        }
+        else
+        {
+            statusMessage = $"Successfully loaded {sourceFiles.Count} C# source files from project folder.";
+        }
+
+        // Clear existing and add new files
+        selectedFiles.Clear();
+        selectedFiles.AddRange(sourceFiles.Take(20)); // Limit to 20 for performance
+
+        if (sourceFiles.Count > 20)
+        {
+            statusMessage += $" Limited to first 20 files for performance.";
+        }
+
         StateHasChanged();
     }
 
@@ -272,20 +563,20 @@
 
     private void HandleFileDrop(DragEventArgs e)
     {
-        statusMessage = "Please use the Browse Files button to select files.";
+        statusMessage = "File upload: Please use the Browse Files button to select source files.";
     }
 
     private void RemoveFile(IBrowserFile file)
     {
         selectedFiles.Remove(file);
-        statusMessage = $"Removed {file.Name}. {selectedFiles.Count} files remaining.";
+        statusMessage = $"Removed {file.Name}. {selectedFiles.Count} files remaining for analysis.";
         StateHasChanged();
     }
 
     private void ClearFiles()
     {
         selectedFiles.Clear();
-        statusMessage = "All files cleared.";
+        statusMessage = "All files cleared. Ready for new file selection.";
         StateHasChanged();
     }
 
@@ -294,23 +585,362 @@
         if (!selectedFiles.Any()) return;
 
         isAnalyzing = true;
-        statusMessage = $"Analyzing {selectedFiles.Count} files with {selectedAnalysisType} analysis...";
+        statusMessage = $"Processing {selectedFiles.Count} files with {selectedAnalysisType} analysis methodology...";
         StateHasChanged();
 
         try
         {
             analysisResult = await MultiFileAnalysisService.AnalyzeMultipleFilesAsync(selectedFiles, selectedAnalysisType);
-            statusMessage = $"Analysis complete! Processed {analysisResult.TotalFiles} files.";
+            statusMessage = $"Analysis completed successfully. Processed {analysisResult.TotalFiles} files with comprehensive assessment.";
+
+            // Generate charts after analysis
+            await GenerateCharts();
         }
         catch (Exception ex)
         {
-            statusMessage = $"Analysis failed: {ex.Message}";
+            statusMessage = $"Analysis process encountered an error: {ex.Message}";
         }
         finally
         {
             isAnalyzing = false;
             StateHasChanged();
         }
+    }
+
+    private async Task TestSimpleCharts()
+    {
+        try
+        {
+            Console.WriteLine("Testing simple charts...");
+            statusMessage = "Testing chart functionality...";
+            StateHasChanged();
+
+            await Task.Delay(500); // Allow UI to render
+
+            // Test if Chart.js is loaded
+            var chartLoaded = await JSRuntime.InvokeAsync<bool>("eval", "typeof Chart !== 'undefined'");
+            Console.WriteLine($"Chart.js loaded: {chartLoaded}");
+
+            if (!chartLoaded)
+            {
+                statusMessage = "Chart.js library not loaded";
+                return;
+            }
+
+            // Test simple chart creation
+            var testResult = await JSRuntime.InvokeAsync<bool>("testSimpleChart");
+            Console.WriteLine($"Test chart result: {testResult}");
+
+            if (testResult)
+            {
+                statusMessage = "Chart test successful! Chart.js is working.";
+            }
+            else
+            {
+                statusMessage = "Chart test failed. Check console for details.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Test error: {ex.Message}");
+            statusMessage = $"Test error: {ex.Message}";
+        }
+    }
+
+    private async Task DebugChartElements()
+    {
+        try
+        {
+            Console.WriteLine("Debugging chart elements...");
+
+            // Check if canvas elements exist
+            var canvasInfo = await JSRuntime.InvokeAsync<string>("eval", @"
+            Array.from(document.querySelectorAll('canvas')).map(c =>
+                c.id + ': ' + c.offsetWidth + 'x' + c.offsetHeight
+            ).join(', ')
+        ");
+
+            Console.WriteLine($"Canvas elements: {canvasInfo}");
+            statusMessage = $"Canvas elements: {canvasInfo}";
+
+            // Check Chart.js version
+            var chartVersion = await JSRuntime.InvokeAsync<string>("eval", @"
+            typeof Chart !== 'undefined' ? Chart.version || 'Unknown version' : 'Not loaded'
+        ");
+
+            Console.WriteLine($"Chart.js version: {chartVersion}");
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Debug error: {ex.Message}");
+            statusMessage = $"Debug error: {ex.Message}";
+        }
+    }
+
+    private async Task GenerateCharts()
+    {
+        if (analysisResult?.FileResults == null || !analysisResult.FileResults.Any())
+        {
+            Console.WriteLine("No file results available for chart generation");
+            return;
+        }
+
+        try
+        {
+            Console.WriteLine("Creating executive charts...");
+            statusMessage = "Generating executive dashboard...";
+            StateHasChanged();
+
+            // Wait for DOM
+            await Task.Delay(1500);
+
+            // FIXED: Ensure we have valid data
+            var validFiles = analysisResult.FileResults
+                .Where(f => f != null && !string.IsNullOrEmpty(f.FileName))
+                .ToList();
+
+            if (!validFiles.Any())
+            {
+                Console.WriteLine("No valid files for chart generation");
+                return;
+            }
+
+            // FIXED: Create complexity chart with proper data
+            var topFiles = validFiles
+                .OrderByDescending(f => f.ComplexityScore)
+                .Take(8)
+                .ToList();
+
+            var fileNames = topFiles.Select(f => f.FileName.Length > 12 ? f.FileName.Substring(0, 12) + "..." : f.FileName).ToArray();
+            var complexityScores = topFiles.Select(f => (object)f.ComplexityScore).ToArray();
+
+            Console.WriteLine($"Creating complexity chart with {fileNames.Length} files: [{string.Join(", ", complexityScores)}]");
+
+            var complexitySuccess = await JSRuntime.InvokeAsync<bool>("createSimpleChart",
+                "complexityChart",
+                "bar",
+                fileNames,
+                complexityScores,
+                "Highest Risk Files - Complexity Analysis"
+            );
+
+            // FIXED: Create risk distribution with actual counts
+            var lowCount = validFiles.Count(f => f.ComplexityScore < 40);
+            var mediumCount = validFiles.Count(f => f.ComplexityScore >= 40 && f.ComplexityScore < 70);
+            var highCount = validFiles.Count(f => f.ComplexityScore >= 70);
+
+            Console.WriteLine($"Risk distribution: Low={lowCount}, Medium={mediumCount}, High={highCount}");
+
+            if (lowCount + mediumCount + highCount > 0)
+            {
+                var riskLabels = new[] { "Low Risk", "Medium Risk", "High Risk" };
+                var riskValues = new object[] { lowCount, mediumCount, highCount };
+
+                var riskSuccess = await JSRuntime.InvokeAsync<bool>("createSimpleChart",
+                    "riskChart",
+                    "doughnut",
+                    riskLabels,
+                    riskValues,
+                    "Project Risk Distribution"
+                );
+
+                Console.WriteLine($"Charts created: Complexity={complexitySuccess}, Risk={riskSuccess}");
+
+                if (complexitySuccess || riskSuccess)
+                {
+                    statusMessage = "Executive dashboard created successfully.";
+                }
+                else
+                {
+                    statusMessage = "Dashboard generation completed. Review detailed analysis below.";
+                }
+            }
+            else
+            {
+                statusMessage = "Analysis completed. Detailed insights available in file breakdown.";
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Chart error: {ex.Message}");
+            statusMessage = "Analysis completed successfully. Detailed breakdown available below.";
+        }
+    }
+
+    private async Task DownloadExecutiveReport()
+    {
+        if (analysisResult == null) return;
+
+        isGeneratingReport = true;
+        statusMessage = "Generating comprehensive executive report...";
+        StateHasChanged();
+
+        try
+        {
+            // Generate executive summary report
+            var reportContent = GenerateExecutiveReport();
+            var reportBytes = System.Text.Encoding.UTF8.GetBytes(reportContent);
+            var fileName = $"executive-analysis-{selectedAnalysisType}-{DateTime.Now:yyyyMMdd-HHmmss}.md";
+
+            await FileDownloadService.DownloadFileAsync(fileName, reportBytes, "text/markdown");
+            statusMessage = $"Executive report generated successfully: {fileName}";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Report generation failed: {ex.Message}";
+        }
+        finally
+        {
+            isGeneratingReport = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GenerateExecutiveReport()
+    {
+        if (analysisResult == null) return "";
+
+        var report = new System.Text.StringBuilder();
+
+        // Executive Summary Header
+        report.AppendLine("# Executive Project Analysis Report");
+        report.AppendLine($"**Analysis Type**: {selectedAnalysisType.ToUpper()} ASSESSMENT");
+        report.AppendLine($"**Report Generated**: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        report.AppendLine($"**Project Scope**: {analysisResult.TotalFiles} source files analyzed");
+        report.AppendLine();
+
+        // Executive Summary
+        report.AppendLine("## Executive Summary");
+        report.AppendLine($"This comprehensive analysis evaluated {analysisResult.TotalFiles} source files containing {analysisResult.TotalClasses} classes and {analysisResult.TotalMethods} methods. ");
+        report.AppendLine($"The overall project complexity is rated as **{analysisResult.OverallRiskLevel}** with a risk score of {analysisResult.OverallComplexityScore}/100.");
+        report.AppendLine();
+
+        // Key Metrics
+        report.AppendLine("## Key Performance Indicators");
+        report.AppendLine("| Metric | Value | Assessment |");
+        report.AppendLine("|--------|--------|------------|");
+        report.AppendLine($"| Source Files | {analysisResult.TotalFiles} | {GetFileCountAssessment(analysisResult.TotalFiles)} |");
+        report.AppendLine($"| Code Classes | {analysisResult.TotalClasses} | {GetClassCountAssessment(analysisResult.TotalClasses)} |");
+        report.AppendLine($"| Methods | {analysisResult.TotalMethods} | {GetMethodCountAssessment(analysisResult.TotalMethods)} |");
+        report.AppendLine($"| Complexity Score | {analysisResult.OverallComplexityScore}/100 | {analysisResult.OverallRiskLevel} Risk Level |");
+        report.AppendLine();
+
+        // Risk Assessment
+        report.AppendLine("## Risk Assessment");
+        var riskStats = GetRiskStatistics();
+        report.AppendLine($"- **Low Risk Files**: {riskStats.low} files ({riskStats.lowPercent:F1}%)");
+        report.AppendLine($"- **Medium Risk Files**: {riskStats.medium} files ({riskStats.mediumPercent:F1}%)");
+        report.AppendLine($"- **High Risk Files**: {riskStats.high} files ({riskStats.highPercent:F1}%)");
+        report.AppendLine();
+
+        // Strategic Recommendations
+        if (analysisResult.KeyRecommendations.Any())
+        {
+            report.AppendLine("## Strategic Recommendations");
+            foreach (var recommendation in analysisResult.KeyRecommendations)
+            {
+                report.AppendLine($"- {recommendation}");
+            }
+            report.AppendLine();
+        }
+
+        // Business Impact
+        report.AppendLine("## Business Impact Assessment");
+        report.AppendLine($"**Migration Timeline**: {GetMigrationTimeline(analysisResult.OverallComplexityScore)}");
+        report.AppendLine($"**Resource Requirements**: {GetResourceRequirements(analysisResult.OverallComplexityScore)}");
+        report.AppendLine($"**Financial Impact**: {GetFinancialImpact(analysisResult.OverallComplexityScore)}");
+        report.AppendLine();
+
+        // Technical Details
+        report.AppendLine("## Detailed File Analysis");
+        foreach (var file in analysisResult.FileResults.OrderByDescending(f => f.ComplexityScore).Take(10))
+        {
+            report.AppendLine($"### {file.FileName}");
+            report.AppendLine($"- **Complexity Score**: {file.ComplexityScore}/100");
+            report.AppendLine($"- **Classes**: {file.StaticAnalysis.ClassCount}");
+            report.AppendLine($"- **Methods**: {file.StaticAnalysis.MethodCount}");
+            report.AppendLine($"- **Properties**: {file.StaticAnalysis.PropertyCount}");
+            if (!string.IsNullOrEmpty(file.AIInsight))
+            {
+                report.AppendLine($"- **Assessment**: {file.AIInsight}");
+            }
+            report.AppendLine();
+        }
+
+        // Next Steps
+        report.AppendLine("## Recommended Next Steps");
+        report.AppendLine("1. **Immediate Actions**: Address high-complexity files identified in this analysis");
+        report.AppendLine("2. **Resource Planning**: Allocate development resources based on complexity assessment");
+        report.AppendLine("3. **Timeline Development**: Create detailed project timeline using risk assessment data");
+        report.AppendLine("4. **Stakeholder Communication**: Present findings to technical and business stakeholders");
+        report.AppendLine("5. **Monitoring Strategy**: Establish metrics tracking for modernization progress");
+
+        return report.ToString();
+    }
+
+    private (int low, int medium, int high, double lowPercent, double mediumPercent, double highPercent) GetRiskStatistics()
+    {
+        if (analysisResult?.FileResults == null) return (0, 0, 0, 0, 0, 0);
+
+        var total = analysisResult.FileResults.Count;
+        var low = analysisResult.FileResults.Count(f => f.ComplexityScore < 40);
+        var medium = analysisResult.FileResults.Count(f => f.ComplexityScore >= 40 && f.ComplexityScore < 70);
+        var high = analysisResult.FileResults.Count(f => f.ComplexityScore >= 70);
+
+        return (low, medium, high,
+                low * 100.0 / total,
+                medium * 100.0 / total,
+                high * 100.0 / total);
+    }
+
+    private string GetFileCountAssessment(int fileCount)
+    {
+        if (fileCount < 5) return "Small project scope";
+        if (fileCount < 15) return "Medium project complexity";
+        if (fileCount < 30) return "Large project - requires structured approach";
+        return "Enterprise-scale project - dedicated team recommended";
+    }
+
+    private string GetClassCountAssessment(int classCount)
+    {
+        if (classCount < 10) return "Low structural complexity";
+        if (classCount < 25) return "Moderate architectural complexity";
+        if (classCount < 50) return "Complex architecture - careful planning required";
+        return "Highly complex system - expert analysis recommended";
+    }
+
+    private string GetMethodCountAssessment(int methodCount)
+    {
+        if (methodCount < 50) return "Manageable codebase size";
+        if (methodCount < 150) return "Medium codebase - standard development practices apply";
+        if (methodCount < 300) return "Large codebase - requires systematic approach";
+        return "Very large codebase - enterprise development practices essential";
+    }
+
+    private string GetMigrationTimeline(int complexityScore)
+    {
+        if (complexityScore < 30) return "2-4 weeks (Low complexity migration)";
+        if (complexityScore < 50) return "4-8 weeks (Standard migration process)";
+        if (complexityScore < 70) return "8-16 weeks (Complex migration - phased approach)";
+        return "16+ weeks (High complexity - dedicated team required)";
+    }
+
+    private string GetResourceRequirements(int complexityScore)
+    {
+        if (complexityScore < 30) return "1-2 developers, standard skillset";
+        if (complexityScore < 50) return "2-3 developers, experienced team";
+        if (complexityScore < 70) return "3-5 developers, senior expertise required";
+        return "5+ developers, specialist migration team with architect oversight";
+    }
+
+    private string GetFinancialImpact(int complexityScore)
+    {
+        if (complexityScore < 30) return "Low cost - standard development rates";
+        if (complexityScore < 50) return "Moderate cost - budget for quality assurance";
+        if (complexityScore < 70) return "High cost - include risk mitigation budget";
+        return "Very high cost - executive approval recommended";
     }
 
     private string FormatFileSize(long bytes)
@@ -326,24 +956,198 @@
         return $"{number:n1} {suffixes[counter]}";
     }
 
+    private string GetStatusAlertClass() => statusMessage.Contains("error") || statusMessage.Contains("failed") ? "alert-danger" : "alert-info";
+
     private string GetComplexityColorClass(int score)
     {
-        if (score < 30)
-            return "bg-success";
-        else if (score < 60)
-            return "bg-warning";
-        else
-            return "bg-danger";
+        if (score < 30) return "bg-success";
+        if (score < 60) return "bg-warning";
+        return "bg-danger";
     }
 
-    private string GetRiskTextColorClass(string risk)
+    private string GetRiskTextColorClass(string risk) => risk switch
     {
-        return risk switch
+        "LOW" => "text-success",
+        "MEDIUM" => "text-warning",
+        "HIGH" => "text-danger",
+        _ => "text-secondary"
+    };
+
+    private string GetRiskDescription(string risk) => risk switch
+    {
+        "LOW" => "Standard migration process applicable",
+        "MEDIUM" => "Structured approach with experienced team required",
+        "HIGH" => "Complex migration requiring specialist expertise",
+        _ => "Assessment in progress"
+    };
+
+    private string GetComplexityTextColor(int score)
+    {
+        if (score < 40) return "text-success";
+        if (score < 70) return "text-warning";
+        return "text-danger";
+    }
+
+    private string GetComplexityBadgeClass(int score)
+    {
+        if (score < 40) return "bg-success";
+        if (score < 70) return "bg-warning text-dark";
+        return "bg-danger";
+    }
+
+    private string GetComplexityLabel(int score)
+    {
+        if (score < 40) return "Low Risk";
+        if (score < 70) return "Medium Risk";
+        return "High Risk";
+    }
+
+    private async Task HandleIndividualFileSelection(InputFileChangeEventArgs e)
+    {
+        var newFiles = e.GetMultipleFiles(20); // Allow more files for folder selection
+        var csFiles = newFiles.Where(f => f.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        // Filter out common non-source files
+        csFiles = csFiles.Where(f =>
+            !f.Name.Contains(".Designer.") &&
+            !f.Name.Contains(".g.cs") &&
+            !f.Name.Contains("AssemblyInfo.cs") &&
+            !f.Name.StartsWith("Temp", StringComparison.OrdinalIgnoreCase)
+        ).ToList();
+
+        if (csFiles.Count != newFiles.Count())
         {
-            "LOW" => "text-success",
-            "MEDIUM" => "text-warning",
-            "HIGH" => "text-danger",
-            _ => "text-secondary"
+            statusMessage = $"Filtered to {csFiles.Count} C# source files from {newFiles.Count()} total files.";
+        }
+        else
+        {
+            statusMessage = $"Successfully selected {csFiles.Count} C# source files.";
+        }
+
+        selectedFiles.AddRange(csFiles);
+        StateHasChanged();
+    }
+
+    private string FormatAIInsight(string insight)
+    {
+        if (string.IsNullOrEmpty(insight))
+            return "<div class='alert alert-light'><em>Assessment pending - analysis in progress</em></div>";
+
+        try
+        {
+            // Clean up the text aggressively
+            var cleaned = insight
+                .Replace("###", "")
+                .Replace("##", "")
+                .Replace("#", "")
+                .Replace("**", "")
+                .Replace("*", "")
+                .Replace("```", "")
+                .Replace("`", "")
+                .Replace("---", "")
+                .Trim();
+
+            // Split into sentences and clean them
+            var sentences = cleaned.Split(new[] { '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => s.Length > 10 && !s.StartsWith("Priority") && !s.StartsWith("Implementation"))
+                .Take(3) // Limit to 3 key insights for executives
+                .ToList();
+
+            if (!sentences.Any())
+            {
+                return "<div class='alert alert-warning'><strong>Assessment Summary:</strong> Code analysis completed. Technical details require manual review.</div>";
+            }
+
+            var formatted = new System.Text.StringBuilder();
+            formatted.Append("<div class='executive-summary'>");
+
+            for (int i = 0; i < sentences.Count; i++)
+            {
+                var sentence = sentences[i].Trim();
+                if (!sentence.EndsWith(".")) sentence += ".";
+
+                // Format as executive-friendly insight
+                formatted.Append($"<div class='insight-item mb-2'>");
+                formatted.Append($"<span class='badge bg-primary me-2'>{i + 1}</span>");
+                formatted.Append($"<span class='insight-text'>{sentence}</span>");
+                formatted.Append("</div>");
+            }
+
+            formatted.Append("</div>");
+            return formatted.ToString();
+        }
+        catch (Exception)
+        {
+            return "<div class='alert alert-info'><strong>Technical Assessment:</strong> Code structure analyzed. Detailed recommendations available upon request.</div>";
+        }
+    }
+
+    private string GetComplexityCardClass(int score) => score switch
+    {
+        >= 70 => "bg-danger",
+        >= 40 => "bg-warning text-dark",
+        _ => "bg-success"
+    };
+
+    private string GetRiskBadgeClass()
+    {
+        return analysisResult?.OverallRiskLevel switch
+        {
+            "LOW" => "success",
+            "MEDIUM" => "warning",
+            "HIGH" => "danger",
+            _ => "secondary"
         };
+    }
+
+    private string GetComplexityTextClass()
+    {
+        if (analysisResult == null) return "secondary";
+
+        if (analysisResult.OverallComplexityScore < 40)
+            return "success";
+        else if (analysisResult.OverallComplexityScore < 70)
+            return "warning";
+        else
+            return "danger";
+    }
+
+    private string GetTimelineColorClass()
+    {
+        if (analysisResult == null) return "secondary";
+
+        if (analysisResult.OverallComplexityScore < 40)
+            return "success";
+        else if (analysisResult.OverallComplexityScore < 70)
+            return "warning";
+        else
+            return "danger";
+    }
+
+    private string GetExecutiveTimeline()
+    {
+        if (analysisResult == null) return "Assessment Pending";
+
+        if (analysisResult.OverallComplexityScore < 30)
+            return "2-4 weeks (Low complexity migration)";
+        else if (analysisResult.OverallComplexityScore < 50)
+            return "4-8 weeks (Standard migration process)";
+        else if (analysisResult.OverallComplexityScore < 70)
+            return "8-12 weeks (Complex migration - phased approach)";
+        else
+            return "12+ weeks (High complexity - dedicated team required)";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("destroyAllCharts");
+        }
+        catch
+        {
+            // Ignore disposal errors
+        }
     }
 }
