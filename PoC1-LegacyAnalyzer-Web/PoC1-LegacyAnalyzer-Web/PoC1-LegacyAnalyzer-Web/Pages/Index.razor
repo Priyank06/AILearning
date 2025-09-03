@@ -22,16 +22,18 @@
         <div class="col-lg-6">
             <div class="card shadow">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">📁 Code Input & Configuration</h5>
+                    <h5 class="mb-0"><span class="oi oi-folder"></span> Code Input & Configuration</h5>
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
                         <label class="form-label">Analysis Type:</label>
                         <select class="form-select" @bind="selectedAnalysisType">
-                            <option value="general">🔍 General Modernization</option>
-                            <option value="security">🛡️ Security Audit</option>
-                            <option value="performance">⚡ Performance Analysis</option>
-                            <option value="migration">🚀 Migration Assessment</option>
+                            <option value="general"><span class="oi oi-magnifying-glass"></span> General Modernization
+                            </option>
+                            <option value="security"><span class="oi oi-shield"></span> Security Audit</option>
+                            <option value="performance"><span class="oi oi-flash"></span> Performance Analysis</option>
+                            <option value="migration"><span class="oi oi-loop-circular"></span> Migration Assessment
+                            </option>
                         </select>
                     </div>
 
@@ -46,7 +48,7 @@
 
                     <div class="mb-3">
                         <button class="btn btn-outline-secondary me-2" @onclick="LoadSampleCode">
-                            📄 Load Sample Code
+                            <span class="oi oi-document"></span> Load Sample Code
                         </button>
                         <button class="btn btn-primary" @onclick="AnalyzeCode" disabled="@isAnalyzing">
                             @if (isAnalyzing)
@@ -56,7 +58,7 @@
                             }
                             else
                             {
-                                <text>🚀 Analyze Code</text>
+                                <text><span class="oi oi-media-play"></span> Analyze Code</text>
                             }
                         </button>
                     </div>
@@ -77,7 +79,7 @@
             {
                 <div class="card shadow">
                     <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">📊 Analysis Results</h5>
+                        <h5 class="mb-0"><span class="oi oi-bar-chart"></span> Analysis Results</h5>
                     </div>
                     <div class="card-body">
                         <!-- Metrics Cards -->
@@ -119,7 +121,7 @@
                         @if (analysisResult.Classes.Any())
                         {
                             <div class="mb-3">
-                                <h6>📋 Identified Classes:</h6>
+                                <h6><span class="oi oi-list-rich"></span> Identified Classes:</h6>
                                 <div class="bg-light p-2 rounded">
                                     @foreach (var className in analysisResult.Classes)
                                     {
@@ -137,7 +139,7 @@
                 {
                     <div class="card shadow mt-3">
                         <div class="card-header bg-info text-white">
-                            <h5 class="mb-0">📊 Project Metrics & Risk Assessment</h5>
+                            <h5 class="mb-0"><span class="oi oi-bar-chart"></span> Project Metrics & Risk Assessment</h5>
                         </div>
                         <div class="card-body">
                             <div class="row">
@@ -145,7 +147,7 @@
                                 <div class="col-md-6">
                                     <div class="card bg-light">
                                         <div class="card-body text-center">
-                                            <h6 class="card-title">🔢 Complexity Score</h6>
+                                            <h6 class="card-title"><span class="oi oi-hash"></span> Complexity Score</h6>
                                             <div class="progress mb-2" style="height: 25px;">
                                                 <div class="progress-bar @GetComplexityColorClass()"
                                                      style="width: @(GetComplexityPercentage())%">
@@ -161,7 +163,7 @@
                                 <div class="col-md-6">
                                     <div class="card bg-light">
                                         <div class="card-body text-center">
-                                            <h6 class="card-title">⚠️ Migration Risk</h6>
+                                            <h6 class="card-title"><span class="oi oi-warning"></span> Migration Risk</h6>
                                             <h3 class="@GetRiskTextColorClass()">@GetRiskLevel()</h3>
                                             <div class="progress mb-2" style="height: 25px;">
                                                 <div class="progress-bar @GetRiskProgressColorClass()"
@@ -184,7 +186,7 @@
             {
                 <div class="card shadow mt-3">
                     <div class="card-header bg-info text-white">
-                        <h5 class="mb-0">🧠 AI-Powered Insights</h5>
+                        <h5 class="mb-0"><span class="oi oi-brain"></span> AI-Powered Insights</h5>
                     </div>
                     <div class="card-body">
                         <div class="font-monospace" style="white-space: pre-line; font-size: 14px;">
@@ -200,7 +202,7 @@
             {
                 <div class="card shadow mt-3">
                     <div class="card-header bg-dark text-white">
-                        <h5 class="mb-0">📋 Executive Report</h5>
+                        <h5 class="mb-0"><span class="oi oi-document"></span> Executive Report</h5>
                     </div>
                     <div class="card-body">
                         <div class="row">
@@ -216,10 +218,10 @@
                                     {
                                         <span class="spinner-border spinner-border-sm me-2"></span>
                                     }
-                                    📄 Download Report (.md)
+                                    <span class="oi oi-document"></span> Download Report (.md)
                                 </button>
                                 <button class="btn btn-outline-success" @onclick="PreviewReport">
-                                    👁️ Preview
+                                    <span class="oi oi-eye"></span> Preview
                                 </button>
                             </div>
                         </div>
@@ -228,7 +230,7 @@
                         {
                             <hr />
                             <div class="bg-light p-3 rounded mt-3" style="max-height: 400px; overflow-y: auto;">
-                                <h6>📋 Report Preview:</h6>
+                                <h6><span class="oi oi-document"></span> Report Preview:</h6>
                                 <pre style="white-space: pre-wrap; font-size: 12px;">@reportPreviewContent</pre>
                             </div>
                         }

@@ -4,7 +4,255 @@
 @{
     Layout = "_Layout";
 }
+
+<!-- Add this to your _Host.cshtml after the existing Chart.js script -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Professional Chart Creation Functions
+    window.createComplexityDistributionChart = function (canvasId, fileData) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+
+        // Destroy existing chart if it exists
+        if (window.complexityChart) {
+            window.complexityChart.destroy();
+        }
+
+        const sortedData = fileData.sort((a, b) => b.complexityScore - a.complexityScore);
+
+        window.complexityChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: sortedData.map(f => f.fileName.length > 15 ? f.fileName.substring(0, 15) + '...' : f.fileName),
+                datasets: [{
+                    label: 'Complexity Score',
+                    data: sortedData.map(f => f.complexityScore),
+                    backgroundColor: sortedData.map(f => {
+                        if (f.complexityScore >= 70) return '#dc3545'; // High risk - Red
+                        if (f.complexityScore >= 40) return '#ffc107'; // Medium risk - Yellow
+                        return '#28a745'; // Low risk - Green
+                    }),
+                    borderColor: '#495057',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'File Complexity Distribution Analysis',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: 'Complexity Score (0-100)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Project Files'
+                        }
+                    }
+                }
+            }
+        });
+    };
+
+    window.createRiskAssessmentChart = function (canvasId, riskData) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+
+        // Destroy existing chart if it exists
+        if (window.riskChart) {
+            window.riskChart.destroy();
+        }
+
+        window.riskChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Low Risk Files', 'Medium Risk Files', 'High Risk Files'],
+                datasets: [{
+                    data: [riskData.low, riskData.medium, riskData.high],
+                    backgroundColor: ['#28a745', '#ffc107', '#dc3545'],
+                    borderColor: ['#1e7e34', '#e0a800', '#c82333'],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Project Risk Assessment Overview',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    };
+
+    window.createCodeMetricsChart = function (canvasId, metricsData) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+
+        // Destroy existing chart if it exists
+        if (window.metricsChart) {
+            window.metricsChart.destroy();
+        }
+
+        window.metricsChart = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Code Quality', 'Security Posture', 'Performance', 'Maintainability', 'Migration Readiness'],
+                datasets: [{
+                    label: 'Current Assessment',
+                    data: metricsData,
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.15)',
+                    pointBackgroundColor: '#007bff',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Enterprise Code Quality Assessment',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    }
+                },
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        max: 10,
+                        ticks: {
+                            stepSize: 2
+                        }
+                    }
+                }
+            }
+        });
+    };
+
+    window.createProjectSummaryChart = function (canvasId, summaryData) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+
+        // Destroy existing chart if it exists
+        if (window.summaryChart) {
+            window.summaryChart.destroy();
+        }
+
+        window.summaryChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: summaryData.fileNames,
+                datasets: [{
+                    label: 'Classes per File',
+                    data: summaryData.classes,
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'Methods per File',
+                    data: summaryData.methods,
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Code Structure Analysis by File',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Count'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Project Files'
+                        }
+                    }
+                }
+            }
+        });
+    };
+
+    // Utility function to calculate risk distribution
+    window.calculateRiskDistribution = function (fileResults) {
+        let low = 0, medium = 0, high = 0;
+
+        fileResults.forEach(file => {
+            if (file.complexityScore < 40) low++;
+            else if (file.complexityScore < 70) medium++;
+            else high++;
+        });
+
+        return { low, medium, high };
+    };
+
+    // Utility function to calculate code metrics
+    window.calculateCodeMetrics = function (analysisResult) {
+        // Professional scoring algorithm
+        const avgComplexity = analysisResult.overallComplexityScore;
+        const classMethodRatio = analysisResult.totalMethods / Math.max(analysisResult.totalClasses, 1);
+
+        return [
+            Math.min(10, 10 - (avgComplexity / 10)), // Code Quality (inverted complexity)
+            Math.min(10, 8 - (analysisResult.totalFiles * 0.1)), // Security (decreases with file count)
+            Math.min(10, 9 - (classMethodRatio * 0.5)), // Performance (decreases with method density)
+            Math.min(10, 8 - (avgComplexity / 12)), // Maintainability
+            Math.min(10, 10 - (avgComplexity / 8)) // Migration Readiness
+        ];
+    };
+
+    // Cleanup function for component disposal
+    window.destroyAllCharts = function () {
+        if (window.complexityChart) window.complexityChart.destroy();
+        if (window.riskChart) window.riskChart.destroy();
+        if (window.metricsChart) window.metricsChart.destroy();
+        if (window.summaryChart) window.summaryChart.destroy();
+    };
+</script>
 <script>
     window.downloadFile = function (fileName, dataUrl) {
         const link = document.createElement('a');

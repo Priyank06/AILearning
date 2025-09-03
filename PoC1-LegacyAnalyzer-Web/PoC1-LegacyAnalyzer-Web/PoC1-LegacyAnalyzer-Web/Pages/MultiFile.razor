@@ -10,7 +10,7 @@
 <div class="container-fluid">
     <div class="row mb-4">
         <div class="col-12 text-center">
-            <h1 class="display-4 mb-2">📁 Project Analysis</h1>
+            <h1 class="display-4 mb-2"><span class="oi oi-folder"></span> Project Analysis</h1>
             <p class="lead text-muted">AI-Powered Legacy Project Assessment</p>
         </div>
     </div>
@@ -20,42 +20,42 @@
         <div class="col-lg-6">
             <div class="card shadow">
                 <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0">📂 Upload Project Files</h5>
+                    <h5 class="mb-0"><span class="oi oi-folder"></span> Upload Project Files</h5>
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
                         <label class="form-label">Analysis Type:</label>
                         <select class="form-select" @bind="selectedAnalysisType">
-                            <option value="general">🔍 General Assessment</option>
-                            <option value="security">🛡️ Security Audit</option>
-                            <option value="performance">⚡ Performance Analysis</option>
-                            <option value="migration">🚀 Migration Readiness</option>
+                            <option value="general"><span class="oi oi-magnifying-glass"></span> General Assessment</option>
+                            <option value="security"><span class="oi oi-shield"></span> Security Audit</option>
+                            <option value="performance"><span class="oi oi-flash"></span> Performance Analysis</option>
+                            <option value="migration"><span class="oi oi-loop-circular"></span> Migration Readiness</option>
                         </select>
                     </div>
 
                     <div class="upload-area mb-3" @ondragover="HandleDragOver" @ondragover:preventDefault="true"
                          @ondrop="HandleFileDrop" @ondrop:preventDefault="true">
                         <div class="text-center p-4">
-                            <div style="font-size: 3rem;" class="text-muted mb-3">📁</div>
+                            <div style="font-size: 3rem;" class="text-muted mb-3"><span class="oi oi-folder"></span></div>
                             <h6>Drop C# Files Here</h6>
                             <p class="text-muted mb-3">Or click to browse (max 10 files)</p>
                             <InputFile id="fileInput" OnChange="HandleFileSelection" multiple accept=".cs" class="d-none" />
-                            <label for="fileInput" class="btn btn-primary">📂 Browse Files</label>
+                            <label for="fileInput" class="btn btn-primary"><span class="oi oi-folder"></span> Browse Files</label>
                         </div>
                     </div>
 
                     @if (selectedFiles.Any())
                     {
                         <div class="mb-3">
-                            <h6>📄 Selected Files (@selectedFiles.Count):</h6>
+                            <h6><span class="oi oi-document"></span> Selected Files (@selectedFiles.Count):</h6>
                             <div style="max-height: 200px; overflow-y: auto;">
                                 @foreach (var file in selectedFiles)
                                 {
                                     <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-1">
-                                        <span>📄 @file.Name</span>
+                                        <span><span class="oi oi-document"></span> @file.Name</span>
                                         <div>
                                             <small class="text-muted me-2">@FormatFileSize(file.Size)</small>
-                                            <button class="btn btn-sm btn-outline-danger" @onclick="@(() => RemoveFile(file))">❌</button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="@(() => RemoveFile(file))"><span class="oi oi-x"></span></button>
                                         </div>
                                     </div>
                                 }
@@ -71,10 +71,10 @@
                                 }
                                 else
                                 {
-                                    <text>🚀 Analyze Project (@selectedFiles.Count files)</text>
+                                    <text><span class="oi oi-media-play"></span> Analyze Project (@selectedFiles.Count files)</text>
                                 }
                             </button>
-                            <button class="btn btn-outline-secondary" @onclick="ClearFiles">🗑️ Clear All</button>
+                            <button class="btn btn-outline-secondary" @onclick="ClearFiles"><span class="oi oi-trash"></span> Clear All</button>
                         </div>
                     }
 
@@ -95,7 +95,7 @@
                 <!-- Project Summary -->
                 <div class="card shadow mb-3">
                     <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">📊 Project Summary</h5>
+                        <h5 class="mb-0"><span class="oi oi-bar-chart"></span> Project Summary</h5>
                     </div>
                     <div class="card-body">
                         <div class="row">
@@ -138,7 +138,7 @@
                 <!-- Risk Assessment -->
                 <div class="card shadow mb-3">
                     <div class="card-header bg-info text-white">
-                        <h5 class="mb-0">⚠️ Risk Assessment</h5>
+                        <h5 class="mb-0"><span class="oi oi-warning"></span> Risk Assessment</h5>
                     </div>
                     <div class="card-body">
                         <div class="row">
@@ -166,7 +166,7 @@
                 {
                     <div class="card shadow mb-3">
                         <div class="card-header bg-info text-white">
-                            <h5 class="mb-0">🧠 AI Assessment</h5>
+                            <h5 class="mb-0"><span class="oi oi-brain"></span> AI Assessment</h5>
                         </div>
                         <div class="card-body">
                             <p>@analysisResult.OverallAssessment</p>
@@ -179,13 +179,13 @@
                 {
                     <div class="card shadow mb-3">
                         <div class="card-header bg-warning text-dark">
-                            <h5 class="mb-0">💡 Key Recommendations</h5>
+                            <h5 class="mb-0"><span class="oi oi-lightbulb"></span> Key Recommendations</h5>
                         </div>
                         <div class="card-body">
                             @foreach (var recommendation in analysisResult.KeyRecommendations)
                             {
                                 <div class="alert alert-light">
-                                    <small>• @recommendation</small>
+                                    <small>&bull; @recommendation</small>
                                 </div>
                             }
                         </div>
@@ -195,7 +195,7 @@
                 <!-- File Details -->
                 <div class="card shadow">
                     <div class="card-header bg-dark text-white">
-                        <h5 class="mb-0">📄 File Analysis Details</h5>
+                        <h5 class="mb-0"><span class="oi oi-document"></span> File Analysis Details</h5>
                     </div>
                     <div class="card-body">
                         <div style="max-height: 400px; overflow-y: auto;">
@@ -217,7 +217,7 @@
                                         </div>
                                         @if (!string.IsNullOrEmpty(fileResult.AIInsight))
                                         {
-                                            <small class="text-muted">🧠 @fileResult.AIInsight</small>
+                                            <small class="text-muted"><span class="oi oi-brain"></span> @fileResult.AIInsight</small>
                                         }
                                     </div>
                                 </div>
@@ -300,11 +300,11 @@
         try
         {
             analysisResult = await MultiFileAnalysisService.AnalyzeMultipleFilesAsync(selectedFiles, selectedAnalysisType);
-            statusMessage = $"✅ Analysis complete! Processed {analysisResult.TotalFiles} files.";
+            statusMessage = $"Analysis complete! Processed {analysisResult.TotalFiles} files.";
         }
         catch (Exception ex)
         {
-            statusMessage = $"❌ Analysis failed: {ex.Message}";
+            statusMessage = $"Analysis failed: {ex.Message}";
         }
         finally
         {
