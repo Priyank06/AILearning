@@ -1,0 +1,489 @@
+﻿@page "/"
+@using PoC1_LegacyAnalyzer_Web.Models
+@using PoC1_LegacyAnalyzer_Web.Services
+@inject IReportService ReportService
+@inject IReportService ReportService
+@inject IFileDownloadService FileDownloadService
+@inject ICodeAnalysisService CodeAnalysisService
+@inject IAIAnalysisService AIAnalysisService
+
+<PageTitle>AI Code Analysis</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <h1 class="display-4 mb-2">AI-Enhanced Code Analyzer</h1>
+            <p class="lead text-muted">Intelligent Legacy Code Migration Assistant</p>
+        </div>
+    </div>
+
+    <div class="row">
+
+        <div class="col-lg-6">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">📁 Code Input & Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Analysis Type:</label>
+                        <select class="form-select" @bind="selectedAnalysisType">
+                            <option value="general">🔍 General Modernization</option>
+                            <option value="security">🛡️ Security Audit</option>
+                            <option value="performance">⚡ Performance Analysis</option>
+                            <option value="migration">🚀 Migration Assessment</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">C# Code to Analyze:</label>
+                        <textarea class="form-control font-monospace"
+                                  rows="12"
+                                  @bind="codeInput"
+                                  placeholder="Paste your C# code here..."
+                                  style="font-size: 13px;"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <button class="btn btn-outline-secondary me-2" @onclick="LoadSampleCode">
+                            📄 Load Sample Code
+                        </button>
+                        <button class="btn btn-primary" @onclick="AnalyzeCode" disabled="@isAnalyzing">
+                            @if (isAnalyzing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                <text>Analyzing...</text>
+                            }
+                            else
+                            {
+                                <text>🚀 Analyze Code</text>
+                            }
+                        </button>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(statusMessage))
+                    {
+                        <div class="alert alert-info">
+                            <small>@statusMessage</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="col-lg-6">
+            @if (analysisResult != null)
+            {
+                <div class="card shadow">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">📊 Analysis Results</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Metrics Cards -->
+                        <div class="row mb-3">
+                            <div class="col-3">
+                                <div class="card bg-light">
+                                    <div class="card-body p-2 text-center">
+                                        <h6 class="card-title mb-1">Classes</h6>
+                                        <h4 class="text-primary mb-0">@analysisResult.ClassCount</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="card bg-light">
+                                    <div class="card-body p-2 text-center">
+                                        <h6 class="card-title mb-1">Methods</h6>
+                                        <h4 class="text-info mb-0">@analysisResult.MethodCount</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="card bg-light">
+                                    <div class="card-body p-2 text-center">
+                                        <h6 class="card-title mb-1">Properties</h6>
+                                        <h4 class="text-warning mb-0">@analysisResult.PropertyCount</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="card bg-light">
+                                    <div class="card-body p-2 text-center">
+                                        <h6 class="card-title mb-1">Imports</h6>
+                                        <h4 class="text-secondary mb-0">@analysisResult.UsingCount</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (analysisResult.Classes.Any())
+                        {
+                            <div class="mb-3">
+                                <h6>📋 Identified Classes:</h6>
+                                <div class="bg-light p-2 rounded">
+                                    @foreach (var className in analysisResult.Classes)
+                                    {
+                                        <span class="badge bg-primary me-1">@className</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                    </div>
+                </div>
+
+                <!-- Simple Metrics Dashboard -->
+                @if (!string.IsNullOrEmpty(aiAnalysis))
+                {
+                    <div class="card shadow mt-3">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">📊 Project Metrics & Risk Assessment</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <!-- Complexity Score -->
+                                <div class="col-md-6">
+                                    <div class="card bg-light">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-title">🔢 Complexity Score</h6>
+                                            <div class="progress mb-2" style="height: 25px;">
+                                                <div class="progress-bar @GetComplexityColorClass()"
+                                                     style="width: @(GetComplexityPercentage())%">
+                                                    @GetComplexityScore()
+                                                </div>
+                                            </div>
+                                            <small class="text-muted">Based on classes, methods, and dependencies</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Risk Level -->
+                                <div class="col-md-6">
+                                    <div class="card bg-light">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-title">⚠️ Migration Risk</h6>
+                                            <h3 class="@GetRiskTextColorClass()">@GetRiskLevel()</h3>
+                                            <div class="progress mb-2" style="height: 25px;">
+                                                <div class="progress-bar @GetRiskProgressColorClass()"
+                                                     style="width: @(GetRiskPercentage())%">
+                                                    @GetRiskPercentage()%
+                                                </div>
+                                            </div>
+                                            <small class="text-muted">Migration complexity assessment</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+
+            <!-- AI Analysis Section -->
+            @if (!string.IsNullOrEmpty(aiAnalysis))
+            {
+                <div class="card shadow mt-3">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">🧠 AI-Powered Insights</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="font-monospace" style="white-space: pre-line; font-size: 14px;">
+                            @aiAnalysis
+                        </div>
+                    </div>
+                </div>
+            }
+
+
+            <!-- Report Generation Section -->
+            @if (analysisResult != null && !string.IsNullOrEmpty(aiAnalysis))
+            {
+                <div class="card shadow mt-3">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">📋 Executive Report</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <p class="mb-2">Professional analysis report ready for stakeholder distribution.</p>
+                                <small class="text-muted">
+                                    Includes: Executive Summary, Technical Analysis, Business Impact Assessment, Next Steps
+                                </small>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <button class="btn btn-success me-2" @onclick="DownloadReport" disabled="@isGeneratingReport">
+                                    @if (isGeneratingReport)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    📄 Download Report (.md)
+                                </button>
+                                <button class="btn btn-outline-success" @onclick="PreviewReport">
+                                    👁️ Preview
+                                </button>
+                            </div>
+                        </div>
+
+                        @if (showReportPreview && !string.IsNullOrEmpty(reportPreviewContent))
+                        {
+                            <hr />
+                            <div class="bg-light p-3 rounded mt-3" style="max-height: 400px; overflow-y: auto;">
+                                <h6>📋 Report Preview:</h6>
+                                <pre style="white-space: pre-wrap; font-size: 12px;">@reportPreviewContent</pre>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+        </div>
+    </div>
+</div>
+
+@code {
+    private string codeInput = "";
+    private string selectedAnalysisType = "general";
+    private bool isAnalyzing = false;
+    private string statusMessage = "";
+    private CodeAnalysisResult? analysisResult;
+    private string aiAnalysis = "";
+    private bool isGeneratingReport = false;
+    private bool showReportPreview = false;
+    private string reportPreviewContent = "";
+
+    private async Task AnalyzeCode()
+    {
+        if (string.IsNullOrWhiteSpace(codeInput))
+        {
+            statusMessage = "Please enter some C# code to analyze.";
+            return;
+        }
+
+        isAnalyzing = true;
+        statusMessage = "Parsing C# code with Roslyn...";
+        StateHasChanged();
+
+        try
+        {
+            analysisResult = await CodeAnalysisService.AnalyzeCodeAsync(codeInput);
+            statusMessage = "Roslyn analysis complete. Getting AI insights...";
+            StateHasChanged();
+
+            aiAnalysis = await AIAnalysisService.GetAnalysisAsync(codeInput, selectedAnalysisType, analysisResult);
+            statusMessage = $"✅ Analysis complete! Found {analysisResult.ClassCount} classes, {analysisResult.MethodCount} methods.";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Analysis failed: {ex.Message}";
+            aiAnalysis = "";
+        }
+        finally
+        {
+            isAnalyzing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DownloadReport()
+    {
+        if (analysisResult == null || string.IsNullOrEmpty(aiAnalysis))
+            return;
+
+        isGeneratingReport = true;
+        statusMessage = "Generating professional report...";
+        StateHasChanged();
+
+        try
+        {
+            var fileName = $"{selectedAnalysisType}-analysis-{DateTime.Now:yyyyMMdd-HHmmss}.md";
+            var reportBytes = await ReportService.GenerateReportAsBytesAsync(
+                analysisResult,
+                aiAnalysis,
+                "WebAnalysis",
+                selectedAnalysisType);
+
+            await FileDownloadService.DownloadFileAsync(fileName, reportBytes, "text/markdown");
+            statusMessage = $"✅ Report downloaded: {fileName}";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Report generation failed: {ex.Message}";
+        }
+        finally
+        {
+            isGeneratingReport = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PreviewReport()
+    {
+        try
+        {
+            if (analysisResult != null)
+            {
+                reportPreviewContent = ReportService.GenerateReportContent(
+                    analysisResult,
+                    aiAnalysis,
+                    "WebAnalysis",
+                    selectedAnalysisType);
+            }
+
+            showReportPreview = !showReportPreview;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Preview generation failed: {ex.Message}";
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        statusMessage = "Ready for code analysis. Load sample code or paste your own C# code.";
+    }
+
+    private async Task DownloadMarkdownReport()
+    {
+        if (analysisResult == null || string.IsNullOrEmpty(aiAnalysis)) return;
+
+        isGeneratingReport = true;
+        statusMessage = "Generating professional report...";
+        StateHasChanged();
+
+        try
+        {
+            var fileName = $"{selectedAnalysisType}-analysis-{DateTime.Now:yyyyMMdd-HHmmss}.md";
+            var reportBytes = await ReportService.GenerateReportAsBytesAsync(
+                analysisResult,
+                aiAnalysis,
+                "WebAnalysis",
+                selectedAnalysisType);
+
+            await FileDownloadService.DownloadFileAsync(fileName, reportBytes, "text/markdown");
+
+            statusMessage = $"Report downloaded: {fileName}";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Report generation failed: {ex.Message}";
+        }
+        finally
+        {
+            isGeneratingReport = false;
+            StateHasChanged();
+        }
+    }
+
+    private int GetComplexityScore()
+    {
+        if (analysisResult == null) return 0;
+        var baseComplexity = analysisResult.ClassCount * 10;
+        var methodComplexity = analysisResult.MethodCount * 2;
+        var dependencyComplexity = analysisResult.UsingCount * 3;
+        var totalComplexity = baseComplexity + methodComplexity + dependencyComplexity;
+        return Math.Min(100, Math.Max(0, totalComplexity / 5));
+    }
+    private int GetComplexityPercentage() => GetComplexityScore();
+    private string GetComplexityColorClass()
+    {
+        var score = GetComplexityScore();
+        if (score < 30) return "bg-success";
+        if (score < 70) return "bg-warning";
+        return "bg-danger";
+    }
+    private string GetRiskLevel()
+    {
+        var score = GetComplexityScore();
+        if (score < 30) return "Low";
+        if (score < 70) return "Medium";
+        return "High";
+    }
+    private int GetRiskPercentage() => GetComplexityScore();
+    private string GetRiskTextColorClass()
+    {
+        var level = GetRiskLevel();
+        return level switch
+        {
+            "Low" => "text-success",
+            "Medium" => "text-warning",
+            "High" => "text-danger",
+            _ => "text-secondary"
+        };
+    }
+    private string GetRiskProgressColorClass()
+    {
+        var level = GetRiskLevel();
+        return level switch
+        {
+            "Low" => "bg-success",
+            "Medium" => "bg-warning",
+            "High" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+    private void LoadSampleCode()
+    {
+        codeInput = @"using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+
+namespace LegacyApplication
+{
+    public class CustomerManager
+    {
+        private string connectionString = ""Server=localhost;Database=MyDB;Trusted_Connection=true;"";
+
+        public List<Customer> GetCustomers()
+        {
+            var customers = new List<Customer>();
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                var command = new SqlCommand(""SELECT * FROM Customers"", connection);
+                var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    customers.Add(new Customer
+                    {
+                        Id = (int)reader[""Id""],
+                        Name = reader[""Name""].ToString(),
+                        Email = reader[""Email""].ToString()
+                    });
+                }
+            }
+            return customers;
+        }
+
+        public void UpdateCustomer(int id, string name, string email)
+        {
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                var sql = $""UPDATE Customers SET Name='{name}', Email='{email}' WHERE Id={id}"";
+                var command = new SqlCommand(sql, connection);
+                command.ExecuteNonQuery();
+            }
+        }
+    }
+
+    public class Customer
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Email { get; set; }
+    }
+
+    internal class Program
+    {
+        static void Main(string[] args)
+        {
+            var manager = new CustomerManager();
+            var customers = manager.GetCustomers();
+            Console.WriteLine($""Found {customers.Count} customers"");
+        }
+    }
+}";
+        statusMessage = "Sample legacy code loaded - ready for analysis!";
+    }
+}

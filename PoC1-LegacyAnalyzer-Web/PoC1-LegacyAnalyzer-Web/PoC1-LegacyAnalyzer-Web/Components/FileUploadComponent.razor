@@ -1,0 +1,208 @@
+﻿@using Microsoft.AspNetCore.Components.Forms
+
+<div class="card shadow mb-3">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">📁 Project File Upload</h5>
+    </div>
+    <div class="card-body">
+        <div class="upload-area @(isDragOver ? "drag-over" : "")"
+             @ondragover="HandleDragOver"
+             @ondragover:preventDefault="true"
+             @ondragenter="HandleDragEnter"
+             @ondragleave="HandleDragLeave"
+             @ondrop="HandleFileDrop"
+             @ondrop:preventDefault="true">
+
+            <div class="text-center p-4">
+                <div style="font-size: 3rem;" class="text-muted mb-3">📁</div>
+                <h6>Drag & Drop C# Files Here</h6>
+                <p class="text-muted">Or click to browse files (max 10 files)</p>
+
+                <InputFile id="fileInput"
+                           OnChange="HandleFileSelection"
+                           multiple
+                           accept=".cs"
+                           class="d-none" />
+                <label for="fileInput" class="btn btn-outline-primary">
+                    📂 Browse Files
+                </label>
+            </div>
+        </div>
+
+        @if (uploadedFiles.Any())
+        {
+            <div class="mt-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">📄 Uploaded Files (@uploadedFiles.Count):</h6>
+                    <div>
+                        <label class="form-label me-2">Analysis Type:</label>
+                        <select class="form-select d-inline-block w-auto" @bind="selectedAnalysisType">
+                            <option value="general">🔍 General</option>
+                            <option value="security">🛡️ Security</option>
+                            <option value="performance">⚡ Performance</option>
+                            <option value="migration">🚀 Migration</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="max-height: 200px; overflow-y: auto;" class="mb-3">
+                    @foreach (var file in uploadedFiles)
+                    {
+                        <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-1">
+                            <span>📄 @file.Name</span>
+                            <div>
+                                <small class="text-muted me-2">@FormatFileSize(file.Size)</small>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="(() => RemoveFile(file))">
+                                    ❌
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="text-center">
+                    <button class="btn btn-success me-2" @onclick="ProcessUploadedFiles" disabled="@isProcessingFiles">
+                        @if (isProcessingFiles)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <text>Processing @uploadedFiles.Count files...</text>
+                        }
+                        else
+                        {
+                            <text>🚀 Analyze All Files (@uploadedFiles.Count)</text>
+                        }
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="ClearFiles">
+                        🗑️ Clear All
+                    </button>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert alert-info mt-3">
+                <small>@statusMessage</small>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .upload-area {
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        min-height: 150px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .upload-area:hover, .upload-area.drag-over {
+            border-color: #0d6efd;
+            background-color: #f8f9fa;
+        }
+
+    .drag-over {
+        border-color: #0d6efd !important;
+        background-color: #e3f2fd !important;
+    }
+</style>
+
+@code {
+    private bool isDragOver = false;
+    private bool isProcessingFiles = false;
+    private string statusMessage = "";
+    private string selectedAnalysisType = "general";
+    private List<IBrowserFile> uploadedFiles = new();
+
+    [Parameter] public EventCallback<List<IBrowserFile>> OnFilesSelected { get; set; }
+    [Parameter] public EventCallback<List<IBrowserFile>> OnFilesProcessed { get; set; }
+
+    private void HandleDragOver(DragEventArgs e)
+    {
+        // Handled by @ondragover:preventDefault="true"
+    }
+
+    private void HandleDragEnter(DragEventArgs e)
+    {
+        isDragOver = true;
+    }
+
+    private void HandleDragLeave(DragEventArgs e)
+    {
+        isDragOver = false;
+    }
+
+    private async Task HandleFileDrop(DragEventArgs e)
+    {
+        isDragOver = false;
+        statusMessage = "File drop detected. Please use the Browse Files button to select files.";
+        StateHasChanged();
+    }
+
+    private async Task HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        var newFiles = e.GetMultipleFiles(10); // Max 10 files
+
+        // Filter for .cs files only
+        var csFiles = newFiles.Where(f => f.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (csFiles.Count != newFiles.Count())
+        {
+            statusMessage = $"Only C# files (.cs) are supported. Added {csFiles.Count} out of {newFiles.Count()} files.";
+        }
+        else
+        {
+            statusMessage = $"Added {csFiles.Count} C# files ready for analysis.";
+        }
+
+        uploadedFiles.AddRange(csFiles);
+        await OnFilesSelected.InvokeAsync(uploadedFiles);
+        StateHasChanged();
+    }
+
+    private void RemoveFile(IBrowserFile file)
+    {
+        uploadedFiles.Remove(file);
+        statusMessage = $"Removed {file.Name}. {uploadedFiles.Count} files remaining.";
+        StateHasChanged();
+    }
+
+    private void ClearFiles()
+    {
+        uploadedFiles.Clear();
+        statusMessage = "All files cleared.";
+        StateHasChanged();
+    }
+
+    private async Task ProcessUploadedFiles()
+    {
+        if (!uploadedFiles.Any()) return;
+
+        isProcessingFiles = true;
+        statusMessage = $"Processing {uploadedFiles.Count} files with {selectedAnalysisType} analysis...";
+        StateHasChanged();
+
+        await OnFilesProcessed.InvokeAsync(uploadedFiles);
+
+        isProcessingFiles = false;
+        statusMessage = $"Analysis complete for {uploadedFiles.Count} files.";
+        StateHasChanged();
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int counter = 0;
+        decimal number = bytes;
+        while (Math.Round(number / 1024) >= 1)
+        {
+            number /= 1024;
+            counter++;
+        }
+        return $"{number:n1} {suffixes[counter]}";
+    }
+}

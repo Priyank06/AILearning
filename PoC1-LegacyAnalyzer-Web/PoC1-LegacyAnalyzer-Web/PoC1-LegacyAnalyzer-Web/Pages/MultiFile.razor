@@ -1,0 +1,349 @@
+﻿@page "/multifile"
+@using PoC1_LegacyAnalyzer_Web.Services
+@using PoC1_LegacyAnalyzer_Web.Models
+@using Microsoft.AspNetCore.Components.Forms
+@inject IMultiFileAnalysisService MultiFileAnalysisService
+@inject IFileDownloadService FileDownloadService
+
+<PageTitle>Project Analysis</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <h1 class="display-4 mb-2">📁 Project Analysis</h1>
+            <p class="lead text-muted">AI-Powered Legacy Project Assessment</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Upload Section -->
+        <div class="col-lg-6">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">📂 Upload Project Files</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Analysis Type:</label>
+                        <select class="form-select" @bind="selectedAnalysisType">
+                            <option value="general">🔍 General Assessment</option>
+                            <option value="security">🛡️ Security Audit</option>
+                            <option value="performance">⚡ Performance Analysis</option>
+                            <option value="migration">🚀 Migration Readiness</option>
+                        </select>
+                    </div>
+
+                    <div class="upload-area mb-3" @ondragover="HandleDragOver" @ondragover:preventDefault="true"
+                         @ondrop="HandleFileDrop" @ondrop:preventDefault="true">
+                        <div class="text-center p-4">
+                            <div style="font-size: 3rem;" class="text-muted mb-3">📁</div>
+                            <h6>Drop C# Files Here</h6>
+                            <p class="text-muted mb-3">Or click to browse (max 10 files)</p>
+                            <InputFile id="fileInput" OnChange="HandleFileSelection" multiple accept=".cs" class="d-none" />
+                            <label for="fileInput" class="btn btn-primary">📂 Browse Files</label>
+                        </div>
+                    </div>
+
+                    @if (selectedFiles.Any())
+                    {
+                        <div class="mb-3">
+                            <h6>📄 Selected Files (@selectedFiles.Count):</h6>
+                            <div style="max-height: 200px; overflow-y: auto;">
+                                @foreach (var file in selectedFiles)
+                                {
+                                    <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-1">
+                                        <span>📄 @file.Name</span>
+                                        <div>
+                                            <small class="text-muted me-2">@FormatFileSize(file.Size)</small>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="@(() => RemoveFile(file))">❌</button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="text-center">
+                            <button class="btn btn-success me-2" @onclick="AnalyzeProject" disabled="@isAnalyzing">
+                                @if (isAnalyzing)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                    <text>Analyzing @selectedFiles.Count files...</text>
+                                }
+                                else
+                                {
+                                    <text>🚀 Analyze Project (@selectedFiles.Count files)</text>
+                                }
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="ClearFiles">🗑️ Clear All</button>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(statusMessage))
+                    {
+                        <div class="alert alert-info mt-3">
+                            <small>@statusMessage</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="col-lg-6">
+            @if (analysisResult != null)
+            {
+                <!-- Project Summary -->
+                <div class="card shadow mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">📊 Project Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6 col-lg-3">
+                                <div class="card bg-primary text-white text-center">
+                                    <div class="card-body p-2">
+                                        <h4>@analysisResult.TotalFiles</h4>
+                                        <small>Files</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="card bg-info text-white text-center">
+                                    <div class="card-body p-2">
+                                        <h4>@analysisResult.TotalClasses</h4>
+                                        <small>Classes</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="card bg-warning text-white text-center">
+                                    <div class="card-body p-2">
+                                        <h4>@analysisResult.TotalMethods</h4>
+                                        <small>Methods</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="card bg-secondary text-white text-center">
+                                    <div class="card-body p-2">
+                                        <h4>@analysisResult.TotalProperties</h4>
+                                        <small>Properties</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risk Assessment -->
+                <div class="card shadow mb-3">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">⚠️ Risk Assessment</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Complexity Score</h6>
+                                <div class="progress mb-2" style="height: 25px;">
+                                    <div class="progress-bar @GetComplexityColorClass(analysisResult.OverallComplexityScore)"
+                                         style="width: @(analysisResult.OverallComplexityScore)%">
+                                        @analysisResult.OverallComplexityScore/100
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Risk Level</h6>
+                                <h3 class="@GetRiskTextColorClass(analysisResult.OverallRiskLevel)">
+                                    @analysisResult.OverallRiskLevel
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Assessment -->
+                @if (!string.IsNullOrEmpty(analysisResult.OverallAssessment))
+                {
+                    <div class="card shadow mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">🧠 AI Assessment</h5>
+                        </div>
+                        <div class="card-body">
+                            <p>@analysisResult.OverallAssessment</p>
+                        </div>
+                    </div>
+                }
+
+                <!-- Key Recommendations -->
+                @if (analysisResult.KeyRecommendations.Any())
+                {
+                    <div class="card shadow mb-3">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0">💡 Key Recommendations</h5>
+                        </div>
+                        <div class="card-body">
+                            @foreach (var recommendation in analysisResult.KeyRecommendations)
+                            {
+                                <div class="alert alert-light">
+                                    <small>• @recommendation</small>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- File Details -->
+                <div class="card shadow">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">📄 File Analysis Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div style="max-height: 400px; overflow-y: auto;">
+                            @foreach (var fileResult in analysisResult.FileResults)
+                            {
+                                <div class="card mb-2">
+                                    <div class="card-body p-2">
+                                        <h6 class="card-title">@fileResult.FileName</h6>
+                                        <div class="row">
+                                            <div class="col-3">
+                                                <small>Classes: <strong>@fileResult.StaticAnalysis.ClassCount</strong></small>
+                                            </div>
+                                            <div class="col-3">
+                                                <small>Methods: <strong>@fileResult.StaticAnalysis.MethodCount</strong></small>
+                                            </div>
+                                            <div class="col-6">
+                                                <small>Complexity: <strong>@fileResult.ComplexityScore</strong></small>
+                                            </div>
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(fileResult.AIInsight))
+                                        {
+                                            <small class="text-muted">🧠 @fileResult.AIInsight</small>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .upload-area {
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        min-height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .upload-area:hover {
+            border-color: #0d6efd;
+            background-color: #f8f9fa;
+        }
+</style>
+
+@code {
+    private string selectedAnalysisType = "general";
+    private bool isAnalyzing = false;
+    private string statusMessage = "";
+    private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
+    private MultiFileAnalysisResult? analysisResult;
+
+    private async Task HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        var newFiles = e.GetMultipleFiles(10);
+        var csFiles = newFiles.Where(f => f.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        selectedFiles.AddRange(csFiles);
+        statusMessage = $"Added {csFiles.Count} C# files. Total: {selectedFiles.Count}";
+        StateHasChanged();
+    }
+
+    private void HandleDragOver(DragEventArgs e)
+    {
+        // Handled by preventDefault
+    }
+
+    private void HandleFileDrop(DragEventArgs e)
+    {
+        statusMessage = "Please use the Browse Files button to select files.";
+    }
+
+    private void RemoveFile(IBrowserFile file)
+    {
+        selectedFiles.Remove(file);
+        statusMessage = $"Removed {file.Name}. {selectedFiles.Count} files remaining.";
+        StateHasChanged();
+    }
+
+    private void ClearFiles()
+    {
+        selectedFiles.Clear();
+        statusMessage = "All files cleared.";
+        StateHasChanged();
+    }
+
+    private async Task AnalyzeProject()
+    {
+        if (!selectedFiles.Any()) return;
+
+        isAnalyzing = true;
+        statusMessage = $"Analyzing {selectedFiles.Count} files with {selectedAnalysisType} analysis...";
+        StateHasChanged();
+
+        try
+        {
+            analysisResult = await MultiFileAnalysisService.AnalyzeMultipleFilesAsync(selectedFiles, selectedAnalysisType);
+            statusMessage = $"✅ Analysis complete! Processed {analysisResult.TotalFiles} files.";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Analysis failed: {ex.Message}";
+        }
+        finally
+        {
+            isAnalyzing = false;
+            StateHasChanged();
+        }
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int counter = 0;
+        decimal number = bytes;
+        while (Math.Round(number / 1024) >= 1)
+        {
+            number /= 1024;
+            counter++;
+        }
+        return $"{number:n1} {suffixes[counter]}";
+    }
+
+    private string GetComplexityColorClass(int score)
+    {
+        if (score < 30)
+            return "bg-success";
+        else if (score < 60)
+            return "bg-warning";
+        else
+            return "bg-danger";
+    }
+
+    private string GetRiskTextColorClass(string risk)
+    {
+        return risk switch
+        {
+            "LOW" => "text-success",
+            "MEDIUM" => "text-warning",
+            "HIGH" => "text-danger",
+            _ => "text-secondary"
+        };
+    }
+}
