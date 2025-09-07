@@ -123,76 +123,103 @@
 
         @if (isAnalyzing)
         {
-            <div class="card shadow border-primary mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">
-                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                        AI Analysis in Progress
-                    </h5>
-                </div>
-                <div class="card-body">
-                    @if (analysisProgress != null)
-                    {
-                        <!-- Main Progress Bar -->
-                        <div class="progress mb-3" style="height: 30px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
-                                 role="progressbar"
-                                 style="width: @($"{analysisProgress.ProgressPercentage:F1}")%"
-                                 aria-valuenow="@analysisProgress.ProgressPercentage"
-                                 aria-valuemin="0"
-                                 aria-valuemax="100">
-                                @($"{analysisProgress.ProgressPercentage:F1}")% Complete
-                            </div>
+            <!-- Modal Overlay for Progress -->
+            <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+                <div class="modal-dialog modal-dialog-centered modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title">
+                                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                AI-Powered Enterprise Analysis in Progress
+                            </h5>
                         </div>
-
-                        <!-- Current Status -->
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <h6><i class="bi bi-file-earmark-code"></i> Current File:</h6>
-                                <div class="alert alert-light py-2">
-                                    <strong>@analysisProgress.CurrentFile</strong>
+                        <div class="modal-body p-4">
+                            @if (analysisProgress != null)
+                            {
+                                <!-- Executive Progress Display -->
+                                <div class="text-center mb-4">
+                                    <h4 class="text-primary">Analyzing Your Legacy Codebase</h4>
+                                    <p class="text-muted">AI-powered insights generating in real-time</p>
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <h6><i class="bi bi-graph-up"></i> Progress Details:</h6>
-                                <div class="alert alert-light py-2">
-                                    <strong>@analysisProgress.CompletedFiles</strong> of
-                                    <strong>@analysisProgress.TotalFiles</strong> files completed
+
+                                <!-- Main Progress Bar -->
+                                <div class="mb-4">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="fw-bold">Overall Progress</span>
+                                        <span class="fw-bold text-primary">@($"{analysisProgress.ProgressPercentage:F1}")%</span>
+                                    </div>
+                                    <div class="progress" style="height: 25px;">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                                             style="width: @($"{analysisProgress.ProgressPercentage:F1}")%">
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
 
-                        <!-- AI Status -->
-                        <div class="alert alert-info">
-                            <i class="bi bi-cpu"></i> <strong>AI Status:</strong> @analysisProgress.Status
-                        </div>
+                                <!-- Current Analysis Status -->
+                                <div class="row g-3 mb-4">
+                                    <div class="col-md-6">
+                                        <div class="card border-primary">
+                                            <div class="card-body text-center">
+                                                <i class="bi bi-file-earmark-code fs-2 text-primary mb-2"></i>
+                                                <h6 class="card-title">Current File</h6>
+                                                <p class="card-text fw-bold">@analysisProgress.CurrentFile</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card border-success">
+                                            <div class="card-body text-center">
+                                                <i class="bi bi-graph-up fs-2 text-success mb-2"></i>
+                                                <h6 class="card-title">Files Completed</h6>
+                                                <p class="card-text fw-bold">@analysisProgress.CompletedFiles of @analysisProgress.TotalFiles</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
-                        <!-- Time Information -->
-                        <div class="row text-center">
-                            <div class="col-md-4">
-                                <small class="text-muted">Analysis Type</small>
-                                <div><strong>@analysisProgress.CurrentAnalysisType.ToUpper()</strong></div>
-                            </div>
-                            <div class="col-md-4">
-                                <small class="text-muted">Elapsed Time</small>
-                                <div><strong>@($"{analysisProgress.ElapsedTime.TotalSeconds:F0}s")</strong></div>
-                            </div>
-                            <div class="col-md-4">
-                                <small class="text-muted">Files Remaining</small>
-                                <div><strong>@(analysisProgress.TotalFiles - analysisProgress.CompletedFiles)</strong></div>
-                            </div>
+                                <!-- AI Status Banner -->
+                                <div class="alert alert-info d-flex align-items-center">
+                                    <i class="bi bi-cpu-fill fs-4 me-3"></i>
+                                    <div>
+                                        <strong>AI Analysis Status:</strong><br>
+                                        <span>@analysisProgress.Status</span>
+                                    </div>
+                                </div>
+
+                                <!-- Time and Performance Metrics -->
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <div class="border-end">
+                                            <h6 class="text-muted mb-1">Analysis Type</h6>
+                                            <strong class="text-primary">@analysisProgress.CurrentAnalysisType.ToUpper()</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="border-end">
+                                            <h6 class="text-muted mb-1">Elapsed Time</h6>
+                                            <strong class="text-success">@($"{analysisProgress.ElapsedTime.TotalSeconds:F0}s")</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <h6 class="text-muted mb-1">Remaining</h6>
+                                        <strong class="text-warning">@(analysisProgress.TotalFiles - analysisProgress.CompletedFiles) files</strong>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
+                                    <h5>Initializing AI Analysis Engine</h5>
+                                    <p class="text-muted">Preparing intelligent code assessment...</p>
+                                </div>
+                            }
                         </div>
-                    }
-                    else
-                    {
-                        <div class="text-center">
-                            <div class="spinner-border text-primary" role="status"></div>
-                            <p class="mt-2">Initializing AI analysis engine...</p>
-                        </div>
-                    }
+                    </div>
                 </div>
             </div>
         }
+
 
         <!-- Results Section -->
         <div class="col-lg-8">
