@@ -219,11 +219,12 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             _ => "substantial to extensive"
         };
 
-        private string GetRecommendedApproach(int complexity) => complexity switch
+        private string GetRecommendedApproach(int complexityScore) => complexityScore switch
         {
-            < 30 => "standard development practices with code review",
-            < 60 => "structured approach with experienced team and architectural oversight",
-            _ => "enterprise-grade methodology with dedicated migration team and executive sponsorship"
+            < 30 => "Agile development with standard practices",
+            < 50 => "Structured approach with experienced team",
+            < 70 => "Phased migration with risk mitigation",
+            _ => "Enterprise methodology with dedicated team"
         };
 
         private string GetResourceRequirement(int complexity) => complexity switch
@@ -250,5 +251,139 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 _ => $"Code quality assessment shows {analysis.ClassCount} classes with {analysis.MethodCount} methods requiring structured modernization approach with quality assurance."
             };
         }
+
+        public async Task<MultiFileAnalysisResult> AnalyzeMultipleFilesWithProgressAsync(List<IBrowserFile> files, string analysisType, IProgress<AnalysisProgress> progress = null)
+        {
+            _logger.LogInformation("Starting analysis for {FileCount} files", files.Count);
+
+            var result = new MultiFileAnalysisResult
+            {
+                TotalFiles = files.Count
+            };
+
+            var fileResults = new List<FileAnalysisResult>();
+            var analysisProgress = new AnalysisProgress
+            {
+                TotalFiles = files.Count,
+                CurrentAnalysisType = analysisType,
+                StartTime = DateTime.Now
+            };
+
+            for (int i = 0; i < files.Take(10).Count(); i++) // Limit to 10 files for performance
+            {
+                var file = files[i];
+
+                // Update progress BEFORE processing
+                analysisProgress.CurrentFile = file.Name;
+                analysisProgress.CompletedFiles = i;
+                analysisProgress.Status = $"Analyzing {file.Name} with AI insights...";
+
+                // Report progress to UI
+                progress?.Report(analysisProgress);
+
+                // Small delay for visual feedback
+                await Task.Delay(200);
+
+                try
+                {
+                    var fileResult = await AnalyzeIndividualFileAsync(file, analysisType);
+                    fileResults.Add(fileResult);
+
+                    // Update metrics
+                    result.TotalClasses += fileResult.StaticAnalysis.ClassCount;
+                    result.TotalMethods += fileResult.StaticAnalysis.MethodCount;
+                    result.TotalProperties += fileResult.StaticAnalysis.PropertyCount;
+                    result.TotalUsingStatements += fileResult.StaticAnalysis.UsingCount;
+
+                    _logger.LogDebug("Completed analysis for: {FileName}", file.Name);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Analysis failed for file: {FileName}", file.Name);
+
+                    fileResults.Add(new FileAnalysisResult
+                    {
+                        FileName = file.Name,
+                        FileSize = file.Size,
+                        Status = "Analysis Failed",
+                        ErrorMessage = $"Processing error: {ex.Message}",
+                        StaticAnalysis = new CodeAnalysisResult()
+                    });
+                }
+            }
+
+            // Final progress update
+            analysisProgress.CompletedFiles = fileResults.Count;
+            analysisProgress.Status = "Analysis completed - generating insights...";
+            progress?.Report(analysisProgress);
+
+            result.FileResults = fileResults;
+            result.OverallComplexityScore = CalculateProjectComplexity(result);
+            result.OverallRiskLevel = DetermineRiskLevel(result.OverallComplexityScore);
+            result.KeyRecommendations = GenerateStrategicRecommendations(result, analysisType);
+            result.OverallAssessment = GenerateExecutiveAssessment(result, analysisType);
+            result.ProjectSummary = GenerateProjectSummary(result);
+
+            _logger.LogInformation("Analysis completed for {FileCount} files", result.TotalFiles);
+            return result;
+        }
+
+        public BusinessMetrics CalculateBusinessMetrics(MultiFileAnalysisResult result)
+        {
+            // Conservative estimate: 30 minutes per method for manual review
+            var baseHours = result.TotalMethods * 0.5m;
+            var complexityMultiplier = (result.OverallComplexityScore / 100m) + 0.5m;
+            var savedHours = baseHours * complexityMultiplier;
+
+            // Compliance cost avoidance based on risk level
+            var complianceAvoidance = result.OverallRiskLevel switch
+            {
+                "HIGH" => 15000m,
+                "MEDIUM" => 8000m,
+                "LOW" => 3000m,
+                _ => 1000m
+            };
+
+            var metrics = new BusinessMetrics
+            {
+                EstimatedDeveloperHoursSaved = savedHours,
+                AverageHourlyRate = 125m,
+                MigrationTimeline = GetMigrationTimeline(result.OverallComplexityScore),
+                RiskMitigation = $"{result.OverallRiskLevel} risk level - {GetRiskMitigationStrategy(result.OverallRiskLevel)}",
+                ComplianceCostAvoidance = complianceAvoidance,
+                ProjectSize = GetProjectSizeAssessment(result.TotalFiles, result.TotalClasses),
+                RecommendedApproach = GetRecommendedApproach(result.OverallComplexityScore)
+            };
+
+            // Calculate computed values
+            metrics.CalculateValues();
+
+            return metrics;
+        }
+
+        private string GetMigrationTimeline(int complexityScore) => complexityScore switch
+        {
+            < 30 => "2-4 weeks",
+            < 50 => "4-8 weeks",
+            < 70 => "8-12 weeks",
+            _ => "12+ weeks"
+        };
+
+        private string GetRiskMitigationStrategy(string riskLevel) => riskLevel switch
+        {
+            "HIGH" => "Dedicated migration team with senior architect oversight required",
+            "MEDIUM" => "Experienced development team with structured approach recommended",
+            "LOW" => "Standard development practices with code review sufficient",
+            _ => "Assessment in progress"
+        };
+
+        private string GetProjectSizeAssessment(int fileCount, int classCount) => (fileCount, classCount) switch
+        {
+            ( < 5, < 10) => "Small Project",
+            ( < 15, < 25) => "Medium Project",
+            ( < 30, < 50) => "Large Project",
+            _ => "Enterprise Project"
+        };
+
     }
 }

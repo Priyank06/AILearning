@@ -6,5 +6,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
     public interface IMultiFileAnalysisService
     {
         Task<MultiFileAnalysisResult> AnalyzeMultipleFilesAsync(List<IBrowserFile> files, string analysisType);
+        //Task<MultiFileAnalysisResult> AnalyzeMultipleFilesAsync(List<IBrowserFile> files, string analysisType, IProgress<AnalysisProgress> progress = null);
+        Task<MultiFileAnalysisResult> AnalyzeMultipleFilesWithProgressAsync(List<IBrowserFile> files, string analysisType, IProgress<AnalysisProgress> progress = null);
+        BusinessMetrics CalculateBusinessMetrics(MultiFileAnalysisResult result);
     }
 }
