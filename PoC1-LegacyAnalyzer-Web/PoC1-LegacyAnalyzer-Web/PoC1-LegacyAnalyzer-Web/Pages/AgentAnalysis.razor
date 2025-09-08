@@ -1,0 +1,958 @@
+﻿@page "/agent"
+@using PoC1_LegacyAnalyzer_Web.Models
+@using PoC1_LegacyAnalyzer_Web.Services
+@inject ICodeAnalysisAgentService AgentService
+@inject ICodeAnalysisService CodeAnalysisService
+
+<PageTitle>AI Agent Analysis</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <div class="bg-gradient-primary text-white p-4 rounded shadow">
+                <h1 class="display-4 mb-2"> Autonomous AI Code Analysis Agent</h1>
+                <p class="lead mb-0">Strategic business-focused code analysis with multi-step AI reasoning</p>
+                <div class="mt-3">
+                    <span class="badge bg-light text-primary me-2">Multi-Step Reasoning</span>
+                    <span class="badge bg-light text-primary me-2">Business Goal Oriented</span>
+                    <span class="badge bg-light text-primary">Strategic Planning</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Input Section -->
+        <div class="col-lg-6">
+            <div class="card shadow border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-robot"></i> Agent Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Business Goal -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Business Objective:</label>
+                        <select class="form-select" @bind="selectedBusinessGoal" @bind:after="OnBusinessGoalChanged">
+                            <option value="cloud-migration">Prepare for Cloud Migration</option>
+                            <option value="security-compliance">Achieve Security Compliance</option>
+                            <option value="performance-optimization">Optimize Performance for Scale</option>
+                            <option value="modernization">Legacy System Modernization</option>
+                            <option value="cost-reduction">Reduce Maintenance Costs</option>
+                            <option value="custom">Custom Business Goal</option>
+                        </select>
+                    </div>
+
+                    @if (selectedBusinessGoal == "custom")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Custom Business Goal:</label>
+                            <textarea class="form-control" rows="2" @bind="customBusinessGoal"
+                                      placeholder="Describe your specific business objective..."></textarea>
+                        </div>
+                    }
+
+                    <!-- Project Context -->
+                    <div class="mb-3">
+                        <label class="form-label">Project Context:</label>
+                        <textarea class="form-control" rows="3" @bind="projectContext"
+                                  placeholder="Enterprise application, team size, timeline, constraints, compliance requirements..."></textarea>
+                    </div>
+
+                    <!-- Code Input -->
+                    <div class="mb-3">
+                        <label class="form-label">Legacy C# Code:</label>
+                        <textarea class="form-control font-monospace" rows="12" @bind="codeInput"
+                                  placeholder="Paste your legacy C# code here..." style="font-size: 13px;"></textarea>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="mb-3">
+                        <button class="btn btn-outline-secondary me-2" @onclick="LoadAgentSampleCode">
+                            <i class="bi bi-file-code"></i> Load Complex Sample
+                        </button>
+                        <button class="btn btn-success btn-lg" @onclick="StartAgentAnalysis" disabled="@isAgentAnalyzing">
+                            @if (isAgentAnalyzing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                <text>Agent Reasoning...</text>
+                            }
+                            else
+                            {
+                                <text><i class="bi bi-cpu"></i> Start Agent Analysis</text>
+                            }
+                        </button>
+                    </div>
+
+                    @if (isAgentAnalyzing)
+                    {
+                        <div class="card border-info mb-3">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="spinner-border text-primary me-3" role="status"></div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">🧠 Agent Status: @GetCurrentAgentStep()</h6>
+                                        <div class="progress" style="height: 8px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                                 style="width: @GetProgressPercentage()%"></div>
+                                        </div>
+                                        <small class="text-muted">@statusMessage</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(statusMessage))
+                    {
+                        <div class="alert alert-info">
+                            <small><i class="bi bi-info-circle"></i> @statusMessage</small>
+                        </div>
+                    }
+
+                </div>
+            </div>
+
+            <!-- Quick Comparison Card -->
+            @if (agentResult != null)
+            {
+                <div class="card shadow mt-3 border-success">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="mb-0"><i class="bi bi-speedometer2"></i> Agent vs Traditional Analysis</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="border-end">
+                                    <h5 class="text-muted">Traditional AI</h5>
+                                    <p class="mb-1"><strong>Single-step analysis</strong></p>
+                                    <p class="mb-1">Technical insights only</p>
+                                    <p class="mb-0">Generic recommendations</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h5 class="text-success">AI Agent</h5>
+                                <p class="mb-1"><strong>Multi-step reasoning</strong></p>
+                                <p class="mb-1">Business-goal oriented</p>
+                                <p class="mb-0">Strategic implementation plans</p>
+                            </div>
+                        </div>
+                        <div class="mt-3 text-center">
+                            <span class="badge bg-success fs-6">
+                                Confidence Score: @agentResult.ConfidenceScore%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            }
+
+        </div>
+
+        @if (agentResult != null)
+        {
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card shadow border-success">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0"> Agent vs Traditional Analysis Comparison</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-6">
+                                    <div class="border-end pe-3">
+                                        <h6 class="text-muted">Traditional AI Analysis</h6>
+                                        <ul class="list-unstyled text-start">
+                                            <li>✓ Single-step code review</li>
+                                            <li>✓ Technical insights only</li>
+                                            <li>✓ Generic recommendations</li>
+                                            <li>✓ Manual interpretation required</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-success"> AI Agent Analysis</h6>
+                                    <ul class="list-unstyled text-start">
+                                        <li><strong>✓ Multi-step reasoning process</strong></li>
+                                        <li><strong>✓ Business-goal oriented analysis</strong></li>
+                                        <li><strong>✓ Strategic implementation plans</strong></li>
+                                        <li><strong>✓ Executive-ready recommendations</strong></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="text-center mt-3">
+                                <span class="badge bg-success fs-6">
+                                    Agent Confidence: @agentResult.ConfidenceScore%
+                                </span>
+                                <span class="badge bg-info fs-6 ms-2">
+                                    Business Value: Strategic Planning
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (agentResult != null)
+        {
+            <!-- Results Section -->
+            <div class="card shadow mb-4 border-info">
+                <div class="card-header bg-gradient-primary text-white">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-brain fs-4 me-3"></i>
+                        <div>
+                            <h5 class="mb-1">Agent Reasoning Process</h5>
+                            <small class="opacity-75">Multi-step strategic analysis approach</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <!-- Task Understanding -->
+                    <div class="reasoning-section mb-4">
+                        <div class="section-header d-flex align-items-center mb-3">
+                            <span class="step-number">1</span>
+                            <h6 class="mb-0 ms-3 text-primary">Task Understanding & Context Analysis</h6>
+                        </div>
+                        <div class="content-box bg-light p-3 rounded-3 border-start border-primary border-4">
+                            @((MarkupString)FormatExecutiveSummary(agentResult.AgentReasoning))
+                        </div>
+                    </div>
+
+                    <!-- Analysis Strategy -->
+                    <div class="reasoning-section">
+                        <div class="section-header d-flex align-items-center mb-3">
+                            <span class="step-number">2</span>
+                            <h6 class="mb-0 ms-3 text-info">Strategic Analysis Approach</h6>
+                        </div>
+                        <div class="content-box bg-light p-3 rounded-3 border-start border-info border-4">
+                            @((MarkupString)FormatExecutiveSummary(agentResult.AnalysisStrategy))
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Business Impact Analysis -->
+            <div class="card shadow mb-4 border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-graph-up-arrow fs-4 me-3"></i>
+                        <div>
+                            <h5 class="mb-1">Business Impact Assessment</h5>
+                            <small>Strategic implications and financial considerations</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="executive-summary">
+                        @((MarkupString)FormatExecutiveContent(agentResult.BusinessImpact))
+                    </div>
+                </div>
+            </div>
+
+            <!-- Strategic Recommendations -->
+            <div class="card shadow mb-4 border-success">
+                <div class="card-header bg-success text-white">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-lightbulb fs-4 me-3"></i>
+                        <div>
+                            <h5 class="mb-1">Strategic Recommendations</h5>
+                            <small class="opacity-75">Priority-based action plan for implementation</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="recommendations-grid">
+                        @((MarkupString)FormatRecommendations(agentResult.StrategicRecommendations))
+                    </div>
+                </div>
+            </div>
+
+            <!-- Implementation Roadmap -->
+            <div class="card shadow mb-4 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-calendar-check fs-4 me-3"></i>
+                        <div>
+                            <h5 class="mb-1">Implementation Roadmap</h5>
+                            <small class="opacity-75">Phase-based delivery plan with milestones</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="roadmap-timeline">
+                        @((MarkupString)FormatRoadmap(agentResult.ImplementationPlan))
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Next Actions - IMPROVED -->
+        <div class="card shadow mb-4 border-dark">
+            <div class="card-header bg-dark text-white">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-play-circle fs-4 me-3"></i>
+                    <div>
+                        <h5 class="mb-1">Immediate Next Actions</h5>
+                        <small class="opacity-75">Priority tasks for next 2 weeks</small>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-4">
+                <div class="next-actions-list">
+                    @((MarkupString)FormatNextActions(agentResult.NextActions))
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Professional formatting for agent results */
+    .step-number {
+        width: 32px;
+        height: 32px;
+        background: linear-gradient(45deg, #007bff, #0056b3);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 14px;
+    }
+
+    .content-box {
+        line-height: 1.8;
+        font-size: 15px;
+    }
+
+    .section-header h6 {
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    .executive-summary {
+        line-height: 1.7;
+        font-size: 15px;
+    }
+
+        .executive-summary h6 {
+            color: #2c3e50;
+            margin-top: 1.5rem;
+            margin-bottom: 0.8rem;
+            font-weight: 600;
+        }
+
+        .executive-summary .highlight-box {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-left: 4px solid #007bff;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+    .recommendations-item {
+        background: #f8f9fa;
+        border-left: 4px solid #28a745;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 0 8px 8px 0;
+    }
+
+        .recommendations-item h6 {
+            color: #155724;
+            margin-bottom: 0.5rem;
+        }
+
+    .roadmap-phase {
+        background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+        border: 1px solid #dee2e6;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        position: relative;
+    }
+
+        .roadmap-phase::before {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            background: #007bff;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+    .next-action {
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-left: 4px solid #6c757d;
+        transition: all 0.3s ease;
+    }
+
+        .next-action:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transform: translateY(-1px);
+        }
+
+    .priority-high {
+        border-left-color: #dc3545 !important;
+    }
+
+    .priority-medium {
+        border-left-color: #ffc107 !important;
+    }
+
+    .priority-low {
+        border-left-color: #28a745 !important;
+    }
+
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    }
+
+    /* Improved text formatting */
+    .formatted-content p {
+        margin-bottom: 1rem;
+        line-height: 1.6;
+    }
+
+    .formatted-content ul {
+        list-style: none;
+        padding-left: 0;
+    }
+
+    .formatted-content li {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f1f3f4;
+    }
+
+        .formatted-content li:last-child {
+            border-bottom: none;
+        }
+
+    /* Business Impact Executive Formatting */
+    .business-metric {
+        transition: all 0.3s ease;
+    }
+
+        .business-metric:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+    .metric-content {
+        font-size: 15px;
+        line-height: 1.7;
+        color: #2c3e50;
+    }
+
+    .strategic-insight {
+        transition: all 0.3s ease;
+    }
+
+        .strategic-insight:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+    .insight-content {
+        font-size: 15px;
+        line-height: 1.7;
+        color: #2c3e50;
+    }
+
+    .executive-point {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f8f9fa;
+    }
+
+        .executive-point:last-child {
+            border-bottom: none;
+        }
+
+    .point-content p {
+        font-size: 15px;
+        line-height: 1.6;
+        color: #495057;
+    }
+
+    .executive-summary-fallback .summary-content {
+        font-size: 14px;
+        line-height: 1.6;
+        color: #6c757d;
+    }
+
+    /* Enhanced visual hierarchy */
+    .business-metric h6,
+    .strategic-insight h6 {
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    /* Icon styling */
+    .business-metric .bi,
+    .strategic-insight .bi {
+        font-size: 1.1rem;
+    }
+</style>
+
+@code {
+    private string selectedBusinessGoal = "cloud-migration";
+    private string customBusinessGoal = "";
+    private string projectContext = "";
+    private string codeInput = "";
+    private bool isAgentAnalyzing = false;
+    private bool showTechnicalDetails = false;
+    private string statusMessage = "";
+    private AutonomousAnalysisResult? agentResult;
+
+    protected override void OnInitialized()
+    {
+        // Initialize with default context
+        projectContext = GetContextForBusinessGoal(selectedBusinessGoal);
+        statusMessage = "AI Agent ready! Select business goal and provide code for autonomous analysis.";
+    }
+
+    private void OnBusinessGoalChanged()
+    {
+        projectContext = GetContextForBusinessGoal(selectedBusinessGoal);
+        StateHasChanged();
+    }
+
+    private string GetContextForBusinessGoal(string goal)
+    {
+        return goal switch
+        {
+            "cloud-migration" => "Legacy on-premises application, 200+ users, Azure migration deadline Q1 2025, zero-downtime requirement",
+            "security-compliance" => "Financial services application, PCI-DSS compliance required, recent security audit findings to address",
+            "performance-optimization" => "E-commerce platform, 1000+ concurrent users, page load times >3 seconds, revenue impact $50K/month",
+            "modernization" => "15-year-old .NET Framework application, technical debt accumulated, maintenance costs $200K/year",
+            "cost-reduction" => "Legacy system with high maintenance overhead, manual deployment process, seeking 40% cost reduction",
+            _ => "Enterprise web application with 50+ users, 6-month timeline, SOX compliance required"
+        };
+    }
+
+    private void ToggleTechnicalDetails()
+    {
+        showTechnicalDetails = !showTechnicalDetails;
+    }
+
+    private string GetBusinessGoalDescription(string goal)
+    {
+        return goal switch
+        {
+            "cloud-migration" => "Prepare this legacy system for cloud migration with minimal business disruption and optimal cost efficiency",
+            "security-compliance" => "Achieve enterprise security compliance (SOX/GDPR) while maintaining system functionality and performance",
+            "performance-optimization" => "Optimize system performance for 10x user growth while maintaining code maintainability",
+            "modernization" => "Modernize legacy architecture to current enterprise standards with strategic technology adoption",
+            "cost-reduction" => "Reduce total cost of ownership through architectural improvements and maintenance optimization",
+            _ => "Comprehensive legacy system assessment and modernization planning"
+        };
+    }
+
+    private void LoadAgentSampleCode()
+    {
+        codeInput = @"using System;
+using System.Data;
+using System.Data.SqlClient;
+using System.Configuration;
+
+namespace LegacyECommerceSystem
+{
+    public class OrderProcessor
+    {
+        private static string connectionString = ConfigurationManager.ConnectionStrings[""DefaultConnection""].ConnectionString;
+
+        public DataTable GetCustomerOrders(string customerId, string status)
+        {
+            DataTable orders = new DataTable();
+            string sql = ""SELECT * FROM Orders WHERE CustomerId = '"" + customerId + ""' AND Status = '"" + status + ""'"";
+
+            using (SqlConnection conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+                SqlCommand cmd = new SqlCommand(sql, conn);
+                SqlDataAdapter adapter = new SqlDataAdapter(cmd);
+                adapter.Fill(orders);
+            }
+            return orders;
+        }
+
+        public void ProcessPayment(decimal amount, string creditCard)
+        {
+            // Store credit card info in plain text - legacy requirement
+            string sql = ""INSERT INTO Payments (Amount, CreditCard, ProcessedDate) VALUES ("" +
+                        amount + "", '"" + creditCard + ""', '"" + DateTime.Now + ""')"";
+
+            using (SqlConnection conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+                SqlCommand cmd = new SqlCommand(sql, conn);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public void UpdateInventory(int productId, int quantity)
+        {
+            string sql = ""UPDATE Products SET Quantity = Quantity - "" + quantity +
+                        "" WHERE ProductId = "" + productId;
+
+            using (SqlConnection conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+                SqlCommand cmd = new SqlCommand(sql, conn);
+                int rowsAffected = cmd.ExecuteNonQuery();
+
+                if (rowsAffected == 0)
+                {
+                    throw new Exception(""Product not found or insufficient inventory"");
+                }
+            }
+        }
+    }
+
+    public class UserManager
+    {
+        public bool ValidateUser(string username, string password)
+        {
+            // Weak password validation - legacy system
+            if (password.Length < 4) return false;
+
+            string sql = ""SELECT COUNT(*) FROM Users WHERE Username = '"" + username +
+                        ""' AND Password = '"" + password + ""'"";
+
+            using (SqlConnection conn = new SqlConnection(
+                ""Server=localhost;Database=ECommerce;Trusted_Connection=true;""))
+            {
+                conn.Open();
+                SqlCommand cmd = new SqlCommand(sql, conn);
+                int count = (int)cmd.ExecuteScalar();
+                return count > 0;
+            }
+        }
+    }
+}";
+
+        selectedBusinessGoal = "security-compliance";
+        OnBusinessGoalChanged(); // Update context when loading sample
+        statusMessage = "Complex legacy e-commerce sample loaded - multiple security and performance issues to analyze!";
+        StateHasChanged();
+    }
+
+    private string FormatContent(string content)
+    {
+        if (string.IsNullOrEmpty(content)) return "";
+
+        // Clean up the content first
+        content = content.Trim();
+
+        // Handle different paragraph structures
+        content = content.Replace("\n\n\n", "\n\n");
+        content = content.Replace("\n\n", "</p><p class='mb-3'>");
+        content = content.Replace("\n", "<br>");
+
+        // Format headers and sections
+        content = System.Text.RegularExpressions.Regex.Replace(
+            content,
+            @"^(\d+\.\s*)([A-Z][^<\n]*?)(<br>|</p>)",
+            "<div class='section-header'><h6 class='text-primary mb-2'><span class='badge bg-primary me-2'>$1</span>$2</h6></div>");
+
+        // Format numbered lists with better styling
+        content = System.Text.RegularExpressions.Regex.Replace(
+            content,
+            @"(\d+\.\s+)([^<]+)",
+            "<div class='list-item mb-2'><span class='fw-bold text-primary'>$1</span>$2</div>");
+
+        // Format bullet points with icons
+        content = content.Replace("• ", "<div class='bullet-item mb-2'><i class='bi bi-arrow-right text-success me-2'></i>");
+        content = content.Replace("- ", "<div class='bullet-item mb-2'><i class='bi bi-chevron-right text-info me-2'></i>");
+
+        // Close any unclosed divs
+        content = content.Replace("<div class='bullet-item mb-2'>", "<div class='bullet-item mb-2'>") + "</div>";
+
+        // Wrap in paragraph tags if needed
+        if (!content.StartsWith("<div") && !content.StartsWith("<p"))
+        {
+            content = $"<p class='mb-3'>{content}</p>";
+        }
+
+        return content;
+    }
+
+    private int analysisStep = 0;
+
+    private readonly string[] agentSteps = {
+    "Understanding Business Requirements",
+    "Developing Analysis Strategy",
+    "Executing Technical Analysis",
+    "Generating Business Impact Assessment",
+    "Creating Strategic Recommendations",
+    "Developing Implementation Plan",
+    "Finalizing Next Actions"
+};
+
+    private string GetCurrentAgentStep()
+    {
+        if (analysisStep < agentSteps.Length)
+            return agentSteps[analysisStep];
+        return "Analysis Complete";
+    }
+
+    private int GetProgressPercentage()
+    {
+        return (int)((double)analysisStep / agentSteps.Length * 100);
+    }
+
+    private async Task StartAgentAnalysis()
+    {
+        if (string.IsNullOrWhiteSpace(codeInput))
+        {
+            statusMessage = "Please enter C# code for agent analysis.";
+            return;
+        }
+
+        isAgentAnalyzing = true;
+        analysisStep = 0;
+
+        try
+        {
+            var businessGoal = selectedBusinessGoal == "custom" ? customBusinessGoal : GetBusinessGoalDescription(selectedBusinessGoal);
+
+            // Simulate progressive steps for demo drama
+            for (int i = 0; i < agentSteps.Length; i++)
+            {
+                analysisStep = i;
+                statusMessage = $"Agent is {agentSteps[i].ToLower()}...";
+                StateHasChanged();
+                await Task.Delay(800); // Demo pacing
+            }
+
+            agentResult = await AgentService.AnalyzeWithAgentAsync(codeInput, businessGoal, projectContext);
+            analysisStep = agentSteps.Length;
+            statusMessage = $" Agent analysis complete! Confidence Score: {agentResult.ConfidenceScore}%";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $" Agent analysis failed: {ex.Message}";
+            agentResult = null;
+        }
+        finally
+        {
+            isAgentAnalyzing = false;
+            StateHasChanged();
+        }
+    }
+
+    private string FormatExecutiveSummary(string content)
+    {
+        if (string.IsNullOrEmpty(content)) return "";
+
+        // Split into key points and format for executive consumption
+        var sentences = content.Split('.', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 20)
+            .Take(3) // Limit to top 3 key points
+            .ToArray();
+
+        var formatted = "";
+        for (int i = 0; i < sentences.Length; i++)
+        {
+            formatted += $"<div class='highlight-box mb-3'><strong>Key Insight {i + 1}:</strong> {sentences[i]}.</div>";
+        }
+
+        return formatted;
+    }
+
+    private string FormatRecommendations(string content)
+    {
+        if (string.IsNullOrEmpty(content)) return "";
+
+        // Extract recommendations and format as cards
+        var recommendations = content.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(line => line.Trim().Length > 20)
+            .Take(4) // Top 4 recommendations
+            .ToArray();
+
+        var formatted = "";
+        for (int i = 0; i < recommendations.Length; i++)
+        {
+            var priority = i == 0 ? "priority-high" : i == 1 ? "priority-medium" : "priority-low";
+            formatted += $@"
+            <div class='recommendations-item {priority}'>
+                <h6><i class='bi bi-star-fill me-2'></i>Priority {i + 1} Recommendation</h6>
+                <p class='mb-0'>{recommendations[i]}</p>
+            </div>";
+        }
+
+        return formatted;
+    }
+
+    private string FormatRoadmap(string content)
+    {
+        if (string.IsNullOrEmpty(content)) return "";
+
+        // Create phase-based roadmap visualization
+        var phases = content.Split("Phase", StringSplitOptions.RemoveEmptyEntries)
+            .Where(phase => phase.Trim().Length > 50)
+            .Take(3)
+            .ToArray();
+
+        var formatted = "";
+        for (int i = 0; i < phases.Length; i++)
+        {
+            formatted += $@"
+            <div class='roadmap-phase'>
+                <h6 class='text-primary mb-3'><i class='bi bi-calendar-event me-2'></i>Phase {i + 1}</h6>
+                <p class='mb-0'>{phases[i].Trim()}</p>
+            </div>";
+        }
+
+        return formatted;
+    }
+
+    private string FormatNextActions(string content)
+    {
+        if (string.IsNullOrEmpty(content)) return "";
+
+        // Format as actionable items with priorities
+        var actions = content.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(action => action.Trim().Length > 20)
+            .Take(3)
+            .ToArray();
+
+        var formatted = "";
+        for (int i = 0; i < actions.Length; i++)
+        {
+            var priority = i == 0 ? "priority-high" : i == 1 ? "priority-medium" : "priority-low";
+            var priorityText = i == 0 ? "URGENT" : i == 1 ? "HIGH" : "MEDIUM";
+
+            formatted += $@"
+            <div class='next-action {priority}'>
+                <div class='d-flex justify-content-between align-items-start mb-2'>
+                    <h6 class='mb-0'>Action {i + 1}</h6>
+                    <span class='badge bg-secondary'>{priorityText}</span>
+                </div>
+                <p class='mb-0'>{actions[i]}</p>
+            </div>";
+        }
+
+        return formatted;
+    }
+
+    private string FormatExecutiveContent(string content)
+    {
+        if (string.IsNullOrEmpty(content)) return "";
+
+        // Clean and prepare content
+        content = content.Trim();
+
+        // Split content into meaningful sections for executive consumption
+        var paragraphs = content.Split(new[] { "\n\n", ". ", ":" }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Trim())
+            .Where(p => p.Length > 30) // Filter out very short fragments
+            .ToArray();
+
+        var formatted = "";
+
+        // Look for key business metrics and highlights
+        var businessKeywords = new[] { "cost", "revenue", "roi", "savings", "investment", "budget", "timeline", "risk", "compliance", "performance" };
+        var strategicKeywords = new[] { "strategy", "approach", "recommendation", "plan", "implementation", "migration", "modernization" };
+
+        for (int i = 0; i < Math.Min(paragraphs.Length, 4); i++) // Limit to 4 key points for executives
+        {
+            var paragraph = paragraphs[i];
+
+            // Determine the type of content and format accordingly
+            var isBusinessMetric = businessKeywords.Any(keyword => paragraph.ToLower().Contains(keyword));
+            var isStrategicPoint = strategicKeywords.Any(keyword => paragraph.ToLower().Contains(keyword));
+
+            if (isBusinessMetric)
+            {
+                // Format as business metric highlight
+                formatted += $@"
+                <div class='business-metric mb-3'>
+                    <div class='d-flex align-items-center mb-2'>
+                        <i class='bi bi-graph-up text-success me-2'></i>
+                        <h6 class='mb-0 text-success'>Business Impact</h6>
+                    </div>
+                    <div class='metric-content bg-light p-3 rounded border-start border-success border-4'>
+                        {paragraph}
+                    </div>
+                </div>";
+            }
+            else if (isStrategicPoint)
+            {
+                // Format as strategic insight
+                formatted += $@"
+                <div class='strategic-insight mb-3'>
+                    <div class='d-flex align-items-center mb-2'>
+                        <i class='bi bi-lightbulb text-primary me-2'></i>
+                        <h6 class='mb-0 text-primary'>Strategic Consideration</h6>
+                    </div>
+                    <div class='insight-content bg-light p-3 rounded border-start border-primary border-4'>
+                        {paragraph}
+                    </div>
+                </div>";
+            }
+            else
+            {
+                // Format as general executive summary
+                formatted += $@"
+                <div class='executive-point mb-3'>
+                    <div class='d-flex align-items-start'>
+                        <span class='badge bg-secondary me-3 mt-1'>{i + 1}</span>
+                        <div class='point-content'>
+                            <p class='mb-0 lh-lg'>{paragraph}</p>
+                        </div>
+                    </div>
+                </div>";
+            }
+        }
+
+        // If no content was formatted, provide a fallback
+        if (string.IsNullOrEmpty(formatted))
+        {
+            formatted = $@"
+            <div class='executive-summary-fallback'>
+                <div class='d-flex align-items-center mb-3'>
+                    <i class='bi bi-info-circle text-info me-2'></i>
+                    <h6 class='mb-0 text-info'>Executive Summary</h6>
+                </div>
+                <div class='summary-content bg-light p-3 rounded'>
+                    {FormatBasicContent(content)}
+                </div>
+            </div>";
+        }
+
+        return formatted;
+    }
+
+    // Helper method for basic content formatting
+    private string FormatBasicContent(string content)
+    {
+        if (string.IsNullOrEmpty(content)) return "";
+
+        // Basic cleanup and formatting
+        content = content.Replace("\n\n", "</p><p class='mb-2'>");
+        content = content.Replace("\n", "<br>");
+
+        // Format bullet points
+        content = content.Replace("• ", "<i class='bi bi-arrow-right text-success me-1'></i>");
+        content = content.Replace("- ", "<i class='bi bi-chevron-right text-info me-1'></i>");
+
+        // Wrap in paragraph if needed
+        if (!content.StartsWith("<p"))
+        {
+            content = $"<p class='mb-2'>{content}</p>";
+        }
+
+        return content;
+    }
+}
