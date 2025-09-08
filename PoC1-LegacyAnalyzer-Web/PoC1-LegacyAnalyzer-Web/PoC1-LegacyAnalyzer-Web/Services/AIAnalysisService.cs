@@ -32,16 +32,17 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
                 var chatCompletionsOptions = new ChatCompletionsOptions()
                 {
+                    DeploymentName = _deploymentName,
                     Messages =
                     {
-                        new ChatMessage(ChatRole.System, GetSystemPrompt(analysisType)),
-                        new ChatMessage(ChatRole.User, prompt)
+                        new ChatRequestSystemMessage(GetSystemPrompt(analysisType)),
+                        new ChatRequestUserMessage(prompt)
                     },
                     MaxTokens = 500,
                     Temperature = 0.3f
                 };
 
-                var response = await _client.GetChatCompletionsAsync(_deploymentName, chatCompletionsOptions);
+                var response = await _client.GetChatCompletionsAsync(chatCompletionsOptions);
                 return response.Value.Choices[0].Message.Content;
             }
             catch (Exception ex)

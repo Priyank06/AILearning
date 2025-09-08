@@ -1,3 +1,4 @@
+using Microsoft.SemanticKernel;
 using PoC1_LegacyAnalyzer_Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +15,21 @@ builder.Services.AddSingleton<IReportService, ReportService>();
 
 builder.Services.AddScoped<IFileDownloadService, FileDownloadService>();
 builder.Services.AddSingleton<IMultiFileAnalysisService, MultiFileAnalysisService>();
+
+builder.Services.AddSingleton<Kernel>(serviceProvider =>
+{
+    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+    var endpoint = configuration["AzureOpenAI:Endpoint"] ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
+    var apiKey = configuration["AzureOpenAI:ApiKey"] ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_KEY");
+    var deployment = configuration["AzureOpenAI:Deployment"] ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT") ?? "gpt-35-turbo";
+
+    var kernelBuilder = Kernel.CreateBuilder();
+    kernelBuilder.AddAzureOpenAIChatCompletion(deployment, endpoint, apiKey);
+
+    return kernelBuilder.Build();
+});
+
+builder.Services.AddSingleton<ICodeAnalysisAgentService, CodeAnalysisAgentService>();
 
 var app = builder.Build();
 
