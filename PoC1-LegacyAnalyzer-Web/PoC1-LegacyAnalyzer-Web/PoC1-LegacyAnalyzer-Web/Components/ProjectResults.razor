@@ -1,0 +1,612 @@
+﻿@using PoC1_LegacyAnalyzer_Web.Models
+@using PoC1_LegacyAnalyzer_Web.Models.ProjectAnalysis
+
+@if (ProjectResult != null)
+{
+    <!-- Project Overview Dashboard -->
+    <div class="results-container">
+        <div class="card shadow mb-4 border-primary">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="mb-1">
+                            <i class="bi bi-building"></i> @ProjectResult.ProjectInfo.SolutionName
+                        </h4>
+                        <small> Project Analysis Results</small>
+                    </div>
+                    <div class="text-end">
+                        <div class="badge bg-light text-primary fs-6 mb-1">
+                            Value: @ProjectResult.BusinessImpact.EstimatedValue.ToString("C0")
+                        </div>
+                        <br>
+                        <div class="badge @GetRiskBadgeClass(ProjectResult.BusinessImpact.RiskLevel) fs-6">
+                            Risk: @ProjectResult.BusinessImpact.RiskLevel
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Key Metrics Row -->
+                <div class="row text-center mb-4">
+                    <div class="col-md-3">
+                        <div class="metric-card bg-primary text-white">
+                            <div class="metric-icon">📁</div>
+                            <div class="metric-value">@ProjectResult.DetailedFileAnalysis.Count</div>
+                            <div class="metric-label">Source Files</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card bg-info text-white">
+                            <div class="metric-icon">📊</div>
+                            <div class="metric-value">@ProjectResult.ProjectInfo.TotalLines.ToString("N0")</div>
+                            <div class="metric-label">Lines of Code</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card bg-warning text-white">
+                            <div class="metric-icon">🏗️</div>
+                            <div class="metric-value">@ProjectResult.Architecture.ArchitecturalDebtScore</div>
+                            <div class="metric-label">Debt Score</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card bg-success text-white">
+                            <div class="metric-icon">📦</div>
+                            <div class="metric-value">@ProjectResult.FolderAnalysis.Count</div>
+                            <div class="metric-label">Components</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Architecture Overview -->
+                <div class="row">
+                    <div class="col-md-8">
+                        <h6 class="text-primary">📐 Architecture Assessment</h6>
+                        <div class="architecture-info bg-light p-3 rounded">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Pattern:</strong> @ProjectResult.Architecture.ArchitecturalPattern<br>
+                                    <strong>Layers:</strong> @string.Join(", ", ProjectResult.Architecture.LayerIdentification)<br>
+                                    <strong>Separation:</strong> @GetSeparationQuality()
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Design Patterns:</strong><br>
+                                    <small>@string.Join(", ", ProjectResult.Architecture.DesignPatterns)</small><br>
+                                    <strong>Testing:</strong> @ProjectResult.Architecture.TestCoverage
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-success">💰 Business Impact</h6>
+                        <div class="business-metrics">
+                            <div class="metric-row">
+                                <span class="label">Investment Priority:</span>
+                                <span class="value @GetPriorityClass()">@ProjectResult.BusinessImpact.InvestmentPriority</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="label">Maintenance:</span>
+                                <span class="value">@GetMaintenanceLevel()</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="label">Approach:</span>
+                                <span class="value">@GetRecommendedApproachShort()</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Executive Summary -->
+        <div class="card shadow mb-4 border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-file-text"></i> Executive Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="executive-summary-content">
+                    @((MarkupString)FormatExecutiveSummary(ProjectResult.ExecutiveSummary))
+                </div>
+            </div>
+        </div>
+
+        <!-- Folder Structure Analysis -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-folder-fill"></i> Project Structure Analysis</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    @foreach (var folder in ProjectResult.FolderAnalysis.Take(8))
+                    {
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="folder-card">
+                                <div class="folder-header">
+                                    <i class="bi bi-folder text-primary"></i>
+                                    <strong>@folder.Value.FolderName</strong>
+                                    <span class="badge @GetComplexityBadgeClass(folder.Value.ComplexityScore) ms-2">
+                                        @folder.Value.ComplexityScore
+                                    </span>
+                                </div>
+                                <div class="folder-details">
+                                    <div class="detail-row">
+                                        <span class="label">Purpose:</span>
+                                        <span class="value">@folder.Value.Purpose</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span class="label">Role:</span>
+                                        <span class="value">@folder.Value.ArchitecturalRole</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span class="label">Files:</span>
+                                        <span class="value">@folder.Value.FileCount</span>
+                                    </div>
+                                    @if (folder.Value.KeyClasses.Any())
+                                    {
+                                        <div class="detail-row">
+                                            <span class="label">Key Classes:</span>
+                                            <span class="value">@string.Join(", ", folder.Value.KeyClasses.Take(2))</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed File Analysis -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-files"></i> Detailed File Analysis</h5>
+            </div>
+            <div class="card-body">
+                <div style="max-height: 400px; overflow-y: auto;">
+                    @foreach (var file in ProjectResult.DetailedFileAnalysis.OrderByDescending(f => f.ComplexityScore).Take(20))
+                    {
+                        <div class="file-analysis-card mb-3">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="file-name">
+                                        <i class="bi bi-file-earmark-code text-primary"></i>
+                                        @file.FileName
+                                    </h6>
+                                    <div class="file-metrics">
+                                        <span class="badge bg-primary me-2">Size: @FormatFileSize(file.FileSize)</span>
+                                        <span class="badge @GetComplexityBadgeClass(file.ComplexityScore) me-2">
+                                            Complexity: @file.ComplexityScore
+                                        </span>
+                                        <span class="badge bg-info">@file.Status</span>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(file.AIInsight))
+                                    {
+                                        <div class="ai-insight mt-2">
+                                            <small class="text-muted">
+                                                <strong>AI Insight:</strong> @TruncateInsight(file.AIInsight, 120)
+                                            </small>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="file-actions">
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowFileDetails(file)">
+                                        <i class="bi bi-eye"></i> Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Next Steps Action Plan -->
+        <div class="card shadow mb-4 border-dark">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="bi bi-list-check"></i> Recommended Next Steps</h5>
+            </div>
+            <div class="card-body">
+                <div class="next-steps-grid">
+                    @for (int i = 0; i < ProjectResult.NextSteps.Count; i++)
+                    {
+                        <div class="next-step-item @GetStepPriorityClass(i)">
+                            <div class="step-number">@(i + 1)</div>
+                            <div class="step-content">
+                                <div class="step-text">@ProjectResult.NextSteps[i]</div>
+                                <div class="step-priority">@GetStepPriorityText(i)</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Critical Areas -->
+        @if (ProjectResult.BusinessImpact.BusinessCriticalAreas.Any())
+        {
+            <div class="card shadow border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Business Critical Areas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        @foreach (var area in ProjectResult.BusinessImpact.BusinessCriticalAreas)
+                        {
+                            <div class="col-md-6 col-lg-4 mb-2">
+                                <div class="critical-area-badge">
+                                    <i class="bi bi-arrow-right text-danger me-2"></i>
+                                    <strong>@area</strong>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="mt-3 p-3 bg-light rounded">
+                        <strong>Recommended Action:</strong> @ProjectResult.BusinessImpact.RecommendedApproach
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<style>
+    .results-container {
+        animation: slideIn 0.5s ease-in-out;
+    }
+
+    @@keyframes slideIn {
+        from
+
+    {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    }
+
+    .metric-card {
+        padding: 1.5rem;
+        border-radius: 12px;
+        text-align: center;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .metric-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 0.25rem;
+    }
+
+    .metric-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+
+    .architecture-info {
+        border-left: 4px solid #007bff;
+    }
+
+    .business-metrics .metric-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #f1f3f4;
+    }
+
+    .business-metrics .label {
+        font-weight: 500;
+        color: #495057;
+    }
+
+    .business-metrics .value {
+        font-weight: 600;
+    }
+
+    .folder-card {
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 1rem;
+        height: 100%;
+        transition: all 0.3s ease;
+    }
+
+        .folder-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+    .folder-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #f1f3f4;
+    }
+
+    .folder-details .detail-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.4rem;
+        font-size: 0.9rem;
+    }
+
+    .folder-details .label {
+        color: #6c757d;
+        font-weight: 500;
+    }
+
+    .folder-details .value {
+        font-weight: 600;
+        text-align: right;
+        max-width: 60%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .file-analysis-card {
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 1rem;
+        transition: all 0.3s ease;
+    }
+
+        .file-analysis-card:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+    .file-name {
+        margin-bottom: 0.5rem;
+        color: #2c3e50;
+    }
+
+    .file-metrics {
+        margin-bottom: 0.5rem;
+    }
+
+    .ai-insight {
+        background: #f8f9fa;
+        padding: 0.75rem;
+        border-radius: 6px;
+        border-left: 3px solid #17a2b8;
+    }
+
+    .next-steps-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .next-step-item {
+        display: flex;
+        align-items: flex-start;
+        padding: 1rem;
+        background: #fff;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+        transition: all 0.3s ease;
+    }
+
+        .next-step-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+    .step-number {
+        width: 32px;
+        height: 32px;
+        background: #007bff;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+
+    .step-content {
+        flex-grow: 1;
+    }
+
+    .step-text {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+        line-height: 1.4;
+    }
+
+    .step-priority {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    .priority-critical .step-number {
+        background: #dc3545;
+    }
+
+    .priority-high .step-number {
+        background: #fd7e14;
+    }
+
+    .priority-medium .step-number {
+        background: #ffc107;
+        color: #000;
+    }
+
+    .critical-area-badge {
+        padding: 0.5rem;
+        background: #fff5f5;
+        border-radius: 6px;
+        border-left: 3px solid #dc3545;
+    }
+
+    .executive-summary-content {
+        line-height: 1.7;
+        font-size: 15px;
+    }
+
+        .executive-summary-content h6 {
+            color: #2c3e50;
+            margin: 1.5rem 0 0.8rem 0;
+            font-weight: 600;
+        }
+
+        .executive-summary-content p {
+            margin-bottom: 1rem;
+        }
+</style>
+
+@code {
+    [Parameter] public ProjectAnalysisResult? ProjectResult { get; set; }
+    [Parameter] public EventCallback<FileAnalysisResult> OnFileDetailsRequested { get; set; }
+
+    private string GetRiskBadgeClass(string riskLevel)
+    {
+        return riskLevel switch
+        {
+            "HIGH" => "bg-danger",
+            "MEDIUM" => "bg-warning text-dark",
+            "LOW" => "bg-success",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetComplexityBadgeClass(int complexity)
+    {
+        return complexity switch
+        {
+            >= 70 => "bg-danger",
+            >= 40 => "bg-warning text-dark",
+            _ => "bg-success"
+        };
+    }
+
+    private string GetPriorityClass()
+    {
+        if (ProjectResult?.BusinessImpact.InvestmentPriority.Contains("CRITICAL") == true)
+            return "text-danger fw-bold";
+        if (ProjectResult?.BusinessImpact.InvestmentPriority.Contains("HIGH") == true)
+            return "text-warning fw-bold";
+        return "text-success";
+    }
+
+    private string GetSeparationQuality()
+    {
+        if (ProjectResult?.Architecture.SeparationOfConcerns.Contains("Excellent") == true)
+            return "Excellent ✅";
+        if (ProjectResult?.Architecture.SeparationOfConcerns.Contains("Good") == true)
+            return "Good ✅";
+        if (ProjectResult?.Architecture.SeparationOfConcerns.Contains("Basic") == true)
+            return "Basic ⚠️";
+        return "Needs Improvement ❌";
+    }
+
+    private string GetMaintenanceLevel()
+    {
+        if (ProjectResult?.BusinessImpact.MaintenanceOverhead.Contains("Low") == true)
+            return "Low";
+        if (ProjectResult?.BusinessImpact.MaintenanceOverhead.Contains("Moderate") == true)
+            return "Moderate";
+        return "High";
+    }
+
+    private string GetRecommendedApproachShort()
+    {
+        var approach = ProjectResult?.BusinessImpact.RecommendedApproach ?? "";
+        if (approach.Contains("Standard agile"))
+            return "Agile";
+        if (approach.Contains("Structured"))
+            return "Structured";
+        if (approach.Contains("Phased"))
+            return "Phased";
+        if (approach.Contains("Comprehensive"))
+            return "Comprehensive";
+        return "Standard";
+    }
+
+    private string GetStepPriorityClass(int index)
+    {
+        return index switch
+        {
+            0 => "priority-critical",
+            1 => "priority-high",
+            2 => "priority-medium",
+            _ => "priority-normal"
+        };
+    }
+
+    private string GetStepPriorityText(int index)
+    {
+        return index switch
+        {
+            0 => "URGENT - Immediate Action",
+            1 => "HIGH - Within 1 Week",
+            2 => "MEDIUM - Within 2 Weeks",
+            _ => "NORMAL - Next Planning Cycle"
+        };
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int counter = 0;
+        decimal number = bytes;
+        while (Math.Round(number / 1024) >= 1)
+        {
+            number /= 1024;
+            counter++;
+        }
+        return $"{number:n1} {suffixes[counter]}";
+    }
+
+    private string TruncateInsight(string insight, int maxLength)
+    {
+        if (string.IsNullOrEmpty(insight) || insight.Length <= maxLength)
+            return insight;
+        return insight.Substring(0, maxLength) + "...";
+    }
+
+    private string FormatExecutiveSummary(string summary)
+    {
+        if (string.IsNullOrEmpty(summary)) return "";
+
+        // Format markdown-style content
+        summary = summary.Replace("## ", "<h6>");
+        // The following line is invalid because string.Replace does not have an overload with a count argument.
+        // summary = summary.Replace("\n", "</h6>" + Environment.NewLine + "<p>", 1); // First replacement
+
+        // Instead, replace only the first occurrence manually:
+        int firstNewline = summary.IndexOf('\n');
+        if (firstNewline >= 0)
+        {
+            summary = summary.Substring(0, firstNewline) + "</h6>" + Environment.NewLine + "<p>" + summary.Substring(firstNewline + 1);
+        }
+
+        summary = summary.Replace("\n\n", "</p><p>");
+        summary = summary.Replace("\n", "<br>");
+
+        // Ensure proper closing tags
+        if (!summary.EndsWith("</p>"))
+            summary += "</p>";
+
+        return summary;
+    }
+
+    private async Task ShowFileDetails(FileAnalysisResult file)
+    {
+        await OnFileDetailsRequested.InvokeAsync(file);
+    }
+}

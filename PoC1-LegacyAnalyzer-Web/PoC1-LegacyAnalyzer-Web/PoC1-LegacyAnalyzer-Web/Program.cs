@@ -27,6 +27,9 @@ builder.Services.AddSingleton<SecurityAnalystAgent>();
 builder.Services.AddSingleton<PerformanceAnalystAgent>();
 builder.Services.AddSingleton<ArchitecturalAnalystAgent>();
 
+builder.Services.AddSingleton<IEnhancedProjectAnalysisService, EnhancedProjectAnalysisService>();
+
+
 builder.Services.AddSingleton<Kernel>(serviceProvider =>
 {
     var configuration = serviceProvider.GetRequiredService<IConfiguration>();

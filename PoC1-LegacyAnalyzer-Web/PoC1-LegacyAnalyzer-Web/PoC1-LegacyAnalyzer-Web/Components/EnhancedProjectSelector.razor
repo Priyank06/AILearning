@@ -1,0 +1,392 @@
+﻿@using Microsoft.AspNetCore.Components.Forms
+@using System.IO
+@using PoC1_LegacyAnalyzer_Web.Models.ProjectAnalysis
+
+<div class="card shadow border-primary">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-folder2-open"></i> Enhanced Project Analysis</h5>
+    </div>
+    <div class="card-body">
+        <!-- Project Selection Methods -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="selection-method @(selectedMethod == "folder" ? "active" : "")"
+                     @onclick='() => SetSelectionMethod("folder")'>
+                    <div class="text-center p-4">
+                        <i class="bi bi-folder-plus display-4 text-primary mb-3"></i>
+                        <h6>📂 Project Folder</h6>
+                        <p class="text-muted mb-0">Select entire .NET project folder</p>
+                        <small>Automatically detects .csproj, .sln files</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="selection-method @(selectedMethod == "individual" ? "active" : "")"
+                     @onclick='() => SetSelectionMethod("individual")'>
+                    <div class="text-center p-4">
+                        <i class="bi bi-files display-4 text-success mb-3"></i>
+                        <h6>📄 Individual Files</h6>
+                        <p class="text-muted mb-0">Select specific C# source files</p>
+                        <small>Manual file selection and upload</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Project Folder Selection -->
+        @if (selectedMethod == "folder")
+        {
+            <div class="folder-selection-area">
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-info-circle"></i> .NET Project Auto-Detection</h6>
+                    <p class="mb-2">This will automatically:</p>
+                    <ul class="mb-0">
+                        <li>Find all .csproj and .sln files</li>
+                        <li>Detect project structure and dependencies</li>
+                        <li>Filter out bin/, obj/, and generated files</li>
+                        <li>Identify business logic and domain code</li>
+                    </ul>
+                </div>
+
+                <!-- Folder Input with Enhanced Attributes -->
+                <InputFile id="folderInput"
+                           OnChange="HandleFolderSelection"
+                           multiple
+                           accept=".cs,.csproj,.sln"
+                           webkitdirectory
+                           class="d-none" />
+
+                <label for="folderInput" class="btn btn-primary btn-lg d-block">
+                    <i class="bi bi-folder2-open me-2"></i>
+                    Select .NET Project Folder
+                </label>
+
+                @if (!string.IsNullOrEmpty(selectedProjectPath))
+                {
+                    <div class="mt-3 p-3 bg-success bg-opacity-10 rounded border border-success">
+                        <h6 class="text-success mb-2">
+                            <i class="bi bi-check-circle"></i> Project Detected
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <strong>Path:</strong> @selectedProjectPath<br>
+                                <strong>Type:</strong> @projectType<br>
+                                <strong>Files Found:</strong> @discoveredFiles.Count C# files
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <button class="btn btn-success" @onclick="AnalyzeDiscoveredProject">
+                                    <i class="bi bi-play-circle"></i> Analyze Project
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Individual Files Selection -->
+        @if (selectedMethod == "individual")
+        {
+            <div class="individual-files-area">
+                <InputFile id="individualFiles"
+                           OnChange="HandleIndividualFileSelection"
+                           multiple
+                           accept=".cs"
+                           class="d-none" />
+
+                <label for="individualFiles" class="btn btn-outline-primary btn-lg d-block">
+                    <i class="bi bi-file-earmark-code me-2"></i>
+                    Select Individual C# Files
+                </label>
+            </div>
+        }
+
+        <!-- Selected Files Display -->
+        @if (selectedFiles.Any())
+        {
+            <div class="selected-files-display mt-4">
+                <h6><i class="bi bi-list-ul"></i> Selected Files (@selectedFiles.Count)</h6>
+
+                <!-- Project Structure Tree -->
+                @if (projectStructure.Any())
+                {
+                    <div class="project-structure mb-3">
+                        <h6 class="text-primary">📁 Project Structure</h6>
+                        @foreach (var folder in projectStructure.Take(5))
+                        {
+                            <div class="folder-item">
+                                <i class="bi bi-folder"></i> @folder.Key (@folder.Value.Count files)
+                                @foreach (var file in folder.Value.Take(3))
+                                {
+                                    <div class="file-item ms-3">
+                                        <i class="bi bi-file-earmark-code text-muted"></i> @file.Name
+                                        <small class="text-muted">(@FormatFileSize(file.Size))</small>
+                                    </div>
+                                }
+                                @if (folder.Value.Count > 3)
+                                {
+                                    <div class="ms-3 text-muted">
+                                        <small>... and @(folder.Value.Count - 3) more files</small>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Analysis Configuration -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label">Analysis Type:</label>
+                        <select class="form-select" @bind="selectedAnalysisType">
+                            <option value="comprehensive">🔍 Comprehensive Audit</option>
+                            <option value="security">🛡️ Security Analysis</option>
+                            <option value="performance">⚡ Performance Review</option>
+                            <option value="architecture">🏗️ Architecture Assessment</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Analysis Mode:</label>
+                        <select class="form-select" @bind="selectedAnalysisMode">
+                            <option value="single-agent">🤖 Single AI Agent</option>
+                            <option value="multi-agent">👥 Multi-Agent Team</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mt-3 text-center">
+                    <button class="btn btn-success btn-lg me-2" @onclick="StartProjectAnalysis" disabled="@isAnalyzing">
+                        @if (isAnalyzing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <text>Analyzing @selectedFiles.Count files...</text>
+                        }
+                        else
+                        {
+                            <text><i class="bi bi-rocket"></i> Start Project Analysis</text>
+                        }
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="ClearSelection">
+                        <i class="bi bi-arrow-clockwise"></i> Reset Selection
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .selection-method {
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+        .selection-method:hover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+
+        .selection-method.active {
+            border-color: #007bff;
+            background-color: #e3f2fd;
+        }
+
+    .project-structure {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        border-left: 4px solid #007bff;
+    }
+
+    .folder-item {
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+    }
+
+    .file-item {
+        margin: 0.2rem 0;
+        font-size: 0.9rem;
+    }
+
+    .folder-selection-area, .individual-files-area {
+        min-height: 200px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+</style>
+
+@code {
+    [Parameter] public EventCallback<ProjectAnalysisRequest> OnProjectAnalysisRequest { get; set; }
+
+    private string selectedMethod = "folder";
+    private string selectedProjectPath = "";
+    private string projectType = "";
+    private List<IBrowserFile> selectedFiles = new();
+    private List<IBrowserFile> discoveredFiles = new();
+    private Dictionary<string, List<IBrowserFile>> projectStructure = new();
+    private string selectedAnalysisType = "comprehensive";
+    private string selectedAnalysisMode = "multi-agent";
+    private bool isAnalyzing = false;
+
+    private void SetSelectionMethod(string method)
+    {
+        selectedMethod = method;
+        ClearSelection();
+    }
+
+    private async Task HandleFolderSelection(InputFileChangeEventArgs e)
+    {
+        var allFiles = e.GetMultipleFiles(1000); // Allow large projects
+
+        // Filter for .NET project files
+        var projectFiles = allFiles.Where(f =>
+            f.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+            f.Name.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+            f.Name.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // Filter out generated and build files
+        var sourceFiles = projectFiles.Where(f =>
+            !f.Name.Contains(".Designer.") &&
+            !f.Name.Contains(".g.cs") &&
+            !f.Name.Contains(".g.i.cs") &&
+            !f.Name.Contains("AssemblyInfo.cs") &&
+            !f.Name.Contains("\\bin\\") &&
+            !f.Name.Contains("\\obj\\") &&
+            !f.Name.Contains("/bin/") &&
+            !f.Name.Contains("/obj/"))
+            .ToList();
+
+        discoveredFiles = sourceFiles;
+        selectedFiles = sourceFiles.Where(f => f.Name.EndsWith(".cs")).ToList();
+
+        // Analyze project structure
+        AnalyzeProjectStructure(allFiles);
+        DetectProjectType(projectFiles);
+
+        // Set project path (simulate from first file path)
+        if (selectedFiles.Any())
+        {
+            selectedProjectPath = ExtractProjectPath(selectedFiles.First().Name);
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task HandleIndividualFileSelection(InputFileChangeEventArgs e)
+    {
+        var newFiles = e.GetMultipleFiles(50);
+        var csFiles = newFiles.Where(f => f.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        selectedFiles.AddRange(csFiles);
+        StateHasChanged();
+    }
+
+    private void AnalyzeProjectStructure(IEnumerable<IBrowserFile> allFiles)
+    {
+        projectStructure.Clear();
+
+        foreach (var file in allFiles)
+        {
+            var folderPath = ExtractFolderPath(file.Name);
+            if (!projectStructure.ContainsKey(folderPath))
+            {
+                projectStructure[folderPath] = new List<IBrowserFile>();
+            }
+            projectStructure[folderPath].Add(file);
+        }
+    }
+
+    private void DetectProjectType(List<IBrowserFile> projectFiles)
+    {
+        if (projectFiles.Any(f => f.Name.EndsWith(".sln")))
+        {
+            projectType = "Visual Studio Solution";
+        }
+        else if (projectFiles.Any(f => f.Name.EndsWith(".csproj")))
+        {
+            projectType = ".NET Project";
+        }
+        else if (selectedFiles.Count > 10)
+        {
+            projectType = "Large C# Project";
+        }
+        else
+        {
+            projectType = "C# Source Files";
+        }
+    }
+
+    private string ExtractProjectPath(string fileName)
+    {
+        // Simulate project path extraction
+        var pathParts = fileName.Split('\\', '/');
+        if (pathParts.Length > 2)
+        {
+            return string.Join("\\", pathParts.Take(pathParts.Length - 2));
+        }
+        return "Local Project";
+    }
+
+    private string ExtractFolderPath(string fileName)
+    {
+        var pathParts = fileName.Split('\\', '/');
+        if (pathParts.Length > 1)
+        {
+            return pathParts[pathParts.Length - 2]; // Parent folder name
+        }
+        return "Root";
+    }
+
+    private async Task AnalyzeDiscoveredProject()
+    {
+        await StartProjectAnalysis();
+    }
+
+    private async Task StartProjectAnalysis()
+    {
+        if (!selectedFiles.Any()) return;
+
+        isAnalyzing = true;
+
+        var analysisRequest = new ProjectAnalysisRequest
+        {
+            Files = selectedFiles.ToList(),
+            ProjectPath = selectedProjectPath,
+            ProjectType = projectType,
+            AnalysisType = selectedAnalysisType,
+            AnalysisMode = selectedAnalysisMode,
+            ProjectStructure = projectStructure
+        };
+
+        await OnProjectAnalysisRequest.InvokeAsync(analysisRequest);
+
+        isAnalyzing = false;
+    }
+
+    private void ClearSelection()
+    {
+        selectedFiles.Clear();
+        discoveredFiles.Clear();
+        projectStructure.Clear();
+        selectedProjectPath = "";
+        projectType = "";
+        StateHasChanged();
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int counter = 0;
+        decimal number = bytes;
+        while (Math.Round(number / 1024) >= 1)
+        {
+            number /= 1024;
+            counter++;
+        }
+        return $"{number:n1} {suffixes[counter]}";
+    }
+}
