@@ -1,0 +1,994 @@
+﻿@page "/multiagent"
+@using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
+@using PoC1_LegacyAnalyzer_Web.Models.MultiAgent
+@using PoC1_LegacyAnalyzer_Web.Services
+@inject IAgentOrchestrationService OrchestrationService
+@inject ICodeAnalysisService CodeAnalysisService
+
+<PageTitle>Multi-Agent Team Analysis</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <div class="bg-gradient-primary text-white p-4 rounded shadow">
+                <h1 class="display-4 mb-2"> Multi-Agent Team Analysis</h1>
+                <p class="lead mb-0">Coordinated AI specialist team for comprehensive code analysis</p>
+                <div class="mt-3">
+                    <span class="badge bg-light text-primary me-2">Security Expert</span>
+                    <span class="badge bg-light text-primary me-2">Performance Specialist</span>
+                    <span class="badge bg-light text-primary">Architecture Analyst</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Input Section -->
+        <div class="col-lg-5">
+            <div class="card shadow border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-people-fill"></i> Team Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Business Objective -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Business Objective:</label>
+                        <select class="form-select" @bind="selectedObjective" @bind:after="OnObjectiveChanged">
+                            <option value="security-compliance">Security Compliance Assessment</option>
+                            <option value="performance-optimization">Performance Optimization Analysis</option>
+                            <option value="architecture-modernization">Architecture Modernization Planning</option>
+                            <option value="comprehensive-audit">Comprehensive Code Audit</option>
+                            <option value="custom">Custom Objective</option>
+                        </select>
+                    </div>
+
+                    @if (selectedObjective == "custom")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Custom Business Objective:</label>
+                            <textarea class="form-control" rows="2" @bind="customObjective"
+                                      placeholder="Describe your specific business objective..."></textarea>
+                        </div>
+                    }
+
+                    <!-- Agent Team Selection -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">AI Agent Team:</label>
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="includeSecurityAgent" id="securityAgent">
+                                    <label class="form-check-label" for="securityAgent">
+                                        <strong> Security Analyst</strong><br>
+                                        <small class="text-muted">Vulnerability assessment, compliance analysis</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-12 mt-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="includePerformanceAgent" id="performanceAgent">
+                                    <label class="form-check-label" for="performanceAgent">
+                                        <strong> Performance Analyst</strong><br>
+                                        <small class="text-muted">Bottleneck identification, scalability assessment</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-12 mt-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="includeArchitectureAgent" id="architectureAgent">
+                                    <label class="form-check-label" for="architectureAgent">
+                                        <strong> Architecture Analyst</strong><br>
+                                        <small class="text-muted">Design patterns, SOLID principles, code structure</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Code Input -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Code to Analyze:</label>
+                        <textarea class="form-control font-monospace" rows="10" @bind="codeInput"
+                                  placeholder="Paste your C# code here..." style="font-size: 13px;"></textarea>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="mb-3">
+                        <button class="btn btn-outline-secondary me-2" @onclick="LoadTeamSampleCode">
+                            <i class="bi bi-file-code"></i> Load Team Analysis Sample
+                        </button>
+                        <button class="btn btn-success btn-lg" @onclick="StartTeamAnalysis" disabled="@isAnalyzing">
+                            @if (isAnalyzing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                <text>Team Analyzing...</text>
+                            }
+                            else
+                            {
+                                <text><i class="bi bi-people"></i> Start Team Analysis</text>
+                            }
+                        </button>
+                    </div>
+
+                    @if (isAnalyzing)
+                    {
+                        <div class="analysis-progress">
+                            <div class="text-center mb-3">
+                                <h5 class="text-primary mb-2">
+                                    <div class="spinner-border spinner-border-sm me-2"></div>
+                                    Multi-Agent Collaboration in Progress
+                                </h5>
+                                <p class="text-muted mb-3">AI specialists working together on your code</p>
+                            </div>
+
+                            <div class="progress mb-3" style="height: 12px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                                     style="width: @GetAnalysisProgress()%"></div>
+                            </div>
+
+                            <div class="row text-center">
+                                <div class="col-md-4">
+                                    <div class="mb-2">
+                                        @if (currentAnalysisPhase >= 2)
+                                        {
+                                            <span class="text-success">✅</span>
+                                        }
+                                        else
+                                        {
+
+                                            <span class="text-muted">⏳</span>
+                                        }
+                                        <strong>Analysis Phase</strong>
+                                    </div>
+                                    <small class="text-muted">Agents analyzing code</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-2">
+                                        @if (currentAnalysisPhase >= 4)
+                                        {
+                                            <span class="text-success">✅</span>
+                                        }
+                                        else
+                                        {
+
+                                            <span class="text-muted">⏳</span>
+                                        }
+                                        <strong>Collaboration Phase</strong>
+                                    </div>
+                                    <small class="text-muted">Peer review & discussion</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-2">
+                                        @if (currentAnalysisPhase >= 6)
+                                        {
+                                            <span class="text-success">✅</span>
+                                        }
+                                        else
+                                        {
+
+                                            <span class="text-muted">⏳</span>
+                                        }
+                                        <strong>Synthesis Phase</strong>
+                                    </div>
+                                    <small class="text-muted">Final recommendations</small>
+                                </div>
+                            </div>
+
+                            <div class="text-center mt-3">
+                                <strong class="text-primary">Current: @GetCurrentAnalysisPhase()</strong>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(statusMessage) && !isAnalyzing)
+                    {
+                        <div class="alert alert-info">
+                            <small><i class="bi bi-info-circle"></i> @statusMessage</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        @if (teamResult != null)
+        {
+            <div class="col-lg-7">
+                <!-- Team Performance Dashboard -->
+                <div class="metrics-dashboard">
+                    <div class="text-center mb-4">
+                        <h4 class="mb-2"> Multi-Agent Analysis Complete</h4>
+                        <p class="mb-0">AI specialist team collaboration results</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-3 col-6">
+                            <div class="metric-box">
+                                <div class="mb-2"></div>
+                                <h4>@teamResult.IndividualAnalyses.Count</h4>
+                                <small>Specialist Agents</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="metric-box">
+                                <div class="mb-2"></div>
+                                <h4>@teamResult.TeamDiscussion.Count</h4>
+                                <small>Collaboration Messages</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="metric-box">
+                                <div class="mb-2"></div>
+                                <h4>@teamResult.FinalRecommendations.HighPriorityActions.Count</h4>
+                                <small>Priority Actions</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="metric-box">
+                                <div class="mb-2"></div>
+                                <h4>@(teamResult.Consensus.AgreementPercentage.ToString("F0"))%</h4>
+                                <small>Team Consensus</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <div class="badge bg-light text-success fs-5 px-3 py-2">
+                            Overall Confidence: @teamResult.OverallConfidenceScore%
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Executive Summary -->
+                <div class="card shadow mb-3 border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-file-text"></i> Executive Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="executive-summary">
+                            @((MarkupString)FormatExecutiveSummary(teamResult.ExecutiveSummary))
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Individual Agent Results -->
+                <div class="card shadow mb-3">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0"><i class="bi bi-person-badge"></i> Individual Agent Analysis</h5>
+                    </div>
+                    <div class="card-body">
+                        @foreach (var analysis in teamResult.IndividualAnalyses.OrderByDescending(a => a.ConfidenceScore))
+                        {
+                            <div class="agent-result-card mb-4">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div>
+                                        <h6 class="text-primary mb-1">
+                                            @GetAgentIcon(analysis.AgentName) @analysis.AgentName
+                                        </h6>
+                                        <small class="text-muted">@analysis.Specialty</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge @GetConfidenceBadgeClass(analysis.ConfidenceScore) fs-6">
+                                            @analysis.ConfidenceScore% Confidence
+                                        </span>
+                                        <br>
+                                        <small class="text-muted">@analysis.Priority Priority</small>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Key Findings (@analysis.KeyFindings.Count):</strong>
+                                        <ul class="list-unstyled mt-2">
+                                            @foreach (var finding in analysis.KeyFindings.Take(3))
+                                            {
+                                                <li class="mb-1">
+                                                    <span class="badge @GetSeverityBadgeClass(finding.Severity) me-2">@finding.Severity</span>
+                                                    @finding.Category
+                                                </li>
+                                            }
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Recommendations (@analysis.Recommendations.Count):</strong>
+                                        <ul class="list-unstyled mt-2">
+                                            @foreach (var rec in analysis.Recommendations.Take(2))
+                                            {
+                                                <li class="mb-1">
+                                                    <strong>@rec.Title</strong><br>
+                                                    <small class="text-muted">Effort: @rec.EstimatedHours hours</small>
+                                                </li>
+                                            }
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(analysis.BusinessImpact))
+                                {
+                                    <div class="mt-3 p-3 bg-light rounded">
+                                        <strong>Business Impact:</strong><br>
+                                        <small>@analysis.BusinessImpact</small>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Team Discussion -->
+                @if (teamResult.TeamDiscussion.Any())
+                {
+                    <div class="card shadow mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="bi bi-chat-dots"></i> Agent Team Discussion</h5>
+                        </div>
+                        <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                            @foreach (var message in teamResult.TeamDiscussion.OrderBy(m => m.Timestamp))
+                            {
+                                <div class="discussion-message mb-3">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <strong class="text-primary">@message.FromAgent</strong>
+                                        <small class="text-muted">@message.Timestamp.ToString("HH:mm:ss")</small>
+                                    </div>
+                                    <div class="mt-1">
+                                        <span class="badge @GetMessageTypeBadgeClass(message.Type) me-2">
+                                            @message.Type
+                                        </span>
+                                        @message.Subject
+                                    </div>
+                                    <div class="mt-2 p-2 bg-light rounded">
+                                        <small>@TruncateMessage(message.Content, 200)</small>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Consolidated Recommendations -->
+                <div class="card shadow">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="bi bi-list-check"></i> Team Recommendations</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-danger">🚨 High Priority (@teamResult.FinalRecommendations.HighPriorityActions.Count)</h6>
+                                <ul class="list-unstyled">
+                                    @foreach (var rec in teamResult.FinalRecommendations.HighPriorityActions.Take(5))
+                                    {
+                                        <li class="mb-2">
+                                            <strong>@rec.Title</strong><br>
+                                            <small class="text-muted">@rec.EstimatedHours hours - @rec.Priority priority</small>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-warning">⚡ Medium Priority (@teamResult.FinalRecommendations.MediumPriorityActions.Count)</h6>
+                                <ul class="list-unstyled">
+                                    @foreach (var rec in teamResult.FinalRecommendations.MediumPriorityActions.Take(3))
+                                    {
+                                        <li class="mb-2">
+                                            <strong>@rec.Title</strong><br>
+                                            <small class="text-muted">@rec.EstimatedHours hours</small>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 p-3 bg-primary text-white rounded">
+                            <h6 class="mb-2"><i class="bi bi-clock"></i> Implementation Summary</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <strong>Total Effort:</strong><br>
+                                    @teamResult.FinalRecommendations.TotalEstimatedEffort hours
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Estimated Cost:</strong><br>
+                                    @((teamResult.FinalRecommendations.TotalEstimatedEffort * 125).ToString("C0"))
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Timeline:</strong><br>
+                                    @GetEstimatedTimeline(teamResult.FinalRecommendations.TotalEstimatedEffort)
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(teamResult.FinalRecommendations.ImplementationStrategy))
+                        {
+                            <div class="mt-3">
+                                <h6><i class="bi bi-map"></i> Implementation Strategy</h6>
+                                <div class="p-3 bg-light rounded">
+                                    @((MarkupString)FormatImplementationStrategy(teamResult.FinalRecommendations.ImplementationStrategy))
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    }
+
+    .metric-box {
+        padding: 1rem;
+        border-radius: 8px;
+        background: #f8f9fa;
+        margin: 0.5rem 0;
+    }
+
+    .agent-result-card {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        background: #fafafa;
+    }
+
+    .discussion-message {
+        border-left: 3px solid #007bff;
+        padding-left: 1rem;
+    }
+
+    .executive-summary {
+        line-height: 1.7;
+        font-size: 15px;
+    }
+
+        .executive-summary h6 {
+            color: #2c3e50;
+            margin-top: 1.5rem;
+            margin-bottom: 0.8rem;
+            font-weight: 600;
+        }
+
+        .executive-summary p {
+            margin-bottom: 1rem;
+        }
+    
+    .executive-summary {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 2rem;
+        line-height: 1.8;
+        font-size: 15px;
+        border-left: 5px solid #007bff;
+    }
+
+        .executive-summary h6 {
+            color: #2c3e50;
+            margin: 1.5rem 0 0.8rem 0;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+        }
+
+            .executive-summary h6::before {
+                content: "💼";
+                margin-right: 0.5rem;
+                font-size: 1.2em;
+            }
+
+    
+    .agent-result-card {
+        border: 1px solid #dee2e6;
+        border-radius: 12px;
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        margin-bottom: 1.5rem;
+    }
+
+        .agent-result-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+            
+    .analysis-progress {
+        background: rgba(255,255,255,0.95);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(0,123,255,0.3);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+    }
+        
+    .metrics-dashboard {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border-radius: 12px;
+        padding: 2rem;
+        color: white;
+        margin-bottom: 2rem;
+    }
+
+    .metric-box {
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(10px);
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin: 0.5rem 0;
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
+        .metric-box h4 {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+            
+    .discussion-message {
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-left: 4px solid #007bff;
+        transition: all 0.3s ease;
+    }
+
+        .discussion-message:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+            
+    .recommendations-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .priority-section {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1.5rem;
+        border-left: 4px solid;
+    }
+
+    .priority-high {
+        border-left-color: #dc3545;
+        background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);
+    }
+
+    .priority-medium {
+        border-left-color: #ffc107;
+        background: linear-gradient(135deg, #fffbf0 0%, #fff 100%);
+    }
+        
+    @@media (max-width: 768px) {
+        .recommendations-grid {
+            grid-template-columns: 1fr;
+        }
+
+    .metric-box h4 {
+        font-size: 1.5rem;
+    }
+
+    .agent-result-card {
+        padding: 1rem;
+    }
+    }
+
+    
+</style>
+
+@code {
+    private string selectedObjective = "comprehensive-audit";
+    private string customObjective = "";
+    private bool includeSecurityAgent = true;
+    private bool includePerformanceAgent = true;
+    private bool includeArchitectureAgent = true;
+    private string codeInput = "";
+    private bool isAnalyzing = false;
+    private string statusMessage = "";
+    private TeamAnalysisResult? teamResult;
+
+    private int currentAnalysisPhase = 0;
+    private readonly string[] analysisPhases = {
+        "Planning team analysis approach",
+        "Deploying specialist agents",
+        "Executing parallel analysis",
+        "Facilitating peer review discussions",
+        "Synthesizing team recommendations",
+        "Generating executive summary"
+    };
+
+    protected override void OnInitialized()
+    {
+        OnObjectiveChanged();
+        statusMessage = "Multi-agent team ready! Select agents and provide code for comprehensive analysis.";
+    }
+
+    private void OnObjectiveChanged()
+    {
+        // Auto-configure agent team based on objective
+        switch (selectedObjective)
+        {
+            case "security-compliance":
+                includeSecurityAgent = true;
+                includePerformanceAgent = false;
+                includeArchitectureAgent = true;
+                break;
+            case "performance-optimization":
+                includeSecurityAgent = false;
+                includePerformanceAgent = true;
+                includeArchitectureAgent = true;
+                break;
+            case "architecture-modernization":
+                includeSecurityAgent = true;
+                includePerformanceAgent = true;
+                includeArchitectureAgent = true;
+                break;
+            case "comprehensive-audit":
+                includeSecurityAgent = true;
+                includePerformanceAgent = true;
+                includeArchitectureAgent = true;
+                break;
+        }
+
+        StateHasChanged();
+    }
+
+    private string GetCurrentAnalysisPhase()
+    {
+        if (currentAnalysisPhase < analysisPhases.Length)
+            return analysisPhases[currentAnalysisPhase];
+        return "Analysis Complete";
+    }
+
+    private int GetAnalysisProgress()
+    {
+        return (int)((double)currentAnalysisPhase / analysisPhases.Length * 100);
+    }
+
+    private void LoadTeamSampleCode()
+    {
+        codeInput = @"using System;
+using System.Data.SqlClient;
+using System.Security.Cryptography;
+using System.Text;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace LegacyFinancialSystem
+{
+    // Poor separation of concerns - business logic mixed with data access
+    public class AccountManager
+    {
+        private string connectionString = ""Server=localhost;Database=Finance;Trusted_Connection=true;"";
+
+        // Security issue: Hardcoded admin credentials
+        private const string ADMIN_PASSWORD = ""admin123"";
+
+        // Performance issue: Synchronous operations
+        public List<Account> GetUserAccounts(string userId)
+        {
+            var accounts = new List<Account>();
+
+            // Security vulnerability: SQL injection possible
+            string sql = ""SELECT * FROM Accounts WHERE UserId = '"" + userId + ""'"";
+
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                var command = new SqlCommand(sql, connection);
+                var reader = command.ExecuteReader();
+
+                // Performance issue: Loading all data into memory
+                while (reader.Read())
+                {
+                    accounts.Add(new Account
+                    {
+                        Id = (int)reader[""Id""],
+                        Balance = (decimal)reader[""Balance""],
+                        AccountType = reader[""AccountType""].ToString(),
+                        // Security issue: Storing sensitive data in plain text
+                        SocialSecurityNumber = reader[""SSN""].ToString()
+                    });
+                }
+            }
+
+            return accounts;
+        }
+
+        // Architecture violation: Mixed responsibilities
+        public bool ProcessPayment(int fromAccountId, int toAccountId, decimal amount)
+        {
+            // Performance issue: Multiple database calls
+            var fromAccount = GetAccountById(fromAccountId);
+            var toAccount = GetAccountById(toAccountId);
+
+            if (fromAccount.Balance < amount)
+            {
+                // Poor error handling: Silent failure
+                return false;
+            }
+
+            // Security issue: No transaction isolation
+            fromAccount.Balance -= amount;
+            toAccount.Balance += amount;
+
+            // Performance issue: Separate update calls
+            UpdateAccount(fromAccount);
+            UpdateAccount(toAccount);
+
+            // Missing audit trail for financial transactions
+            return true;
+        }
+
+        // Security issue: Weak password validation
+        public bool ValidateUser(string username, string password)
+        {
+            if (password == ADMIN_PASSWORD)
+                return true;
+
+            // Performance issue: Inefficient string comparison
+            var storedPassword = GetStoredPassword(username);
+            return password.Equals(storedPassword);
+        }
+
+        // Architecture issue: Tight coupling to specific data access
+        private Account GetAccountById(int accountId)
+        {
+            // Repeated connection code - violation of DRY principle
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                var sql = ""SELECT * FROM Accounts WHERE Id = "" + accountId;
+                var command = new SqlCommand(sql, connection);
+                var reader = command.ExecuteReader();
+
+                if (reader.Read())
+                {
+                    return new Account
+                    {
+                        Id = (int)reader[""Id""],
+                        Balance = (decimal)reader[""Balance""],
+                        AccountType = reader[""AccountType""].ToString()
+                    };
+                }
+                return null;
+            }
+        }
+
+        private void UpdateAccount(Account account)
+        {
+            // More duplicated connection code
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                // Another SQL injection vulnerability
+                var sql = $""UPDATE Accounts SET Balance = {account.Balance} WHERE Id = {account.Id}"";
+                var command = new SqlCommand(sql, connection);
+                command.ExecuteNonQuery();
+            }
+        }
+
+        private string GetStoredPassword(string username)
+        {
+            // Security issue: Storing passwords in plain text
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                var sql = ""SELECT Password FROM Users WHERE Username = '"" + username + ""'"";
+                var command = new SqlCommand(sql, connection);
+                return command.ExecuteScalar()?.ToString() ?? """";
+            }
+        }
+    }
+
+    public class Account
+    {
+        public int Id { get; set; }
+        public decimal Balance { get; set; }
+        public string AccountType { get; set; }
+        public string SocialSecurityNumber { get; set; } // PII exposure
+    }
+}";
+
+        selectedObjective = "comprehensive-audit";
+        OnObjectiveChanged();
+        statusMessage = "Complex financial system sample loaded - perfect for multi-agent team analysis!";
+        StateHasChanged();
+    }
+
+    private async Task StartTeamAnalysis()
+    {
+        if (string.IsNullOrWhiteSpace(codeInput))
+        {
+            statusMessage = "Please enter code for team analysis.";
+            return;
+        }
+
+        // Validate at least one agent is selected
+        var selectedAgents = new List<string>();
+        if (includeSecurityAgent) selectedAgents.Add("security");
+        if (includePerformanceAgent) selectedAgents.Add("performance");
+        if (includeArchitectureAgent) selectedAgents.Add("architecture");
+
+        if (!selectedAgents.Any())
+        {
+            statusMessage = "Please select at least one specialist agent.";
+            return;
+        }
+
+        isAnalyzing = true;
+        currentAnalysisPhase = 0;
+
+        try
+        {
+            var businessObjective = selectedObjective == "custom" ? customObjective : GetObjectiveDescription(selectedObjective);
+
+            // Simulate progressive phases for demo
+            for (int i = 0; i < analysisPhases.Length; i++)
+            {
+                currentAnalysisPhase = i;
+                statusMessage = $"Phase {i + 1}: {analysisPhases[i]}...";
+                StateHasChanged();
+
+                // Realistic timing for each phase
+                await Task.Delay(i switch
+                {
+                    0 => 1000,  // Planning
+                    1 => 1500,  // Deployment
+                    2 => 3000,  // Analysis (longest phase)
+                    3 => 2000,  // Discussion
+                    4 => 1500,  // Synthesis
+                    5 => 1000   // Summary
+                });
+            }
+
+            // Execute the actual team analysis
+            teamResult = await OrchestrationService.CoordinateTeamAnalysisAsync(
+                codeInput,
+                businessObjective,
+                selectedAgents);
+
+            currentAnalysisPhase = analysisPhases.Length;
+            statusMessage = $"✅ Team analysis complete! {teamResult.IndividualAnalyses.Count} agents collaborated with {teamResult.OverallConfidenceScore}% confidence.";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Team analysis failed: {ex.Message}";
+            teamResult = null;
+        }
+        finally
+        {
+            isAnalyzing = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetObjectiveDescription(string objective)
+    {
+        return objective switch
+        {
+            "security-compliance" => "Comprehensive security assessment with focus on vulnerability identification and compliance requirements (SOX, GDPR, PCI-DSS)",
+            "performance-optimization" => "Performance bottleneck analysis and scalability assessment for enterprise-grade optimization recommendations",
+            "architecture-modernization" => "Architectural analysis and modernization planning with focus on SOLID principles, design patterns, and maintainability improvements",
+            "comprehensive-audit" => "Complete code audit covering security, performance, and architectural aspects for holistic modernization planning",
+            _ => "Custom business-focused code analysis and improvement recommendations"
+        };
+    }
+
+    private string FormatExecutiveSummary(string summary)
+    {
+        if (string.IsNullOrEmpty(summary)) return "";
+
+        // Basic formatting for executive consumption
+        summary = summary.Replace("\n\n", "</p><p>");
+        summary = summary.Replace("\n", "<br>");
+
+        // Format headers
+        summary = System.Text.RegularExpressions.Regex.Replace(
+            summary,
+            @"^(\d+\.\s*)([A-Z][^<\n]*?)(<br>|</p>)",
+            "<h6 class='text-primary mb-2'>$1$2</h6>");
+
+        // Format bullet points
+        summary = summary.Replace("• ", "<i class='bi bi-arrow-right text-success me-2'></i>");
+        summary = summary.Replace("- ", "<i class='bi bi-chevron-right text-info me-2'></i>");
+
+        if (!summary.StartsWith("<p") && !summary.StartsWith("<h6"))
+        {
+            summary = $"<p>{summary}</p>";
+        }
+
+        return summary;
+    }
+
+    private string FormatImplementationStrategy(string strategy)
+    {
+        if (string.IsNullOrEmpty(strategy)) return "";
+
+        // Format phases and sections
+        strategy = strategy.Replace("Phase 1:", "<h6 class='text-primary mt-3 mb-2'><i class='bi bi-1-circle'></i> Phase 1:</h6>");
+        strategy = strategy.Replace("Phase 2:", "<h6 class='text-primary mt-3 mb-2'><i class='bi bi-2-circle'></i> Phase 2:</h6>");
+        strategy = strategy.Replace("Phase 3:", "<h6 class='text-primary mt-3 mb-2'><i class='bi bi-3-circle'></i> Phase 3:</h6>");
+
+        strategy = strategy.Replace("\n\n", "</p><p>");
+        strategy = strategy.Replace("\n", "<br>");
+        strategy = strategy.Replace("• ", "<i class='bi bi-check-circle text-success me-1'></i>");
+
+        if (!strategy.StartsWith("<h6") && !strategy.StartsWith("<p"))
+        {
+            strategy = $"<p>{strategy}</p>";
+        }
+
+        return strategy;
+    }
+
+    private string GetAgentIcon(string agentName)
+    {
+        return agentName.ToLower() switch
+        {
+            var name when name.Contains("security") => "🛡️",
+            var name when name.Contains("performance") => "⚡",
+            var name when name.Contains("architectural") => "🏗️",
+            _ => "🤖"
+        };
+    }
+
+    private string GetConfidenceBadgeClass(int confidence)
+    {
+        return confidence switch
+        {
+            >= 90 => "bg-success",
+            >= 75 => "bg-primary",
+            >= 60 => "bg-warning text-dark",
+            _ => "bg-danger"
+        };
+    }
+
+    private string GetSeverityBadgeClass(string severity)
+    {
+        return severity?.ToUpper() switch
+        {
+            "CRITICAL" => "bg-danger",
+            "HIGH" => "bg-warning text-dark",
+            "MEDIUM" => "bg-info",
+            "LOW" => "bg-secondary",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private string GetMessageTypeBadgeClass(MessageType messageType)
+    {
+        return messageType switch
+        {
+            MessageType.Analysis => "bg-primary",
+            MessageType.PeerReview => "bg-info",
+            MessageType.Challenge => "bg-warning text-dark",
+            MessageType.Agreement => "bg-success",
+            MessageType.Synthesis => "bg-dark",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string TruncateMessage(string message, int maxLength)
+    {
+        if (string.IsNullOrEmpty(message) || message.Length <= maxLength)
+            return message;
+
+        return message.Substring(0, maxLength) + "...";
+    }
+
+    private string GetEstimatedTimeline(decimal hours)
+    {
+        return hours switch
+        {
+            <= 40 => "1 week",
+            <= 80 => "2 weeks",
+            <= 160 => "1 month",
+            <= 320 => "2 months",
+            _ => "3+ months"
+        };
+    }
+}

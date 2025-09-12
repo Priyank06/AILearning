@@ -16,6 +16,17 @@ builder.Services.AddSingleton<IReportService, ReportService>();
 builder.Services.AddScoped<IFileDownloadService, FileDownloadService>();
 builder.Services.AddSingleton<IMultiFileAnalysisService, MultiFileAnalysisService>();
 
+// Register new multi-agent services
+builder.Services.AddSingleton<ISpecialistAgentService, SecurityAnalystAgent>();
+builder.Services.AddSingleton<ISpecialistAgentService, PerformanceAnalystAgent>();
+builder.Services.AddSingleton<ISpecialistAgentService, ArchitecturalAnalystAgent>();
+builder.Services.AddSingleton<IAgentOrchestrationService, AgentOrchestrationService>();
+
+// Register individual agents for dependency injection
+builder.Services.AddSingleton<SecurityAnalystAgent>();
+builder.Services.AddSingleton<PerformanceAnalystAgent>();
+builder.Services.AddSingleton<ArchitecturalAnalystAgent>();
+
 builder.Services.AddSingleton<Kernel>(serviceProvider =>
 {
     var configuration = serviceProvider.GetRequiredService<IConfiguration>();
