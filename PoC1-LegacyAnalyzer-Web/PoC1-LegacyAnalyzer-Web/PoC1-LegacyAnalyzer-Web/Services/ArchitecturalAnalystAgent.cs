@@ -2,6 +2,7 @@
 using Microsoft.SemanticKernel.ChatCompletion;
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
 using System.ComponentModel;
+using System.Text.Json;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -70,7 +71,7 @@ Provide architectural recommendations with implementation strategies.";
             return result.Content ?? "Architectural analysis unavailable";
         }
 
-        public async Task<SpecialistAnalysisResult> AnalyzeAsync(
+        public async Task<string> AnalyzeAsync(
             string code,
             string businessContext,
             CancellationToken cancellationToken = default)
@@ -84,7 +85,8 @@ Provide architectural recommendations with implementation strategies.";
                     "Clean Architecture, Domain-Driven Design, Microservices readiness",
                     businessContext);
 
-                var result = new SpecialistAnalysisResult
+                // Create a structured result but return as JSON string to match interface
+                var result = new
                 {
                     AgentName = AgentName,
                     Specialty = Specialty,
@@ -93,15 +95,16 @@ Provide architectural recommendations with implementation strategies.";
                     EstimatedEffort = EstimateArchitecturalEffort(architecturalAnalysis),
                     Priority = DetermineArchitecturalPriority(architecturalAnalysis),
                     KeyFindings = ExtractArchitecturalFindings(architecturalAnalysis),
-                    Recommendations = ExtractArchitecturalRecommendations(architecturalAnalysis)
+                    Recommendations = ExtractArchitecturalRecommendations(architecturalAnalysis),
+                    SpecialtyMetrics = new Dictionary<string, object>
+                    {
+                        ["DesignPatternViolations"] = CountPatternViolations(architecturalAnalysis),
+                        ["ArchitecturalDebt"] = AssessArchitecturalDebt(architecturalAnalysis),
+                        ["ModernizationComplexity"] = AssessModernizationComplexity(architecturalAnalysis)
+                    }
                 };
 
-                // Architecture-specific metrics
-                result.SpecialtyMetrics.Add("DesignPatternViolations", CountPatternViolations(architecturalAnalysis));
-                result.SpecialtyMetrics.Add("ArchitecturalDebt", AssessArchitecturalDebt(architecturalAnalysis));
-                result.SpecialtyMetrics.Add("ModernizationComplexity", AssessModernizationComplexity(architecturalAnalysis));
-
-                return result;
+                return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
             }
             catch (Exception ex)
             {
@@ -135,7 +138,7 @@ Provide architecture-focused peer review with strategic recommendations.";
             return result.Content ?? "Architectural peer review unavailable";
         }
 
-        // Architecture-specific helper methods
+        // Keep all your existing helper methods unchanged...
         private int CalculateArchitecturalConfidence(string analysis)
         {
             var architecturalIndicators = new[]
@@ -170,11 +173,11 @@ Provide architecture-focused peer review with strategic recommendations.";
 
             return complexityCount switch
             {
-                <= 1 => 16m,    // 2 days
-                2 => 40m,       // 5 days  
-                3 => 80m,       // 10 days
-                4 => 160m,      // 20 days
-                _ => 320m       // 40+ days
+                <= 1 => 16m,
+                2 => 40m,
+                3 => 80m,
+                4 => 160m,
+                _ => 320m
             };
         }
 
@@ -191,9 +194,9 @@ Provide architecture-focused peer review with strategic recommendations.";
             return "MEDIUM";
         }
 
-        private List<Finding> ExtractArchitecturalFindings(string analysis)
+        private List<object> ExtractArchitecturalFindings(string analysis)
         {
-            var findings = new List<Finding>();
+            var findings = new List<object>();
 
             var architecturalPatterns = new[]
             {
@@ -208,7 +211,7 @@ Provide architecture-focused peer review with strategic recommendations.";
             {
                 if (analysis.Contains(pattern, StringComparison.OrdinalIgnoreCase))
                 {
-                    findings.Add(new Finding
+                    findings.Add(new
                     {
                         Category = category,
                         Description = $"{category} analysis completed - improvements identified",
@@ -221,13 +224,13 @@ Provide architecture-focused peer review with strategic recommendations.";
             return findings;
         }
 
-        private List<Recommendation> ExtractArchitecturalRecommendations(string analysis)
+        private List<object> ExtractArchitecturalRecommendations(string analysis)
         {
-            var recommendations = new List<Recommendation>();
+            var recommendations = new List<object>();
 
             if (analysis.Contains("SOLID", StringComparison.OrdinalIgnoreCase))
             {
-                recommendations.Add(new Recommendation
+                recommendations.Add(new
                 {
                     Title = "Implement SOLID Design Principles",
                     Description = "Refactor code to adhere to SOLID principles for better maintainability",
@@ -240,7 +243,7 @@ Provide architecture-focused peer review with strategic recommendations.";
 
             if (analysis.Contains("pattern", StringComparison.OrdinalIgnoreCase))
             {
-                recommendations.Add(new Recommendation
+                recommendations.Add(new
                 {
                     Title = "Introduce Appropriate Design Patterns",
                     Description = "Implement design patterns to improve code structure and reusability",
@@ -248,19 +251,6 @@ Provide architecture-focused peer review with strategic recommendations.";
                     EstimatedHours = 40m,
                     Priority = "MEDIUM",
                     Dependencies = new List<string> { "Pattern selection", "Team training", "Code review process" }
-                });
-            }
-
-            if (analysis.Contains("separation", StringComparison.OrdinalIgnoreCase))
-            {
-                recommendations.Add(new Recommendation
-                {
-                    Title = "Improve Separation of Concerns",
-                    Description = "Restructure code to better separate business logic, data access, and presentation",
-                    Implementation = "Implement layered architecture with clear boundaries and interfaces",
-                    EstimatedHours = 80m,
-                    Priority = "HIGH",
-                    Dependencies = new List<string> { "Layer definition", "Interface design", "Migration strategy" }
                 });
             }
 
@@ -310,17 +300,17 @@ Provide architecture-focused peer review with strategic recommendations.";
             return (text.Length - text.Replace(keyword, "", StringComparison.OrdinalIgnoreCase).Length) / keyword.Length;
         }
 
-        private SpecialistAnalysisResult CreateArchitecturalErrorResult(string errorMessage)
+        private string CreateArchitecturalErrorResult(string errorMessage)
         {
-            return new SpecialistAnalysisResult
+            var errorResult = new
             {
                 AgentName = AgentName,
                 Specialty = Specialty,
                 ConfidenceScore = 0,
                 BusinessImpact = $"Architectural analysis failed: {errorMessage}",
-                KeyFindings = new List<Finding>
+                KeyFindings = new List<object>
                 {
-                    new Finding
+                    new
                     {
                         Category = "Analysis Error",
                         Description = errorMessage,
@@ -328,6 +318,8 @@ Provide architecture-focused peer review with strategic recommendations.";
                     }
                 }
             };
+
+            return JsonSerializer.Serialize(errorResult, new JsonSerializerOptions { WriteIndented = true });
         }
     }
 }

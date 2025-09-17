@@ -2,6 +2,7 @@
 using Microsoft.SemanticKernel.ChatCompletion;
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
 using System.ComponentModel;
+using System.Text.Json;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -19,8 +20,6 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         {
             _kernel = kernel;
             _logger = logger;
-
-            // Register agent functions with kernel
             _kernel.Plugins.AddFromObject(this, "SecurityAnalyst");
         }
 
@@ -101,7 +100,8 @@ Be collaborative but thorough in identifying security gaps.";
             return result.Content ?? "Peer review unavailable";
         }
 
-        public async Task<SpecialistAnalysisResult> AnalyzeAsync(
+        // FIXED: Changed return type from Task<SpecialistAnalysisResult> to Task<string>
+        public async Task<string> AnalyzeAsync(
             string code,
             string businessContext,
             CancellationToken cancellationToken = default)
@@ -116,8 +116,8 @@ Be collaborative but thorough in identifying security gaps.";
                     "OWASP Top 10, PCI-DSS, SOX Compliance",
                     businessContext);
 
-                // Parse AI response and structure results
-                var result = new SpecialistAnalysisResult
+                // Create structured result but return as JSON string to match interface
+                var result = new
                 {
                     AgentName = AgentName,
                     Specialty = Specialty,
@@ -127,16 +127,17 @@ Be collaborative but thorough in identifying security gaps.";
                     Priority = DeterminePriority(securityAnalysis),
                     KeyFindings = ExtractFindings(securityAnalysis),
                     Recommendations = ExtractRecommendations(securityAnalysis),
-                    RiskLevel = AssessRisk(securityAnalysis)
+                    RiskLevel = AssessRisk(securityAnalysis),
+                    SpecialtyMetrics = new Dictionary<string, object>
+                    {
+                        ["VulnerabilityCount"] = CountVulnerabilities(securityAnalysis),
+                        ["ComplianceGaps"] = CountComplianceGaps(securityAnalysis),
+                        ["CriticalFindings"] = CountCriticalFindings(securityAnalysis)
+                    }
                 };
 
-                // Add security-specific metrics
-                result.SpecialtyMetrics.Add("VulnerabilityCount", CountVulnerabilities(securityAnalysis));
-                result.SpecialtyMetrics.Add("ComplianceGaps", CountComplianceGaps(securityAnalysis));
-                result.SpecialtyMetrics.Add("CriticalFindings", CountCriticalFindings(securityAnalysis));
-
                 _logger.LogInformation("SecurityAnalyst completed analysis with confidence: {Confidence}%", result.ConfidenceScore);
-                return result;
+                return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
             }
             catch (Exception ex)
             {
@@ -159,7 +160,6 @@ Be collaborative but thorough in identifying security gaps.";
         // Helper methods for parsing AI responses and calculating metrics
         private int CalculateConfidenceScore(string analysis)
         {
-            // Analyze response quality and completeness
             var qualityIndicators = new[]
             {
                 analysis.Contains("vulnerability", StringComparison.OrdinalIgnoreCase),
@@ -175,7 +175,6 @@ Be collaborative but thorough in identifying security gaps.";
 
         private string ExtractBusinessImpact(string analysis)
         {
-            // Extract business impact statements from AI response
             var businessKeywords = new[] { "business", "cost", "risk", "compliance", "revenue", "reputation" };
             var sentences = analysis.Split('.', StringSplitOptions.RemoveEmptyEntries);
 
@@ -187,17 +186,16 @@ Be collaborative but thorough in identifying security gaps.";
 
         private decimal EstimateRemediationEffort(string analysis)
         {
-            // Basic effort estimation based on complexity indicators
             var complexityKeywords = new[] { "refactor", "architecture", "framework", "migration", "comprehensive" };
             var complexityCount = complexityKeywords.Count(keyword =>
                 analysis.Contains(keyword, StringComparison.OrdinalIgnoreCase));
 
             return complexityCount switch
             {
-                0 => 8m,    // 1 day
-                1 => 16m,   // 2 days  
-                2 => 40m,   // 1 week
-                >= 3 => 80m // 2 weeks+
+                0 => 8m,
+                1 => 16m,
+                2 => 40m,
+                >= 3 => 80m
             };
         }
 
@@ -218,12 +216,10 @@ Be collaborative but thorough in identifying security gaps.";
             return "LOW";
         }
 
-        private List<Finding> ExtractFindings(string analysis)
+        private List<object> ExtractFindings(string analysis)
         {
-            // Parse findings from AI response
-            var findings = new List<Finding>();
+            var findings = new List<object>();
 
-            // Look for vulnerability patterns
             var vulnerabilityPatterns = new[]
             {
                 ("SQL Injection", "injection"),
@@ -237,7 +233,7 @@ Be collaborative but thorough in identifying security gaps.";
             {
                 if (analysis.Contains(pattern, StringComparison.OrdinalIgnoreCase))
                 {
-                    findings.Add(new Finding
+                    findings.Add(new
                     {
                         Category = category,
                         Description = $"{category} vulnerability identified in code analysis",
@@ -251,14 +247,13 @@ Be collaborative but thorough in identifying security gaps.";
             return findings;
         }
 
-        private List<Recommendation> ExtractRecommendations(string analysis)
+        private List<object> ExtractRecommendations(string analysis)
         {
-            // Extract actionable recommendations
-            var recommendations = new List<Recommendation>();
+            var recommendations = new List<object>();
 
             if (analysis.Contains("parameterized", StringComparison.OrdinalIgnoreCase))
             {
-                recommendations.Add(new Recommendation
+                recommendations.Add(new
                 {
                     Title = "Implement Parameterized Queries",
                     Description = "Replace string concatenation with parameterized queries to prevent SQL injection",
@@ -271,7 +266,7 @@ Be collaborative but thorough in identifying security gaps.";
 
             if (analysis.Contains("authentication", StringComparison.OrdinalIgnoreCase))
             {
-                recommendations.Add(new Recommendation
+                recommendations.Add(new
                 {
                     Title = "Strengthen Authentication Mechanisms",
                     Description = "Implement robust authentication and session management",
@@ -285,7 +280,7 @@ Be collaborative but thorough in identifying security gaps.";
             return recommendations;
         }
 
-        private RiskAssessment AssessRisk(string analysis)
+        private object AssessRisk(string analysis)
         {
             var riskFactors = new List<string>();
 
@@ -298,7 +293,7 @@ Be collaborative but thorough in identifying security gaps.";
             if (analysis.Contains("encryption", StringComparison.OrdinalIgnoreCase))
                 riskFactors.Add("Inadequate encryption exposes sensitive data");
 
-            return new RiskAssessment
+            return new
             {
                 Level = riskFactors.Count switch
                 {
@@ -332,7 +327,6 @@ Be collaborative but thorough in identifying security gaps.";
 
         private List<string> ExtractEvidence(string analysis, string pattern)
         {
-            // Extract evidence related to specific pattern
             var evidence = new List<string>();
             var sentences = analysis.Split('.', StringSplitOptions.RemoveEmptyEntries);
 
@@ -344,7 +338,7 @@ Be collaborative but thorough in identifying security gaps.";
                 }
             }
 
-            return evidence.Take(3).ToList(); // Limit to top 3 evidence items
+            return evidence.Take(3).ToList();
         }
 
         private string ExtractPatternContext(string analysis, string pattern)
@@ -356,22 +350,19 @@ Be collaborative but thorough in identifying security gaps.";
         private int CountVulnerabilities(string analysis)
         {
             var vulnerabilityKeywords = new[] { "vulnerability", "flaw", "weakness", "risk", "exposure" };
-            return vulnerabilityKeywords.Sum(keyword =>
-                CountOccurrences(analysis, keyword));
+            return vulnerabilityKeywords.Sum(keyword => CountOccurrences(analysis, keyword));
         }
 
         private int CountComplianceGaps(string analysis)
         {
             var complianceKeywords = new[] { "compliance", "regulation", "standard", "requirement", "policy" };
-            return complianceKeywords.Sum(keyword =>
-                CountOccurrences(analysis, keyword));
+            return complianceKeywords.Sum(keyword => CountOccurrences(analysis, keyword));
         }
 
         private int CountCriticalFindings(string analysis)
         {
             var criticalKeywords = new[] { "critical", "severe", "dangerous", "urgent", "immediate" };
-            return criticalKeywords.Sum(keyword =>
-                CountOccurrences(analysis, keyword));
+            return criticalKeywords.Sum(keyword => CountOccurrences(analysis, keyword));
         }
 
         private int CountOccurrences(string text, string keyword)
@@ -379,17 +370,17 @@ Be collaborative but thorough in identifying security gaps.";
             return (text.Length - text.Replace(keyword, "", StringComparison.OrdinalIgnoreCase).Length) / keyword.Length;
         }
 
-        private SpecialistAnalysisResult CreateErrorResult(string errorMessage)
+        private string CreateErrorResult(string errorMessage)
         {
-            return new SpecialistAnalysisResult
+            var errorResult = new
             {
                 AgentName = AgentName,
                 Specialty = Specialty,
                 ConfidenceScore = 0,
                 BusinessImpact = $"Analysis failed: {errorMessage}",
-                KeyFindings = new List<Finding>
+                KeyFindings = new List<object>
                 {
-                    new Finding
+                    new
                     {
                         Category = "Analysis Error",
                         Description = errorMessage,
@@ -397,6 +388,8 @@ Be collaborative but thorough in identifying security gaps.";
                     }
                 }
             };
+
+            return JsonSerializer.Serialize(errorResult, new JsonSerializerOptions { WriteIndented = true });
         }
     }
 }

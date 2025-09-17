@@ -2,6 +2,7 @@
 using Microsoft.SemanticKernel.ChatCompletion;
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
 using System.ComponentModel;
+using System.Text.Json;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -70,7 +71,8 @@ Provide detailed technical recommendations with measurable performance improveme
             return result.Content ?? "Performance analysis unavailable";
         }
 
-        public async Task<SpecialistAnalysisResult> AnalyzeAsync(
+        // FIXED: Changed return type from Task<SpecialistAnalysisResult> to Task<string>
+        public async Task<string> AnalyzeAsync(
             string code,
             string businessContext,
             CancellationToken cancellationToken = default)
@@ -84,7 +86,8 @@ Provide detailed technical recommendations with measurable performance improveme
                     "Sub-second response times, 1000+ concurrent users",
                     "10x user growth over 2 years, 99.9% availability");
 
-                var result = new SpecialistAnalysisResult
+                // Create structured result but return as JSON string to match interface
+                var result = new
                 {
                     AgentName = AgentName,
                     Specialty = Specialty,
@@ -93,15 +96,16 @@ Provide detailed technical recommendations with measurable performance improveme
                     EstimatedEffort = EstimateOptimizationEffort(performanceAnalysis),
                     Priority = DeterminePerformancePriority(performanceAnalysis),
                     KeyFindings = ExtractPerformanceFindings(performanceAnalysis),
-                    Recommendations = ExtractPerformanceRecommendations(performanceAnalysis)
+                    Recommendations = ExtractPerformanceRecommendations(performanceAnalysis),
+                    SpecialtyMetrics = new Dictionary<string, object>
+                    {
+                        ["BottleneckCount"] = CountBottlenecks(performanceAnalysis),
+                        ["OptimizationOpportunities"] = CountOptimizations(performanceAnalysis),
+                        ["ScalabilityIssues"] = CountScalabilityIssues(performanceAnalysis)
+                    }
                 };
 
-                // Performance-specific metrics
-                result.SpecialtyMetrics.Add("BottleneckCount", CountBottlenecks(performanceAnalysis));
-                result.SpecialtyMetrics.Add("OptimizationOpportunities", CountOptimizations(performanceAnalysis));
-                result.SpecialtyMetrics.Add("ScalabilityIssues", CountScalabilityIssues(performanceAnalysis));
-
-                return result;
+                return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
             }
             catch (Exception ex)
             {
@@ -169,11 +173,11 @@ Provide performance-focused peer review.";
 
             return complexityCount switch
             {
-                0 => 4m,    // 0.5 days
-                1 => 12m,   // 1.5 days
-                2 => 24m,   // 3 days
-                3 => 40m,   // 5 days
-                _ => 80m    // 10+ days
+                0 => 4m,
+                1 => 12m,
+                2 => 24m,
+                3 => 40m,
+                _ => 80m
             };
         }
 
@@ -190,9 +194,9 @@ Provide performance-focused peer review.";
             return "MEDIUM";
         }
 
-        private List<Finding> ExtractPerformanceFindings(string analysis)
+        private List<object> ExtractPerformanceFindings(string analysis)
         {
-            var findings = new List<Finding>();
+            var findings = new List<object>();
 
             var performancePatterns = new[]
             {
@@ -207,7 +211,7 @@ Provide performance-focused peer review.";
             {
                 if (analysis.Contains(pattern, StringComparison.OrdinalIgnoreCase))
                 {
-                    findings.Add(new Finding
+                    findings.Add(new
                     {
                         Category = category,
                         Description = $"{category} optimization opportunity identified",
@@ -220,13 +224,13 @@ Provide performance-focused peer review.";
             return findings;
         }
 
-        private List<Recommendation> ExtractPerformanceRecommendations(string analysis)
+        private List<object> ExtractPerformanceRecommendations(string analysis)
         {
-            var recommendations = new List<Recommendation>();
+            var recommendations = new List<object>();
 
             if (analysis.Contains("database", StringComparison.OrdinalIgnoreCase))
             {
-                recommendations.Add(new Recommendation
+                recommendations.Add(new
                 {
                     Title = "Optimize Database Queries",
                     Description = "Implement query optimization and indexing strategies",
@@ -238,7 +242,7 @@ Provide performance-focused peer review.";
 
             if (analysis.Contains("async", StringComparison.OrdinalIgnoreCase))
             {
-                recommendations.Add(new Recommendation
+                recommendations.Add(new
                 {
                     Title = "Implement Asynchronous Operations",
                     Description = "Convert blocking operations to async/await patterns",
@@ -282,17 +286,17 @@ Provide performance-focused peer review.";
             return (text.Length - text.Replace(keyword, "", StringComparison.OrdinalIgnoreCase).Length) / keyword.Length;
         }
 
-        private SpecialistAnalysisResult CreatePerformanceErrorResult(string errorMessage)
+        private string CreatePerformanceErrorResult(string errorMessage)
         {
-            return new SpecialistAnalysisResult
+            var errorResult = new
             {
                 AgentName = AgentName,
                 Specialty = Specialty,
                 ConfidenceScore = 0,
                 BusinessImpact = $"Performance analysis failed: {errorMessage}",
-                KeyFindings = new List<Finding>
+                KeyFindings = new List<object>
                 {
-                    new Finding
+                    new
                     {
                         Category = "Analysis Error",
                         Description = errorMessage,
@@ -300,6 +304,8 @@ Provide performance-focused peer review.";
                     }
                 }
             };
+
+            return JsonSerializer.Serialize(errorResult, new JsonSerializerOptions { WriteIndented = true });
         }
     }
 }

@@ -166,8 +166,18 @@ Respond with specific, actionable orchestration plan.";
                     throw new InvalidOperationException($"Failed to resolve agent for specialty: {specialty}");
                 }
 
-                _logger.LogInformation("Executing {AgentName} analysis", agent.AgentName);
-                return await agent.AnalyzeAsync(code, businessObjective, cancellationToken);
+                var analysisResultString = await agent.AnalyzeAsync(code, businessObjective, cancellationToken);
+                var analysisResult = JsonSerializer.Deserialize<SpecialistAnalysisResult>(
+                    analysisResultString,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+
+                if (analysisResult == null)
+                {
+                    throw new InvalidOperationException("Agent returned null analysis result.");
+                }
+
+                return analysisResult;
             }
             catch (Exception ex)
             {

@@ -1,0 +1,894 @@
+﻿@* Components/AI102Dashboard.razor *@
+@page "/ai102dashboard"
+@using PoC1_LegacyAnalyzer_Web.Models.AI102
+@using PoC1_LegacyAnalyzer_Web.Services
+@inject IFormRecognizerService FormRecognizerService
+@inject IComputerVisionService ComputerVisionService
+@inject ICustomVisionService CustomVisionService
+@inject ISpeechService SpeechService
+@inject ILanguageUnderstandingService LanguageService
+@inject IContentModerationService ContentModerationService
+@inject ICognitiveSearchService SearchService
+@inject IJSRuntime JSRuntime
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h2 class="mb-4">
+                <i class="fas fa-brain"></i> AI-102 Services Dashboard
+                <span class="badge badge-info ms-2">8 Services Ready</span>
+            </h2>
+        </div>
+    </div>
+
+    <div class="row">
+        @* Document Analysis Panel *@
+        <div class="col-lg-6 col-md-12 mb-4">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-alt"></i> Document Analysis (Form Recognizer)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Upload Document:</label>
+                        <InputFile OnChange="HandleDocumentUpload" accept=".pdf,.png,.jpg,.jpeg" class="form-control" />
+                    </div>
+                    
+                    <button class="btn btn-primary" @onclick="AnalyzeDocument" disabled="@(documentFile == null || isAnalyzing)">
+                        @if (isAnalyzing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        <i class="fas fa-search"></i> Analyze Document
+                    </button>
+
+                    @if (!string.IsNullOrEmpty(documentResult))
+                    {
+                        <div class="mt-3">
+                            <h6>Analysis Results:</h6>
+                            <div class="alert alert-info">
+                                <pre class="mb-0" style="white-space: pre-wrap;">@documentResult</pre>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* Computer Vision Panel *@
+        <div class="col-lg-6 col-md-12 mb-4">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-eye"></i> Computer Vision Analysis
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Upload Image/Diagram:</label>
+                        <InputFile OnChange="HandleImageUpload" accept=".png,.jpg,.jpeg" class="form-control" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Analysis Type:</label>
+                        <select class="form-select" @bind="visionAnalysisType">
+                            <option value="architecture">Architecture Diagram</option>
+                            <option value="ui">UI Design</option>
+                            <option value="text">Text Extraction</option>
+                            <option value="components">Diagram Components</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-success" @onclick="AnalyzeImage" disabled="@(imageFile == null || isAnalyzingImage)">
+                        @if (isAnalyzingImage)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        <i class="fas fa-image"></i> Analyze Image
+                    </button>
+
+                    @if (!string.IsNullOrEmpty(visionResult))
+                    {
+                        <div class="mt-3">
+                            <h6>Vision Analysis Results:</h6>
+                            <div class="alert alert-success">
+                                <pre class="mb-0" style="white-space: pre-wrap;">@visionResult</pre>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        @* Custom Vision Panel *@
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-magic"></i> Custom Vision (Pattern Detection)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Source Code for Pattern Analysis:</label>
+                        <textarea @bind="customVisionCode" class="form-control" rows="8" 
+                                  placeholder="Paste C# code to analyze design patterns...">@defaultSampleCode</textarea>
+                    </div>
+
+                    <button class="btn btn-warning" @onclick="AnalyzeDesignPatterns" disabled="@isAnalyzingPatterns">
+                        @if (isAnalyzingPatterns)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        <i class="fas fa-puzzle-piece"></i> Detect Patterns
+                    </button>
+
+                    @if (!string.IsNullOrEmpty(customVisionResult))
+                    {
+                        <div class="mt-3">
+                            <h6>Pattern Analysis:</h6>
+                            <div class="alert alert-warning">
+                                <pre class="mb-0" style="white-space: pre-wrap;">@customVisionResult</pre>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* Speech Services Panel *@
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-microphone"></i> Speech Services
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Voice Command (Text Simulation):</label>
+                        <input type="text" @bind="speechText" class="form-control" 
+                               placeholder="analyze security vulnerabilities in authentication code" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Voice Type for TTS:</label>
+                        <select class="form-select" @bind="selectedVoiceType">
+                            <option value="Professional">Professional</option>
+                            <option value="Friendly">Friendly</option>
+                            <option value="Technical">Technical</option>
+                            <option value="Executive">Executive</option>
+                        </select>
+                    </div>
+
+                    <div class="btn-group d-grid gap-2">
+                        <button class="btn btn-info" @onclick="ParseVoiceCommand" disabled="@isProcessingSpeech">
+                            @if (isProcessingSpeech)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            <i class="fas fa-cogs"></i> Parse Command
+                        </button>
+                        
+                        <button class="btn btn-outline-info" @onclick="ConvertToSpeech" disabled="@isProcessingSpeech">
+                            <i class="fas fa-volume-up"></i> Text to Speech
+                        </button>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(speechResult))
+                    {
+                        <div class="mt-3">
+                            <h6>Command Analysis:</h6>
+                            <div class="alert alert-info">
+                                <pre class="mb-0" style="white-space: pre-wrap;">@speechResult</pre>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* Language Understanding Panel *@
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card border-secondary">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-comments"></i> Language Understanding (LUIS)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Natural Language Request:</label>
+                        <textarea @bind="languageText" class="form-control" rows="3" 
+                                  placeholder="Show me security issues in the authentication module"></textarea>
+                    </div>
+
+                    <button class="btn btn-secondary" @onclick="ParseLanguageIntent" disabled="@isProcessingLanguage">
+                        @if (isProcessingLanguage)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        <i class="fas fa-brain"></i> Parse Intent
+                    </button>
+
+                    <button class="btn btn-outline-secondary ms-2" @onclick="ExtractEntities" disabled="@isProcessingLanguage">
+                        <i class="fas fa-tags"></i> Extract Entities
+                    </button>
+
+                    @if (!string.IsNullOrEmpty(languageResult))
+                    {
+                        <div class="mt-3">
+                            <h6>Language Analysis:</h6>
+                            <div class="alert alert-secondary">
+                                <pre class="mb-0" style="white-space: pre-wrap;">@languageResult</pre>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        @* Content Moderation Panel *@
+        <div class="col-lg-6 col-md-12 mb-4">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-shield-alt"></i> Content Moderation
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Code with Comments to Moderate:</label>
+                        <textarea @bind="contentModerationText" class="form-control" rows="8" 
+                                  placeholder="Paste code with comments to analyze...">@defaultCodeWithComments</textarea>
+                    </div>
+
+                    <div class="btn-group d-grid gap-2">
+                        <button class="btn btn-danger" @onclick="ModerateContent" disabled="@isModeratingContent">
+                            @if (isModeratingContent)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            <i class="fas fa-check-circle"></i> Moderate Comments
+                        </button>
+                        
+                        <button class="btn btn-outline-danger" @onclick="AnalyzeDocumentationQuality" disabled="@isModeratingContent">
+                            <i class="fas fa-file-medical"></i> Check Documentation Quality
+                        </button>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(contentModerationResult))
+                    {
+                        <div class="mt-3">
+                            <h6>Moderation Results:</h6>
+                            <div class="alert alert-danger">
+                                <pre class="mb-0" style="white-space: pre-wrap;">@contentModerationResult</pre>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* Cognitive Search Panel *@
+        <div class="col-lg-6 col-md-12 mb-4">
+            <div class="card border-dark">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-search"></i> Cognitive Search
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Search Query:</label>
+                        <input type="text" @bind="searchQuery" class="form-control" 
+                               placeholder="authentication security vulnerability" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Search Type:</label>
+                        <div class="btn-group" role="group">
+                            <input type="radio"
+                                   class="btn-check"
+                                   name="searchType"
+                                   id="keyword"
+                                   value="keyword"
+                                   @onchange="@(() => searchType =" keyword")"
+                                   checked="@(searchType == "keyword")" />
+                            <label class="btn btn-outline-dark" for="keyword">Keyword</label>
+
+                            <input type="radio"
+                                   class="btn-check"
+                                   name="searchType"
+                                   id="semantic"
+                                   value="semantic"
+                                   @onchange="@(() => searchType = "semantic")"
+                                   checked="@(searchType == "semantic")" />
+                            
+                            <label class="btn btn-outline-dark" for="semantic">Semantic</label>
+                                   checked="@(searchType == "semantic")" />
+                            <label class="btn btn-outline-dark" for="semantic">Semantic</label>
+                        </div>
+                    </div>
+
+                    <div class="btn-group d-grid gap-2">
+                        <button class="btn btn-dark" @onclick="PerformSearch" disabled="@isSearching">
+                            @if (isSearching)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            <i class="fas fa-search"></i> Search Code
+                        </button>
+                        
+                        <button class="btn btn-outline-dark" @onclick="GenerateInsights" disabled="@isSearching">
+                            <i class="fas fa-lightbulb"></i> Generate Insights
+                        </button>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(searchResult))
+                    {
+                        <div class="mt-3">
+                            <h6>Search Results:</h6>
+                            <div class="alert alert-dark">
+                                <pre class="mb-0" style="white-space: pre-wrap;">@searchResult</pre>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Service Status Panel *@
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-light">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-server"></i> Service Status & Configuration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <i class="fas fa-file-alt fa-2x text-primary"></i>
+                                <div class="mt-2">
+                                    <strong>Form Recognizer</strong>
+                                    <div class="badge bg-success">Ready</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <i class="fas fa-shield-alt fa-2x text-danger"></i>
+                                <div class="mt-2">
+                                    <strong>Content Moderation</strong>
+                                    <div class="badge bg-success">Ready</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <i class="fas fa-search fa-2x text-dark"></i>
+                                <div class="mt-2">
+                                    <strong>Cognitive Search</strong>
+                                    <div class="badge bg-warning">Simulated</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <i class="fas fa-robot fa-2x text-primary"></i>
+                                <div class="mt-2">
+                                    <strong>Multi-Agent System</strong>
+                                    <div class="badge bg-success">Active</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // File handling
+    private IBrowserFile? documentFile;
+    private IBrowserFile? imageFile;
+    
+    // UI state
+    private bool isAnalyzing = false;
+    private bool isAnalyzingImage = false;
+    private bool isAnalyzingPatterns = false;
+    private bool isProcessingSpeech = false;
+    private bool isProcessingLanguage = false;
+    private bool isModeratingContent = false;
+    private bool isSearching = false;
+    
+    // Input fields
+    private string customVisionCode = "";
+    private string speechText = "analyze security vulnerabilities in authentication code";
+    private string languageText = "Show me security issues in the authentication module";
+    private string contentModerationText = "";
+    private string searchQuery = "authentication security vulnerability";
+    private string visionAnalysisType = "architecture";
+    private string selectedVoiceType = "Professional";
+    private string searchType = "keyword";
+    
+    // Results
+    private string documentResult = "";
+    private string visionResult = "";
+    private string customVisionResult = "";
+    private string speechResult = "";
+    private string languageResult = "";
+    private string contentModerationResult = "";
+    private string searchResult = "";
+
+    // Default sample data
+    private string defaultSampleCode = @"public class UserService 
+{
+    private static UserService _instance;
+    private static readonly object _lock = new object();
+    
+    public static UserService Instance 
+    {
+        get 
+        {
+            if (_instance == null)
+            {
+                lock (_lock)
+                {
+                    if (_instance == null)
+                        _instance = new UserService();
+                }
+            }
+            return _instance;
+        }
+    }
+    
+    public User CreateUser(string name, string email)
+    {
+        return new User { Name = name, Email = email };
+    }
+}";
+
+    private string defaultCodeWithComments = @"// This method handles user authentication
+public bool AuthenticateUser(string username, string password)
+{
+    // TODO: This is a stupid way to do auth
+    // Password: admin123 (remove this comment!)
+    if (username == ""admin"" && password == ""admin123"")
+    {
+        return true; // This sucks but works for now
+    }
+    return false;
+}";
+
+    protected override void OnInitialized()
+    {
+        customVisionCode = defaultSampleCode;
+        contentModerationText = defaultCodeWithComments;
+    }
+
+    // Document Analysis Methods
+    private async Task HandleDocumentUpload(InputFileChangeEventArgs e)
+    {
+        documentFile = e.File;
+        documentResult = "";
+    }
+
+    private async Task AnalyzeDocument()
+    {
+        if (documentFile == null) return;
+        
+        isAnalyzing = true;
+        try
+        {
+            using var stream = documentFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024); // 10MB limit
+            var result = await FormRecognizerService.AnalyzeDocumentAsync(stream, documentFile.Name);
+            
+            documentResult = $"Document: {result.FileName}\n" +
+                           $"Confidence: {result.ConfidenceScore:F1}%\n" +
+                           $"Extracted Text Length: {result.ExtractedText.Length} chars\n" +
+                           $"Key-Value Pairs: {result.KeyValuePairs.Count}\n" +
+                           $"Tables: {result.Tables.Count}\n\n" +
+                           $"Sample Text: {result.ExtractedText.Substring(0, Math.Min(200, result.ExtractedText.Length))}...";
+        }
+        catch (Exception ex)
+        {
+            documentResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isAnalyzing = false;
+        }
+    }
+
+    // Computer Vision Methods
+    private async Task HandleImageUpload(InputFileChangeEventArgs e)
+    {
+        imageFile = e.File;
+        visionResult = "";
+    }
+
+    private async Task AnalyzeImage()
+    {
+        if (imageFile == null) return;
+        
+        isAnalyzingImage = true;
+        try
+        {
+            using var stream = imageFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            
+            switch (visionAnalysisType)
+            {
+                case "architecture":
+                    var archResult = await ComputerVisionService.AnalyzeArchitectureDiagramAsync(stream);
+                    visionResult = $"Description: {archResult.Description}\n" +
+                                 $"Confidence: {archResult.Confidence:F1}%\n" +
+                                 $"Tags: {string.Join(", ", archResult.Tags)}\n" +
+                                 $"Objects: {archResult.Objects.Count}\n" +
+                                 $"Extracted Text: {string.Join(", ", archResult.ExtractedText)}";
+                    break;
+                    
+                case "ui":
+                    var uiResult = await ComputerVisionService.AnalyzeUIDesignAsync(stream);
+                    visionResult = $"Layout: {uiResult.Layout}\n" +
+                                 $"Confidence: {uiResult.Confidence:F1}%\n" +
+                                 $"UI Elements: {uiResult.Elements.Count}\n" +
+                                 $"Description: {uiResult.Description}";
+                    break;
+                    
+                case "text":
+                    var textResult = await ComputerVisionService.ExtractTextFromImageAsync(stream);
+                    visionResult = $"Extracted Text ({textResult.Count} lines):\n" +
+                                 string.Join("\n", textResult);
+                    break;
+                    
+                case "components":
+                    var compResult = await ComputerVisionService.IdentifyDiagramComponentsAsync(stream);
+                    visionResult = $"Diagram Type: {compResult.DiagramType}\n" +
+                                 $"Confidence: {compResult.OverallConfidence:F1}%\n" +
+                                 $"Components: {compResult.Components.Count}";
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            visionResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isAnalyzingImage = false;
+        }
+    }
+
+    // Custom Vision Methods
+    private async Task AnalyzeDesignPatterns()
+    {
+        isAnalyzingPatterns = true;
+        try
+        {
+            var analysis = await CustomVisionService.AnalyzeDesignPatternsAsync(customVisionCode);
+            customVisionResult = $"Overall Quality Score: {analysis.OverallQualityScore:F1}\n" +
+                               $"Patterns Found: {analysis.Patterns.Count}\n" +
+                               $"Recommendations: {analysis.Recommendations.Count}\n\n";
+            
+            if (analysis.Patterns.Any())
+            {
+                customVisionResult += "Detected Patterns:\n";
+                foreach (var pattern in analysis.Patterns.Take(3))
+                {
+                    customVisionResult += $"- {pattern.PatternName} (Confidence: {pattern.Confidence:F1}, Quality: {pattern.Quality})\n";
+                }
+            }
+            
+            if (analysis.Recommendations.Any())
+            {
+                customVisionResult += "\nTop Recommendations:\n";
+                foreach (var recommendation in analysis.Recommendations.Take(3))
+                {
+                    customVisionResult += $"- {recommendation}\n";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            customVisionResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isAnalyzingPatterns = false;
+        }
+    }
+
+    // Speech Services Methods
+    private async Task ParseVoiceCommand()
+    {
+        isProcessingSpeech = true;
+        try
+        {
+            var command = await SpeechService.ParseVoiceCommandAsync(speechText);
+            speechResult = $"Command Type: {command.Type}\n" +
+                         $"Confidence: {command.Confidence:F2}\n" +
+                         $"Original Text: {command.OriginalText}\n" +
+                         $"Parameters: {command.Parameters.Count}\n\n";
+            
+            if (command.Parameters.Any())
+            {
+                speechResult += "Parameters:\n";
+                foreach (var param in command.Parameters)
+                {
+                    speechResult += $"- {param.Key}: {param.Value}\n";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            speechResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isProcessingSpeech = false;
+        }
+    }
+
+    private async Task ConvertToSpeech()
+    {
+        isProcessingSpeech = true;
+        try
+        {
+            var voiceType = Enum.Parse<VoiceType>(selectedVoiceType);
+            using var audioStream = await SpeechService.TextToSpeechAsync(speechText, voiceType);
+            
+            if (audioStream.Length > 0)
+            {
+                speechResult += $"\n\nText-to-Speech completed successfully!\n" +
+                              $"Audio generated: {audioStream.Length} bytes\n" +
+                              $"Voice: {selectedVoiceType}";
+            }
+            else
+            {
+                speechResult += "\n\nText-to-Speech: Service not configured or no audio generated.";
+            }
+        }
+        catch (Exception ex)
+        {
+            speechResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isProcessingSpeech = false;
+        }
+    }
+
+    // Language Understanding Methods
+    private async Task ParseLanguageIntent()
+    {
+        isProcessingLanguage = true;
+        try
+        {
+            var intent = await LanguageService.ParseAnalysisRequestAsync(languageText);
+            languageResult = $"Intent: {intent.IntentName}\n" +
+                           $"Confidence: {intent.Confidence:F2}\n" +
+                           $"Entities: {intent.Entities.Count}\n" +
+                           $"Original Text: {intent.OriginalText}\n\n";
+            
+            if (intent.Entities.Any())
+            {
+                languageResult += "Entities:\n";
+                foreach (var entity in intent.Entities.Take(5))
+                {
+                    languageResult += $"- {entity.EntityName}: {entity.Value} (Confidence: {entity.Confidence:F2})\n";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            languageResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isProcessingLanguage = false;
+        }
+    }
+
+    private async Task ExtractEntities()
+    {
+        isProcessingLanguage = true;
+        try
+        {
+            var entities = await LanguageService.ExtractEntitiesAsync(languageText);
+            languageResult = $"Entities Extracted: {entities.Count}\n\n";
+            
+            foreach (var entity in entities.Take(10))
+            {
+                languageResult += $"Type: {entity.EntityType}\n" +
+                                $"Value: {entity.Value}\n" +
+                                $"Confidence: {entity.Confidence:F2}\n" +
+                                $"Context: {entity.Context}\n\n";
+            }
+        }
+        catch (Exception ex)
+        {
+            languageResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isProcessingLanguage = false;
+        }
+    }
+
+    // Content Moderation Methods
+    private async Task ModerateContent()
+    {
+        isModeratingContent = true;
+        try
+        {
+            var moderation = await ContentModerationService.ModerateCodeCommentsAsync(contentModerationText);
+            contentModerationResult = $"Is Appropriate: {moderation.IsAppropriate}\n" +
+                                    $"Confidence Score: {moderation.ConfidenceScore:F1}%\n" +
+                                    $"Issues Found: {moderation.Issues.Count}\n" +
+                                    $"Suggestions: {moderation.Suggestions.Count}\n\n";
+            
+            if (moderation.Issues.Any())
+            {
+                contentModerationResult += "Issues:\n";
+                foreach (var issue in moderation.Issues.Take(5))
+                {
+                    contentModerationResult += $"- {issue.Type}: {issue.Description} (Severity: {issue.Severity})\n";
+                }
+            }
+            
+            if (moderation.Suggestions.Any())
+            {
+                contentModerationResult += "\nSuggestions:\n";
+                foreach (var suggestion in moderation.Suggestions.Take(3))
+                {
+                    contentModerationResult += $"- {suggestion}\n";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            contentModerationResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isModeratingContent = false;
+        }
+    }
+
+    private async Task AnalyzeDocumentationQuality()
+    {
+        isModeratingContent = true;
+        try
+        {
+            var quality = await ContentModerationService.AnalyzeDocumentationQualityAsync(contentModerationText);
+            contentModerationResult = $"Overall Score: {quality.OverallScore:F1}/100\n" +
+                                    $"Issues Found: {quality.IssuesFound.Count}\n" +
+                                    $"Recommendations: {quality.Recommendations.Count}\n\n";
+            
+            if (quality.QualityMetrics.Any())
+            {
+                contentModerationResult += "Quality Metrics:\n";
+                foreach (var metric in quality.QualityMetrics)
+                {
+                    contentModerationResult += $"- {metric.Key}: {metric.Value:F1}/100\n";
+                }
+            }
+            
+            if (quality.Recommendations.Any())
+            {
+                contentModerationResult += "\nRecommendations:\n";
+                foreach (var recommendation in quality.Recommendations.Take(3))
+                {
+                    contentModerationResult += $"- {recommendation}\n";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            contentModerationResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isModeratingContent = false;
+        }
+    }
+
+    // Cognitive Search Methods
+    private async Task PerformSearch()
+    {
+        isSearching = true;
+        try
+        {
+            List<CodeSearchResult> results;
+            
+            if (searchType == "semantic")
+            {
+                results = await SearchService.SemanticSearchAsync(searchQuery);
+            }
+            else
+            {
+                results = await SearchService.SearchCodeAsync(searchQuery);
+            }
+            
+            searchResult = $"Search Type: {searchType}\n" +
+                         $"Query: {searchQuery}\n" +
+                         $"Results Found: {results.Count}\n\n";
+            
+            if (results.Any())
+            {
+                searchResult += "Top Results:\n";
+                foreach (var result in results.Take(3))
+                {
+                    searchResult += $"File: {result.Document.FileName}\n" +
+                                  $"Class: {result.Document.ClassName}\n" +
+                                  $"Method: {result.Document.MethodName}\n" +
+                                  $"Score: {result.Score:F2}\n" +
+                                  $"Complexity: {result.Document.Complexity}\n\n";
+                }
+            }
+            else
+            {
+                searchResult += "No results found. Note: Search service may not be configured with indexed data.";
+            }
+        }
+        catch (Exception ex)
+        {
+            searchResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSearching = false;
+        }
+    }
+
+    private async Task GenerateInsights()
+    {
+        isSearching = true;
+        try
+        {
+            var insights = await SearchService.GenerateCodeInsightsAsync(searchQuery);
+            searchResult = $"Code Insights for: {searchQuery}\n" +
+                         $"Overall Quality Score: {insights.OverallQualityScore:F1}/100\n" +
+                         $"Insights: {insights.Insights.Count}\n" +
+                         $"Recommendations: {insights.Recommendations.Count}\n\n";
+            
+            if (insights.Insights.Any())
+            {
+                searchResult += "Key Insights:\n";
+                foreach (var insight in insights.Insights.Take(3))
+                {
+                    searchResult += $"- {insight.Title}: {insight.Description} (Impact: {insight.Impact})\n";
+                }
+            }
+            
+            if (insights.PatternFrequency.Any())
+            {
+                searchResult += "\nPattern Frequency:\n";
+                foreach (var pattern in insights.PatternFrequency.Take(5))
+                {
+                    searchResult += $"- {pattern.Key}: {pattern.Value} occurrences\n";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            searchResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSearching = false;
+        }
+    }
+}
