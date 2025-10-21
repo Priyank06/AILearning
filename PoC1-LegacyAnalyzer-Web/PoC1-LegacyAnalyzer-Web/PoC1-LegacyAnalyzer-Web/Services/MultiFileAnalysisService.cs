@@ -116,7 +116,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             var dependencyComplexity = analysis.UsingCount * 1;
 
             var totalComplexity = structuralComplexity + behavioralComplexity + dependencyComplexity;
-            return Math.Min(100, Math.Max(0, totalComplexity / 3));
+            return Math.Min(100, Math.Max(0, totalComplexity));
         }
 
         private int CalculateProjectComplexity(MultiFileAnalysisResult result)
@@ -351,6 +351,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 MigrationTimeline = GetMigrationTimeline(result.OverallComplexityScore),
                 RiskMitigation = $"{result.OverallRiskLevel} risk level - {GetRiskMitigationStrategy(result.OverallRiskLevel)}",
                 ComplianceCostAvoidance = complianceAvoidance,
+                ProjectCostSavings = savedHours * 125m,
+                TotalROI = (savedHours * 125m) + complianceAvoidance,
                 ProjectSize = GetProjectSizeAssessment(result.TotalFiles, result.TotalClasses),
                 RecommendedApproach = GetRecommendedApproach(result.OverallComplexityScore)
             };

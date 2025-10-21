@@ -1596,7 +1596,7 @@
                 selectedFiles, selectedAnalysisType, progress);
 
             // Calculate business metrics after analysis
-            businessMetrics = await CalculateBusinessMetricsAsync(analysisResult);
+            businessMetrics = MultiFileAnalysisService.CalculateBusinessMetrics(analysisResult);
 
             statusMessage = $"Analysis completed! ROI: {businessMetrics.EstimatedDeveloperHoursSaved * businessMetrics.AverageHourlyRate:C0} value delivered.";
             statusMessage += $" Compliance Cost Avoidance: {businessMetrics.ComplianceCostAvoidance:C0}.";
