@@ -1,5 +1,3 @@
-using Microsoft.Bot.Builder;
-using Microsoft.Bot.Builder.Integration.AspNet.Core;
 using Microsoft.SemanticKernel;
 using PoC1_LegacyAnalyzer_Web.Services;
 
@@ -30,22 +28,6 @@ builder.Services.AddSingleton<PerformanceAnalystAgent>();
 builder.Services.AddSingleton<ArchitecturalAnalystAgent>();
 
 builder.Services.AddSingleton<IEnhancedProjectAnalysisService, EnhancedProjectAnalysisService>();
-
-// Add new AI services to your existing Program.cs
-builder.Services.AddSingleton<IFormRecognizerService, FormRecognizerService>();
-builder.Services.AddSingleton<ICognitiveSearchService, CognitiveSearchService>();
-builder.Services.AddSingleton<IComputerVisionService, ComputerVisionService>();
-builder.Services.AddSingleton<ICustomVisionService, CustomVisionService>();
-builder.Services.AddSingleton<ISpeechService, SpeechService>();
-builder.Services.AddSingleton<ILanguageUnderstandingService, LanguageUnderstandingService>();
-builder.Services.AddSingleton<IContentModerationService, ContentModerationService>();
-
-// Register DocumentAnalystAgent with proper dependencies
-builder.Services.AddSingleton<DocumentAnalystAgent>();
-
-// Add DocumentAnalystAgent to the collection of specialist agents
-builder.Services.AddSingleton<ISpecialistAgentService>(provider =>
-    provider.GetRequiredService<DocumentAnalystAgent>());
 
 // Keep your existing agent registrations:
 builder.Services.AddSingleton<ISpecialistAgentService, SecurityAnalystAgent>();
