@@ -1,4 +1,5 @@
-﻿using Microsoft.SemanticKernel.ChatCompletion;
+﻿using Azure;
+using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
 using PoC1_LegacyAnalyzer_Web.Models;
 
@@ -11,13 +12,29 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
         public AIAnalysisService(IConfiguration configuration)
         {
-            var endpoint = configuration["AzureOpenAI:Endpoint"] ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
-            var apiKey = configuration["AzureOpenAI:ApiKey"] ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_KEY");
-            var deployment = configuration["AzureOpenAI:Deployment"] ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT") ?? "gpt-35-turbo";
+            var endpoint = configuration["AzureOpenAI:Endpoint"]
+     ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
 
-            if (string.IsNullOrEmpty(endpoint) || string.IsNullOrEmpty(apiKey))
+            var apiKey = configuration["AzureOpenAI:ApiKey"]
+                ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_KEY");
+
+            var deployment = configuration["AzureOpenAI:Deployment"]
+                ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
+                ?? "gpt-4"; // Update default to gpt-4
+
+            if (string.IsNullOrWhiteSpace(endpoint))
             {
-                throw new InvalidOperationException("Azure OpenAI configuration missing. Please verify AzureOpenAI:Endpoint and AzureOpenAI:ApiKey settings.");
+                throw new InvalidOperationException(
+                    "Azure OpenAI endpoint is not configured. " +
+                    "Set 'AzureOpenAI:Endpoint' in appsettings.json or AZURE_OPENAI_ENDPOINT environment variable.");
+            }
+
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                throw new InvalidOperationException(
+                    "Azure OpenAI API key is not configured. " +
+                    "Set 'AzureOpenAI:ApiKey' in appsettings.json or AZURE_OPENAI_KEY environment variable. " +
+                    "For development, use: dotnet user-secrets set 'AzureOpenAI:ApiKey' 'your-key'");
             }
 
             _deploymentName = deployment;
@@ -42,10 +59,18 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
                 var result = await _chatService.GetChatMessageContentsAsync(chatHistory);
                 return result?.FirstOrDefault()?.Content ?? "No response from AI.";
+            }            
+            catch (RequestFailedException ex) when (ex.Status == 429)
+            {                
+                return "AI analysis is currently at capacity. Please try again in a moment, or contact support if this persists.";
             }
-            catch (Exception ex)
-            {
-                return $"Intelligent analysis temporarily unavailable: {ex.Message}\nPlease verify Azure OpenAI service configuration and network connectivity.";
+            catch (RequestFailedException ex) when (ex.Status == 401)
+            {                
+                return "AI service configuration error. Please contact your administrator.";
+            }
+            catch
+            {                
+                return "AI analysis is temporarily unavailable. Your code has been analyzed using static analysis. Please try the AI enhancement again shortly.";
             }
         }
 

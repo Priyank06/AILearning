@@ -37,7 +37,7 @@
         {
             <div class="col-12">
                 <ProjectResults ProjectResult="enhancedProjectResult"
-                                        OnFileDetailsRequested="ShowFileDetailsModal" />
+                                OnFileDetailsRequested="ShowFileDetailsModal" />
             </div>
         }
         else if (teamResult != null)
@@ -697,42 +697,66 @@ namespace LegacyFinancialSystem
         };
     }
 
-    
-
-    // Update your HandleEnhancedProjectAnalysis method
     private async Task HandleEnhancedProjectAnalysis(ProjectAnalysisRequest request)
     {
         isAnalyzing = true;
         enhancedProjectResult = null; // Clear previous results
         teamResult = null; // Clear previous team results
         statusMessage = $"Starting enhanced analysis of {request.ProjectType}...";
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
 
         try
         {
-            var progress = new Progress<ProjectAnalysisProgress>(p =>
+            var progress = new Progress<ProjectAnalysisProgress>(async p =>
             {
-                statusMessage = $"{p.CurrentPhase}: {p.Status} ({p.ProgressPercentage:F0}%)";
-                StateHasChanged();
+                await InvokeAsync(() =>
+                {
+                    statusMessage = $"{p.CurrentPhase}: {p.Status} ({p.ProgressPercentage:F0}%)";
+                    StateHasChanged();
+                });
             });
 
             enhancedProjectResult = await EnhancedProjectAnalysisService.AnalyzeProjectAsync(request, progress);
 
-            statusMessage = $"✅ Enhanced project analysis complete! " +
-                          $"{enhancedProjectResult.DetailedFileAnalysis.Count} files analyzed. " +
-                          $"Project value: {enhancedProjectResult.BusinessImpact.EstimatedValue:C0}, " +
-                          $"Risk level: {enhancedProjectResult.BusinessImpact.RiskLevel}";
+            await InvokeAsync(() =>
+            {
+                statusMessage = $"Enhanced project analysis complete! " +
+                              $"{enhancedProjectResult.DetailedFileAnalysis.Count} files analyzed. " +
+                              $"Project value: {enhancedProjectResult.BusinessImpact.EstimatedValue:C0}, " +
+                              $"Risk level: {enhancedProjectResult.BusinessImpact.RiskLevel}";
+
+                StateHasChanged();
+            });
         }
         catch (Exception ex)
         {
-            statusMessage = $"❌ Enhanced analysis failed: {ex.Message}";
+            statusMessage = $"Enhanced analysis failed: {ex.Message}";
             enhancedProjectResult = null;
         }
         finally
         {
             isAnalyzing = false;
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
         }
+    }
+
+    private DateTime _lastProgressUpdate = DateTime.MinValue;
+    private const int PROGRESS_UPDATE_THROTTLE_MS = 100; // Max 10 updates/second
+
+    private async Task HandleProgressUpdate(ProjectAnalysisProgress progress)
+    {
+        var now = DateTime.UtcNow;
+        if ((now - _lastProgressUpdate).TotalMilliseconds < PROGRESS_UPDATE_THROTTLE_MS)
+        {
+            return; // Throttle high-frequency updates
+        }
+
+        _lastProgressUpdate = now;
+        await InvokeAsync(() =>
+        {
+            statusMessage = $"{progress.CurrentPhase}: {progress.Status} ({progress.ProgressPercentage:F0}%)";
+            StateHasChanged();
+        });
     }
 
     private void ShowFileDetailsModal(FileAnalysisResult file)

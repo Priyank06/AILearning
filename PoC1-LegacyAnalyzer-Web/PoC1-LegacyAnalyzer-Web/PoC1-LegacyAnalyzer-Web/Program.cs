@@ -1,70 +1,97 @@
 using Microsoft.SemanticKernel;
 using PoC1_LegacyAnalyzer_Web.Services;
 
-var builder = WebApplication.CreateBuilder(args);
-
-// Add services to the container.
-builder.Services.AddRazorPages();
-builder.Services.AddServerSideBlazor();
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
-// Register your AI services
-builder.Services.AddSingleton<ICodeAnalysisService, CodeAnalysisService>();
-builder.Services.AddSingleton<IAIAnalysisService, AIAnalysisService>();
-builder.Services.AddSingleton<IReportService, ReportService>();
-
-builder.Services.AddScoped<IFileDownloadService, FileDownloadService>();
-builder.Services.AddSingleton<IMultiFileAnalysisService, MultiFileAnalysisService>();
-
-// Register new multi-agent services
-builder.Services.AddSingleton<ISpecialistAgentService, SecurityAnalystAgent>();
-builder.Services.AddSingleton<ISpecialistAgentService, PerformanceAnalystAgent>();
-builder.Services.AddSingleton<ISpecialistAgentService, ArchitecturalAnalystAgent>();
-builder.Services.AddSingleton<IAgentOrchestrationService, AgentOrchestrationService>();
-
-// Register individual agents for dependency injection
-builder.Services.AddSingleton<SecurityAnalystAgent>();
-builder.Services.AddSingleton<PerformanceAnalystAgent>();
-builder.Services.AddSingleton<ArchitecturalAnalystAgent>();
-
-builder.Services.AddSingleton<IEnhancedProjectAnalysisService, EnhancedProjectAnalysisService>();
-
-// Keep your existing agent registrations:
-builder.Services.AddSingleton<ISpecialistAgentService, SecurityAnalystAgent>();
-builder.Services.AddSingleton<ISpecialistAgentService, PerformanceAnalystAgent>();
-builder.Services.AddSingleton<ISpecialistAgentService, ArchitecturalAnalystAgent>();
-
-
-builder.Services.AddSingleton<Kernel>(serviceProvider =>
+public static class ServiceCollectionExtensions
 {
-    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-    var endpoint = configuration["AzureOpenAI:Endpoint"] ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
-    var apiKey = configuration["AzureOpenAI:ApiKey"] ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_KEY");
-    var deployment = configuration["AzureOpenAI:Deployment"] ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT") ?? "gpt-35-turbo";
+    public static IServiceCollection AddCodeAnalysisServices(this IServiceCollection services)
+    {
+        // Core analysis services (scoped for Blazor circuits)
+        services.AddScoped<ICodeAnalysisService, CodeAnalysisService>();
+        services.AddScoped<IAIAnalysisService, AIAnalysisService>();
+        services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<IMultiFileAnalysisService, MultiFileAnalysisService>();
+        services.AddScoped<IFileDownloadService, FileDownloadService>();
+        services.AddScoped<ICodeAnalysisAgentService, CodeAnalysisAgentService>();
 
-    var kernelBuilder = Kernel.CreateBuilder();
-    kernelBuilder.AddAzureOpenAIChatCompletion(deployment, endpoint, apiKey);
+        return services;
+    }
 
-    return kernelBuilder.Build();
-});
+    public static IServiceCollection AddMultiAgentOrchestration(this IServiceCollection services)
+    {
+        // Agent orchestration (scoped - each circuit gets fresh state)
+        services.AddScoped<IAgentOrchestrationService, AgentOrchestrationService>();
+        services.AddScoped<IEnhancedProjectAnalysisService, EnhancedProjectAnalysisService>();
 
-builder.Services.AddSingleton<ICodeAnalysisAgentService, CodeAnalysisAgentService>();
+        // Specialist agents (scoped - isolated per analysis session)
+        services.AddScoped<SecurityAnalystAgent>();
+        services.AddScoped<PerformanceAnalystAgent>();
+        services.AddScoped<ArchitecturalAnalystAgent>();
 
-var app = builder.Build();
+        // Register as collection for orchestrator
+        services.AddScoped<IEnumerable<ISpecialistAgentService>>(sp =>
+        [
+            sp.GetRequiredService<SecurityAnalystAgent>(),
+            sp.GetRequiredService<PerformanceAnalystAgent>(),
+            sp.GetRequiredService<ArchitecturalAnalystAgent>()
+        ]);
 
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Error");
-    app.UseHsts();
+        return services;
+    }
+
+    public static IServiceCollection AddSemanticKernel(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddScoped<Kernel>(sp =>
+        {
+            var endpoint = configuration["AzureOpenAI:Endpoint"]
+                ?? throw new InvalidOperationException("Azure OpenAI endpoint not configured");
+            var apiKey = configuration["AzureOpenAI:ApiKey"]
+                ?? throw new InvalidOperationException("Azure OpenAI API key not configured");
+            var deployment = configuration["AzureOpenAI:Deployment"] ?? "gpt-4";
+
+            var builder = Kernel.CreateBuilder();
+            builder.AddAzureOpenAIChatCompletion(deployment, endpoint, apiKey);
+            builder.Services.AddLogging();
+
+            return builder.Build();
+        });
+
+        return services;
+    }
 }
 
-app.UseHttpsRedirection();
-app.UseStaticFiles();
-app.UseRouting();
+public class Program
+{
+    public static void Main(string[] args)
+    {
+        var builder = WebApplication.CreateBuilder(args);
 
-app.MapRazorPages();
-app.MapBlazorHub();
-app.MapFallbackToPage("/_Host");
+        // Add services to the container.
+        builder.Services.AddRazorPages();
+        builder.Services.AddServerSideBlazor();
+        builder.Logging.ClearProviders();
+        builder.Logging.AddConsole();
+        // Register your AI services
+        builder.Services.AddCodeAnalysisServices();
+        builder.Services.AddMultiAgentOrchestration();
+        builder.Services.AddSemanticKernel(builder.Configuration);
 
-app.Run();
+        var app = builder.Build();
+
+        // Configure the HTTP request pipeline.
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseExceptionHandler("/Error");
+            app.UseHsts();
+        }
+
+        app.UseHttpsRedirection();
+        app.UseStaticFiles();
+        app.UseRouting();
+
+        app.MapRazorPages();
+        app.MapBlazorHub();
+        app.MapFallbackToPage("/_Host");
+
+        app.Run();
+    }
+}

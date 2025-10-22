@@ -9,6 +9,11 @@ namespace PoC1_LegacyAnalyzer_Web.Services
     {
         public async Task<CodeAnalysisResult> AnalyzeCodeAsync(string code)
         {
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                throw new ArgumentException("Code to analyze cannot be null or empty", nameof(code));
+            }
+
             return await Task.Run(() =>
             {
                 var syntaxTree = CSharpSyntaxTree.ParseText(code);
@@ -19,6 +24,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
         public CodeAnalysisResult PerformBasicAnalysis(SyntaxNode root)
         {
+            ArgumentNullException.ThrowIfNull(root);
+
             var classes = root.DescendantNodes().OfType<ClassDeclarationSyntax>().ToList();
             var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
             var properties = root.DescendantNodes().OfType<PropertyDeclarationSyntax>().ToList();
