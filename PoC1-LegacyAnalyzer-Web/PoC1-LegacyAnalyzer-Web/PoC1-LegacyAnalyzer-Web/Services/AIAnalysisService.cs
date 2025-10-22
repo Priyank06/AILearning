@@ -1,12 +1,12 @@
-﻿using Azure;
-using Azure.AI.OpenAI;
+﻿using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
 using PoC1_LegacyAnalyzer_Web.Models;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
     public class AIAnalysisService : IAIAnalysisService
     {
-        private readonly OpenAIClient _client;
+        private readonly AzureOpenAIChatCompletionService _chatService;
         private readonly string _deploymentName;
 
         public AIAnalysisService(IConfiguration configuration)
@@ -20,8 +20,12 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 throw new InvalidOperationException("Azure OpenAI configuration missing. Please verify AzureOpenAI:Endpoint and AzureOpenAI:ApiKey settings.");
             }
 
-            _client = new OpenAIClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
             _deploymentName = deployment;
+            _chatService = new AzureOpenAIChatCompletionService(
+                deploymentName: deployment,
+                endpoint: endpoint,
+                apiKey: apiKey
+            );
         }
 
         public async Task<string> GetAnalysisAsync(string code, string analysisType, CodeAnalysisResult staticAnalysis)
@@ -29,21 +33,15 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             try
             {
                 var prompt = BuildAnalysisPrompt(code, analysisType, staticAnalysis);
+                var systemPrompt = GetSystemPrompt(analysisType);
 
-                var chatCompletionsOptions = new ChatCompletionsOptions()
-                {
-                    DeploymentName = _deploymentName,
-                    Messages =
-                    {
-                        new ChatRequestSystemMessage(GetSystemPrompt(analysisType)),
-                        new ChatRequestUserMessage(prompt)
-                    },
-                    MaxTokens = 500,
-                    Temperature = 0.3f
-                };
+                // Build chat history for the chat completion API
+                var chatHistory = new ChatHistory();
+                chatHistory.AddSystemMessage(systemPrompt);
+                chatHistory.AddUserMessage(prompt);
 
-                var response = await _client.GetChatCompletionsAsync(chatCompletionsOptions);
-                return response.Value.Choices[0].Message.Content;
+                var result = await _chatService.GetChatMessageContentsAsync(chatHistory);
+                return result?.FirstOrDefault()?.Content ?? "No response from AI.";
             }
             catch (Exception ex)
             {

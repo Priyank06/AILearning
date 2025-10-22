@@ -7,11 +7,9 @@
 		<RootNamespace>PoC1_LegacyAnalyzer_Web</RootNamespace>
 	</PropertyGroup>
 
-	<ItemGroup>		
-		<PackageReference Include="Azure.AI.OpenAI" Version="1.0.0-beta.12" />
+	<ItemGroup>
 		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
-		<PackageReference Include="Microsoft.SemanticKernel" Version="1.0.1" />
-		<PackageReference Include="Microsoft.SemanticKernel.Plugins.Core" Version="1.0.1-alpha" />
+		<PackageReference Include="Microsoft.SemanticKernel" Version="1.66.0" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8" />
 		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="6.0.0" />		
 	</ItemGroup>
