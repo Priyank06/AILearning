@@ -16,11 +16,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// <param name="requiredSpecialties">A list of specialties required for the analysis.</param>
         /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
         /// <returns>A <see cref="TeamAnalysisResult"/> containing the results of the team analysis.</returns>
-        Task<TeamAnalysisResult> CoordinateTeamAnalysisAsync(
-            string code,
-            string businessObjective,
-            List<string> requiredSpecialties,
-            CancellationToken cancellationToken = default);
+        Task<TeamAnalysisResult> CoordinateTeamAnalysisAsync(string code, string businessObjective, List<string> requiredSpecialties, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Facilitates a discussion among agents on a given topic, using initial analyses as input.
@@ -29,10 +25,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// <param name="initialAnalyses">The initial analyses provided by specialists.</param>
         /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
         /// <returns>An <see cref="AgentConversation"/> representing the discussion.</returns>
-        Task<AgentConversation> FacilitateAgentDiscussionAsync(
-            string topic,
-            List<SpecialistAnalysisResult> initialAnalyses,
-            CancellationToken cancellationToken = default);
+        Task<AgentConversation> FacilitateAgentDiscussionAsync(string topic, List<SpecialistAnalysisResult> initialAnalyses, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Synthesizes consolidated recommendations from multiple specialist analyses within a business context.
@@ -41,10 +34,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// <param name="businessContext">The business context for the recommendations.</param>
         /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
         /// <returns>A <see cref="ConsolidatedRecommendations"/> object containing the synthesized recommendations.</returns>
-        Task<ConsolidatedRecommendations> SynthesizeRecommendationsAsync(
-            List<SpecialistAnalysisResult> analyses,
-            string businessContext,
-            CancellationToken cancellationToken = default);
+        Task<ConsolidatedRecommendations> SynthesizeRecommendationsAsync(List<SpecialistAnalysisResult> analyses, string businessContext, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Generates an executive summary based on the team analysis result and business objective.
@@ -53,9 +43,6 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// <param name="businessObjective">The business objective for the summary.</param>
         /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
         /// <returns>A string containing the executive summary.</returns>
-        Task<string> GenerateExecutiveSummaryAsync(
-            TeamAnalysisResult teamResult,
-            string businessObjective,
-            CancellationToken cancellationToken = default);
+        Task<string> GenerateExecutiveSummaryAsync(TeamAnalysisResult teamResult, string businessObjective, CancellationToken cancellationToken = default);
     }
 }

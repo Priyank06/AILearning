@@ -1,13 +1,9 @@
 ﻿@page "/multiagent"
-@using PoC1_LegacyAnalyzer_Web.Components
-@using PoC1_LegacyAnalyzer_Web.Models
 @using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
 @using PoC1_LegacyAnalyzer_Web.Models.MultiAgent
-@using PoC1_LegacyAnalyzer_Web.Models.ProjectAnalysis
 @using PoC1_LegacyAnalyzer_Web.Services
 @inject IAgentOrchestrationService OrchestrationService
 @inject ICodeAnalysisService CodeAnalysisService
-@inject IEnhancedProjectAnalysisService EnhancedProjectAnalysisService
 
 <PageTitle>Multi-Agent Team Analysis</PageTitle>
 
@@ -29,85 +25,386 @@
     <div class="row">
         <!-- Input Section -->
         <div class="col-lg-5">
-            <EnhancedProjectSelector OnProjectAnalysisRequest="HandleEnhancedProjectAnalysis" />
+            <div class="card shadow border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-people-fill"></i> Team Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Business Objective -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Business Objective:</label>
+                        <select class="form-select" @bind="selectedObjective" @bind:after="OnObjectiveChanged">
+                            <option value="security-compliance">Security Compliance Assessment</option>
+                            <option value="performance-optimization">Performance Optimization Analysis</option>
+                            <option value="architecture-modernization">Architecture Modernization Planning</option>
+                            <option value="comprehensive-audit">Comprehensive Code Audit</option>
+                            <option value="custom">Custom Objective</option>
+                        </select>
+                    </div>
+
+                    @if (selectedObjective == "custom")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Custom Business Objective:</label>
+                            <textarea class="form-control" rows="2" @bind="customObjective"
+                                      placeholder="Describe your specific business objective..."></textarea>
+                        </div>
+                    }
+
+                    <!-- Agent Team Selection -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">AI Agent Team:</label>
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="includeSecurityAgent" id="securityAgent">
+                                    <label class="form-check-label" for="securityAgent">
+                                        <strong> Security Analyst</strong><br>
+                                        <small class="text-muted">Vulnerability assessment, compliance analysis</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-12 mt-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="includePerformanceAgent" id="performanceAgent">
+                                    <label class="form-check-label" for="performanceAgent">
+                                        <strong> Performance Analyst</strong><br>
+                                        <small class="text-muted">Bottleneck identification, scalability assessment</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-12 mt-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="includeArchitectureAgent" id="architectureAgent">
+                                    <label class="form-check-label" for="architectureAgent">
+                                        <strong> Architecture Analyst</strong><br>
+                                        <small class="text-muted">Design patterns, SOLID principles, code structure</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Code Input -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Code to Analyze:</label>
+                        <textarea class="form-control font-monospace" rows="10" @bind="codeInput"
+                                  placeholder="Paste your C# code here..." style="font-size: 13px;"></textarea>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="mb-3">
+                        <button class="btn btn-outline-secondary me-2" @onclick="LoadTeamSampleCode">
+                            <i class="bi bi-file-code"></i> Load Team Analysis Sample
+                        </button>
+                        <button class="btn btn-success btn-lg" @onclick="StartTeamAnalysis" disabled="@isAnalyzing">
+                            @if (isAnalyzing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                <text>Team Analyzing...</text>
+                            }
+                            else
+                            {
+                                <text><i class="bi bi-people"></i> Start Team Analysis</text>
+                            }
+                        </button>
+                    </div>
+
+                    @if (isAnalyzing)
+                    {
+                        <div class="analysis-progress">
+                            <div class="text-center mb-3">
+                                <h5 class="text-primary mb-2">
+                                    <div class="spinner-border spinner-border-sm me-2"></div>
+                                    Multi-Agent Collaboration in Progress
+                                </h5>
+                                <p class="text-muted mb-3">AI specialists working together on your code</p>
+                            </div>
+
+                            <div class="progress mb-3" style="height: 12px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                                     style="width: @GetAnalysisProgress()%"></div>
+                            </div>
+
+                            <div class="row text-center">
+                                <div class="col-md-4">
+                                    <div class="mb-2">
+                                        @if (currentAnalysisPhase >= 2)
+                                        {
+                                            <span class="text-success">✅</span>
+                                        }
+                                        else
+                                        {
+
+                                            <span class="text-muted">⏳</span>
+                                        }
+                                        <strong>Analysis Phase</strong>
+                                    </div>
+                                    <small class="text-muted">Agents analyzing code</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-2">
+                                        @if (currentAnalysisPhase >= 4)
+                                        {
+                                            <span class="text-success">✅</span>
+                                        }
+                                        else
+                                        {
+
+                                            <span class="text-muted">⏳</span>
+                                        }
+                                        <strong>Collaboration Phase</strong>
+                                    </div>
+                                    <small class="text-muted">Peer review & discussion</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-2">
+                                        @if (currentAnalysisPhase >= 6)
+                                        {
+                                            <span class="text-success">✅</span>
+                                        }
+                                        else
+                                        {
+
+                                            <span class="text-muted">⏳</span>
+                                        }
+                                        <strong>Synthesis Phase</strong>
+                                    </div>
+                                    <small class="text-muted">Final recommendations</small>
+                                </div>
+                            </div>
+
+                            <div class="text-center mt-3">
+                                <strong class="text-primary">Current: @GetCurrentAnalysisPhase()</strong>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(statusMessage) && !isAnalyzing)
+                    {
+                        <div class="alert alert-info">
+                            <small><i class="bi bi-info-circle"></i> @statusMessage</small>
+                        </div>
+                    }
+                </div>
+            </div>
         </div>
 
         <!-- Results Section -->
-        @if (enhancedProjectResult != null)
+        @if (teamResult != null)
         {
-            <div class="col-12">
-                <ProjectResults ProjectResult="enhancedProjectResult"
-                                OnFileDetailsRequested="ShowFileDetailsModal" />
-            </div>
-        }
-        else if (teamResult != null)
-        {
-            <!-- Keep existing team result display for backward compatibility -->
             <div class="col-lg-7">
-                <!-- Your existing team results display code -->
-            </div>
-        }
+                <!-- Team Performance Dashboard -->
+                <div class="metrics-dashboard">
+                    <div class="text-center mb-4">
+                        <h4 class="mb-2"> Multi-Agent Analysis Complete</h4>
+                        <p class="mb-0">AI specialist team collaboration results</p>
+                    </div>
 
-        <!-- File Details Modal -->
-        @if (showFileDetailsModal && selectedFileDetails != null)
-        {
-            <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">
-                                <i class="bi bi-file-earmark-code"></i> @selectedFileDetails.FileName
-                            </h5>
-                            <button type="button" class="btn-close" @onclick="CloseFileDetailsModal"></button>
+                    <div class="row">
+                        <div class="col-md-3 col-6">
+                            <div class="metric-box">
+                                <div class="mb-2"></div>
+                                <h4>@teamResult.IndividualAnalyses.Count</h4>
+                                <small>Specialist Agents</small>
+                            </div>
                         </div>
-                        <div class="modal-body">
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <strong>File Size:</strong> @FormatFileSize(selectedFileDetails.FileSize)
-                                </div>
-                                <div class="col-md-6">
-                                    <strong>Complexity Score:</strong>
-                                    <span class="badge @GetComplexityBadgeClass(selectedFileDetails.ComplexityScore)">
-                                        @selectedFileDetails.ComplexityScore
-                                    </span>
-                                </div>
+                        <div class="col-md-3 col-6">
+                            <div class="metric-box">
+                                <div class="mb-2"></div>
+                                <h4>@teamResult.TeamDiscussion.Count</h4>
+                                <small>Collaboration Messages</small>
                             </div>
-
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <strong>Analysis Status:</strong> @selectedFileDetails.Status
-                                </div>
-                                <div class="col-md-6">
-                                    <strong>Static Analysis:</strong>
-                                    @selectedFileDetails.StaticAnalysis.ClassCount classes,
-                                    @selectedFileDetails.StaticAnalysis.MethodCount methods
-                                </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="metric-box">
+                                <div class="mb-2"></div>
+                                <h4>@teamResult.FinalRecommendations.HighPriorityActions.Count</h4>
+                                <small>Priority Actions</small>
                             </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="metric-box">
+                                <div class="mb-2"></div>
+                                <h4>@(teamResult.Consensus.AgreementPercentage.ToString("F0"))%</h4>
+                                <small>Team Consensus</small>
+                            </div>
+                        </div>
+                    </div>
 
-                            @if (!string.IsNullOrEmpty(selectedFileDetails.AIInsight))
+                    <div class="text-center mt-3">
+                        <div class="badge bg-light text-success fs-5 px-3 py-2">
+                            Overall Confidence: @teamResult.OverallConfidenceScore%
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Executive Summary -->
+                <div class="card shadow mb-3 border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-file-text"></i> Executive Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="executive-summary">
+                            @((MarkupString)FormatExecutiveSummary(teamResult.ExecutiveSummary))
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Individual Agent Results -->
+                <div class="card shadow mb-3">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0"><i class="bi bi-person-badge"></i> Individual Agent Analysis</h5>
+                    </div>
+                    <div class="card-body">
+                        @foreach (var analysis in teamResult.IndividualAnalyses.OrderByDescending(a => a.ConfidenceScore))
+                        {
+                            <div class="agent-result-card mb-4">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div>
+                                        <h6 class="text-primary mb-1">
+                                            @GetAgentIcon(analysis.AgentName) @analysis.AgentName
+                                        </h6>
+                                        <small class="text-muted">@analysis.Specialty</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge @GetConfidenceBadgeClass(analysis.ConfidenceScore) fs-6">
+                                            @analysis.ConfidenceScore% Confidence
+                                        </span>
+                                        <br>
+                                        <small class="text-muted">@analysis.Priority Priority</small>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Key Findings (@analysis.KeyFindings.Count):</strong>
+                                        <ul class="list-unstyled mt-2">
+                                            @foreach (var finding in analysis.KeyFindings.Take(3))
+                                            {
+                                                <li class="mb-1">
+                                                    <span class="badge @GetSeverityBadgeClass(finding.Severity) me-2">@finding.Severity</span>
+                                                    @finding.Category
+                                                </li>
+                                            }
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Recommendations (@analysis.Recommendations.Count):</strong>
+                                        <ul class="list-unstyled mt-2">
+                                            @foreach (var rec in analysis.Recommendations.Take(2))
+                                            {
+                                                <li class="mb-1">
+                                                    <strong>@rec.Title</strong><br>
+                                                    <small class="text-muted">Effort: @rec.EstimatedHours hours</small>
+                                                </li>
+                                            }
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(analysis.BusinessImpact))
+                                {
+                                    <div class="mt-3 p-3 bg-light rounded">
+                                        <strong>Business Impact:</strong><br>
+                                        <small>@analysis.BusinessImpact</small>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Team Discussion -->
+                @if (teamResult.TeamDiscussion.Any())
+                {
+                    <div class="card shadow mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="bi bi-chat-dots"></i> Agent Team Discussion</h5>
+                        </div>
+                        <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                            @foreach (var message in teamResult.TeamDiscussion.OrderBy(m => m.Timestamp))
                             {
-                                <div class="mt-3">
-                                    <strong>AI Analysis Insights:</strong>
-                                    <div class="p-3 bg-light rounded mt-2">
-                                        @selectedFileDetails.AIInsight
+                                <div class="discussion-message mb-3">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <strong class="text-primary">@message.FromAgent</strong>
+                                        <small class="text-muted">@message.Timestamp.ToString("HH:mm:ss")</small>
+                                    </div>
+                                    <div class="mt-1">
+                                        <span class="badge @GetMessageTypeBadgeClass(message.Type) me-2">
+                                            @message.Type
+                                        </span>
+                                        @message.Subject
+                                    </div>
+                                    <div class="mt-2 p-2 bg-light rounded">
+                                        <small>@TruncateMessage(message.Content, 200)</small>
                                     </div>
                                 </div>
                             }
+                        </div>
+                    </div>
+                }
 
-                            @if (!string.IsNullOrEmpty(selectedFileDetails.ErrorMessage))
-                            {
-                                <div class="mt-3">
-                                    <div class="alert alert-warning">
-                                        <strong>Analysis Note:</strong> @selectedFileDetails.ErrorMessage
-                                    </div>
+                <!-- Consolidated Recommendations -->
+                <div class="card shadow">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="bi bi-list-check"></i> Team Recommendations</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-danger">🚨 High Priority (@teamResult.FinalRecommendations.HighPriorityActions.Count)</h6>
+                                <ul class="list-unstyled">
+                                    @foreach (var rec in teamResult.FinalRecommendations.HighPriorityActions.Take(5))
+                                    {
+                                        <li class="mb-2">
+                                            <strong>@rec.Title</strong><br>
+                                            <small class="text-muted">@rec.EstimatedHours hours - @rec.Priority priority</small>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-warning">⚡ Medium Priority (@teamResult.FinalRecommendations.MediumPriorityActions.Count)</h6>
+                                <ul class="list-unstyled">
+                                    @foreach (var rec in teamResult.FinalRecommendations.MediumPriorityActions.Take(3))
+                                    {
+                                        <li class="mb-2">
+                                            <strong>@rec.Title</strong><br>
+                                            <small class="text-muted">@rec.EstimatedHours hours</small>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 p-3 bg-primary text-white rounded">
+                            <h6 class="mb-2"><i class="bi bi-clock"></i> Implementation Summary</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <strong>Total Effort:</strong><br>
+                                    @teamResult.FinalRecommendations.TotalEstimatedEffort hours
                                 </div>
-                            }
+                                <div class="col-md-4">
+                                    <strong>Estimated Cost:</strong><br>
+                                    @((teamResult.FinalRecommendations.TotalEstimatedEffort * 125).ToString("C0"))
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Timeline:</strong><br>
+                                    @GetEstimatedTimeline(teamResult.FinalRecommendations.TotalEstimatedEffort)
+                                </div>
+                            </div>
                         </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" @onclick="CloseFileDetailsModal">
-                                Close
-                            </button>
-                        </div>
+
+                        @if (!string.IsNullOrEmpty(teamResult.FinalRecommendations.ImplementationStrategy))
+                        {
+                            <div class="mt-3">
+                                <h6><i class="bi bi-map"></i> Implementation Strategy</h6>
+                                <div class="p-3 bg-light rounded">
+                                    @((MarkupString)FormatImplementationStrategy(teamResult.FinalRecommendations.ImplementationStrategy))
+                                </div>
+                            </div>
+                        }
                     </div>
                 </div>
             </div>
@@ -291,9 +588,6 @@
     private bool isAnalyzing = false;
     private string statusMessage = "";
     private TeamAnalysisResult? teamResult;
-    private ProjectAnalysisResult? enhancedProjectResult;
-    private bool showFileDetailsModal = false;
-    private FileAnalysisResult? selectedFileDetails;
 
     private int currentAnalysisPhase = 0;
     private readonly string[] analysisPhases = {
@@ -694,106 +988,6 @@ namespace LegacyFinancialSystem
             <= 160 => "1 month",
             <= 320 => "2 months",
             _ => "3+ months"
-        };
-    }
-
-    private async Task HandleEnhancedProjectAnalysis(ProjectAnalysisRequest request)
-    {
-        isAnalyzing = true;
-        enhancedProjectResult = null; // Clear previous results
-        teamResult = null; // Clear previous team results
-        statusMessage = $"Starting enhanced analysis of {request.ProjectType}...";
-        await InvokeAsync(StateHasChanged);
-
-        try
-        {
-            var progress = new Progress<ProjectAnalysisProgress>(async p =>
-            {
-                await InvokeAsync(() =>
-                {
-                    statusMessage = $"{p.CurrentPhase}: {p.Status} ({p.ProgressPercentage:F0}%)";
-                    StateHasChanged();
-                });
-            });
-
-            enhancedProjectResult = await EnhancedProjectAnalysisService.AnalyzeProjectAsync(request, progress);
-
-            await InvokeAsync(() =>
-            {
-                statusMessage = $"Enhanced project analysis complete! " +
-                              $"{enhancedProjectResult.DetailedFileAnalysis.Count} files analyzed. " +
-                              $"Project value: {enhancedProjectResult.BusinessImpact.EstimatedValue:C0}, " +
-                              $"Risk level: {enhancedProjectResult.BusinessImpact.RiskLevel}";
-
-                StateHasChanged();
-            });
-        }
-        catch (Exception ex)
-        {
-            statusMessage = $"Enhanced analysis failed: {ex.Message}";
-            enhancedProjectResult = null;
-        }
-        finally
-        {
-            isAnalyzing = false;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private DateTime _lastProgressUpdate = DateTime.MinValue;
-    private const int PROGRESS_UPDATE_THROTTLE_MS = 100; // Max 10 updates/second
-
-    private async Task HandleProgressUpdate(ProjectAnalysisProgress progress)
-    {
-        var now = DateTime.UtcNow;
-        if ((now - _lastProgressUpdate).TotalMilliseconds < PROGRESS_UPDATE_THROTTLE_MS)
-        {
-            return; // Throttle high-frequency updates
-        }
-
-        _lastProgressUpdate = now;
-        await InvokeAsync(() =>
-        {
-            statusMessage = $"{progress.CurrentPhase}: {progress.Status} ({progress.ProgressPercentage:F0}%)";
-            StateHasChanged();
-        });
-    }
-
-    private void ShowFileDetailsModal(FileAnalysisResult file)
-    {
-        selectedFileDetails = file;
-        showFileDetailsModal = true;
-        StateHasChanged();
-    }
-
-    private void CloseFileDetailsModal()
-    {
-        showFileDetailsModal = false;
-        selectedFileDetails = null;
-        StateHasChanged();
-    }
-
-    // Add helper methods
-    private string FormatFileSize(long bytes)
-    {
-        string[] suffixes = { "B", "KB", "MB", "GB" };
-        int counter = 0;
-        decimal number = bytes;
-        while (Math.Round(number / 1024) >= 1)
-        {
-            number /= 1024;
-            counter++;
-        }
-        return $"{number:n1} {suffixes[counter]}";
-    }
-
-    private string GetComplexityBadgeClass(int complexity)
-    {
-        return complexity switch
-        {
-            >= 70 => "bg-danger",
-            >= 40 => "bg-warning text-dark",
-            _ => "bg-success"
         };
     }
 }
