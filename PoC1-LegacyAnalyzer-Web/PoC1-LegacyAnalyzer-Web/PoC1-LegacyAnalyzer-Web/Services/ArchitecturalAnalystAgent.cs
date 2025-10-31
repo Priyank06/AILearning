@@ -224,13 +224,13 @@ Provide architecture-focused peer review with strategic recommendations.";
             return findings;
         }
 
-        private List<object> ExtractArchitecturalRecommendations(string analysis)
+        private List<Recommendation> ExtractArchitecturalRecommendations(string analysis)
         {
-            var recommendations = new List<object>();
+            var recommendations = new List<Recommendation>();
 
             if (analysis.Contains("SOLID", StringComparison.OrdinalIgnoreCase))
             {
-                recommendations.Add(new
+                recommendations.Add(new Recommendation
                 {
                     Title = "Implement SOLID Design Principles",
                     Description = "Refactor code to adhere to SOLID principles for better maintainability",
@@ -243,7 +243,7 @@ Provide architecture-focused peer review with strategic recommendations.";
 
             if (analysis.Contains("pattern", StringComparison.OrdinalIgnoreCase))
             {
-                recommendations.Add(new
+                recommendations.Add(new Recommendation
                 {
                     Title = "Introduce Appropriate Design Patterns",
                     Description = "Implement design patterns to improve code structure and reusability",

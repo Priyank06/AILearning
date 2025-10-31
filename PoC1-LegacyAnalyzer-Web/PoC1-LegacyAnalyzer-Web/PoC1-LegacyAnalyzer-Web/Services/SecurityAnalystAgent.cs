@@ -100,7 +100,7 @@ Be collaborative but thorough in identifying security gaps.";
             return result.Content ?? "Peer review unavailable";
         }
 
-        // FIXED: Changed return type from Task<SpecialistAnalysisResult> to Task<string>
+        // Changed return type from Task<SpecialistAnalysisResult> to Task<string>
         public async Task<string> AnalyzeAsync(
             string code,
             string businessContext,
@@ -247,13 +247,13 @@ Be collaborative but thorough in identifying security gaps.";
             return findings;
         }
 
-        private List<object> ExtractRecommendations(string analysis)
+        private List<Recommendation> ExtractRecommendations(string analysis)
         {
-            var recommendations = new List<object>();
+            var recommendations = new List<Recommendation>();
 
             if (analysis.Contains("parameterized", StringComparison.OrdinalIgnoreCase))
             {
-                recommendations.Add(new
+                recommendations.Add(new Recommendation
                 {
                     Title = "Implement Parameterized Queries",
                     Description = "Replace string concatenation with parameterized queries to prevent SQL injection",
@@ -266,7 +266,7 @@ Be collaborative but thorough in identifying security gaps.";
 
             if (analysis.Contains("authentication", StringComparison.OrdinalIgnoreCase))
             {
-                recommendations.Add(new
+                recommendations.Add(new Recommendation
                 {
                     Title = "Strengthen Authentication Mechanisms",
                     Description = "Implement robust authentication and session management",

@@ -22,5 +22,7 @@
         public string BusinessImpact { get; set; } = "";
         public decimal EstimatedEffort { get; set; }
         public string Priority { get; set; } = "";
+        public DateTime Timestamp { get; internal set; }
+        public string ErrorMessage { get; internal set; }
     }
 }

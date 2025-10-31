@@ -2,8 +2,12 @@
 @using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
 @using PoC1_LegacyAnalyzer_Web.Models.MultiAgent
 @using PoC1_LegacyAnalyzer_Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Text
 @inject IAgentOrchestrationService OrchestrationService
 @inject ICodeAnalysisService CodeAnalysisService
+@inject IFilePreProcessingService PreProcessingService
+@inject ILogger<MultiAgentOrchestration> Logger
 
 <PageTitle>Multi-Agent Team Analysis</PageTitle>
 
@@ -11,12 +15,12 @@
     <div class="row mb-4">
         <div class="col-12 text-center">
             <div class="bg-gradient-primary text-white p-4 rounded shadow">
-                <h1 class="display-4 mb-2"> Multi-Agent Team Analysis</h1>
-                <p class="lead mb-0">Coordinated AI specialist team for comprehensive code analysis</p>
+                <h1 class="display-4 mb-2">🤖 Multi-Agent Team Analysis</h1>
+                <p class="lead mb-0">Coordinated AI specialist team for comprehensive legacy code analysis</p>
                 <div class="mt-3">
-                    <span class="badge bg-light text-primary me-2">Security Expert</span>
-                    <span class="badge bg-light text-primary me-2">Performance Specialist</span>
-                    <span class="badge bg-light text-primary">Architecture Analyst</span>
+                    <span class="badge bg-light text-primary me-2">🔒 Security Expert</span>
+                    <span class="badge bg-light text-primary me-2">⚡ Performance Specialist</span>
+                    <span class="badge bg-light text-primary">🏗️ Architecture Analyst</span>
                 </div>
             </div>
         </div>
@@ -34,11 +38,11 @@
                     <div class="mb-3">
                         <label class="form-label fw-bold">Business Objective:</label>
                         <select class="form-select" @bind="selectedObjective" @bind:after="OnObjectiveChanged">
-                            <option value="security-compliance">Security Compliance Assessment</option>
-                            <option value="performance-optimization">Performance Optimization Analysis</option>
-                            <option value="architecture-modernization">Architecture Modernization Planning</option>
-                            <option value="comprehensive-audit">Comprehensive Code Audit</option>
-                            <option value="custom">Custom Objective</option>
+                            <option value="security-compliance">🔒 Security Compliance Assessment</option>
+                            <option value="performance-optimization">⚡ Performance Optimization Analysis</option>
+                            <option value="architecture-modernization">🏗️ Architecture Modernization Planning</option>
+                            <option value="comprehensive-audit">📊 Comprehensive Code Audit</option>
+                            <option value="custom">✏️ Custom Objective</option>
                         </select>
                     </div>
 
@@ -59,7 +63,7 @@
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" @bind="includeSecurityAgent" id="securityAgent">
                                     <label class="form-check-label" for="securityAgent">
-                                        <strong> Security Analyst</strong><br>
+                                        <strong>🔒 Security Analyst</strong><br>
                                         <small class="text-muted">Vulnerability assessment, compliance analysis</small>
                                     </label>
                                 </div>
@@ -68,7 +72,7 @@
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" @bind="includePerformanceAgent" id="performanceAgent">
                                     <label class="form-check-label" for="performanceAgent">
-                                        <strong> Performance Analyst</strong><br>
+                                        <strong>⚡ Performance Analyst</strong><br>
                                         <small class="text-muted">Bottleneck identification, scalability assessment</small>
                                     </label>
                                 </div>
@@ -77,7 +81,7 @@
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" @bind="includeArchitectureAgent" id="architectureAgent">
                                     <label class="form-check-label" for="architectureAgent">
-                                        <strong> Architecture Analyst</strong><br>
+                                        <strong>🏗️ Architecture Analyst</strong><br>
                                         <small class="text-muted">Design patterns, SOLID principles, code structure</small>
                                     </label>
                                 </div>
@@ -85,31 +89,178 @@
                         </div>
                     </div>
 
-                    <!-- Code Input -->
+                    <hr />
+
+                    <!-- File Upload Section - OPTIMIZED FOR AI COST -->
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Code to Analyze:</label>
-                        <textarea class="form-control font-monospace" rows="10" @bind="codeInput"
-                                  placeholder="Paste your C# code here..." style="font-size: 13px;"></textarea>
+                        <label class="form-label fw-bold">📁 Legacy Code Files:</label>
+
+                        <!-- Cost Optimization Info Banner -->
+                        <div class="alert alert-info py-2 mb-2">
+                            <small>
+                                <i class="bi bi-info-circle"></i>
+                                <strong>Smart Analysis:</strong> Files are pre-processed locally to reduce AI costs by 75%+
+                            </small>
+                        </div>
+
+                        <div class="upload-area @(isDragging ? "drag-over" : "")"
+                             @ondragover="HandleDragOver"
+                             @ondragover:preventDefault="true"
+                             @ondragleave="HandleDragLeave"
+                             @ondrop="HandleFileDrop"
+                             @ondrop:preventDefault="true">
+                            <div class="text-center p-3">
+                                <div style="font-size: 2.5rem;" class="text-muted mb-2">
+                                    <i class="bi bi-folder2-open"></i>
+                                </div>
+                                <h6>Upload C# Legacy Code</h6>
+                                <p class="text-muted small mb-3">
+                                    Select files from your project for AI-powered analysis
+                                </p>
+
+                                <!-- Folder Selection (Recommended) -->
+                                <InputFile id="folderInput"
+                                           OnChange="HandleFileSelection"
+                                           multiple
+                                           accept=".cs"
+                                           class="d-none"
+                                           webkitdirectory />
+                                <label for="folderInput" class="btn btn-primary btn-sm me-2">
+                                    <i class="bi bi-folder-plus"></i> Select Project Folder
+                                </label>
+
+                                <!-- Individual File Selection -->
+                                <InputFile id="individualFiles"
+                                           OnChange="HandleIndividualFileSelection"
+                                           multiple
+                                           accept=".cs"
+                                           class="d-none" />
+                                <label for="individualFiles" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-file-plus"></i> Select Individual Files
+                                </label>
+
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <strong>Folder:</strong> Auto-finds all .cs files |
+                                        <strong>Individual:</strong> Select specific files
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Action Buttons -->
-                    <div class="mb-3">
-                        <button class="btn btn-outline-secondary me-2" @onclick="LoadTeamSampleCode">
-                            <i class="bi bi-file-code"></i> Load Team Analysis Sample
-                        </button>
-                        <button class="btn btn-success btn-lg" @onclick="StartTeamAnalysis" disabled="@isAnalyzing">
-                            @if (isAnalyzing)
-                            {
-                                <span class="spinner-border spinner-border-sm me-2"></span>
-                                <text>Team Analyzing...</text>
-                            }
-                            else
-                            {
-                                <text><i class="bi bi-people"></i> Start Team Analysis</text>
-                            }
-                        </button>
-                    </div>
+                    <!-- Selected Files Display -->
+                    @if (selectedFiles.Any())
+                    {
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">📄 Selected Files (@selectedFiles.Count):</h6>
+                                @if (!isPreProcessing && !isAnalyzing)
+                                {
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="ClearFiles">
+                                        <i class="bi bi-trash"></i> Clear All
+                                    </button>
+                                }
+                            </div>
 
+                            <div style="max-height: 250px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px;">
+                                @foreach (var file in selectedFiles)
+                                {
+                                    <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-1">
+                                        <div class="flex-grow-1">
+                                            <i class="bi bi-file-earmark-code text-primary"></i>
+                                            <span class="small">@file.Name</span>
+                                        </div>
+                                        <div class="d-flex align-items-center">
+                                            @if (processedMetadata.Any(m => m.FileName == file.Name))
+                                            {
+                                                <span class="badge bg-success me-2">✓ Analyzed</span>
+                                            }
+                                            <small class="text-muted me-2">@FormatFileSize(file.Size)</small>
+                                            @if (!isPreProcessing && !isAnalyzing)
+                                            {
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        @onclick="@(() => RemoveFile(file))">
+                                                    <i class="bi bi-x-circle"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Pre-Processing Stats -->
+                            @if (projectSummary != null && !isAnalyzing)
+                            {
+                                <div class="card mt-2 bg-light">
+                                    <div class="card-body py-2">
+                                        <div class="row small">
+                                            <div class="col-6">
+                                                <strong>📊 LOC:</strong> @projectSummary.TotalLines.ToString("N0")
+                                            </div>
+                                            <div class="col-6">
+                                                <strong>🏗️ Classes:</strong> @projectSummary.TotalClasses
+                                            </div>
+                                            <div class="col-6 mt-1">
+                                                <strong>⚙️ Methods:</strong> @projectSummary.TotalMethods
+                                            </div>
+                                            <div class="col-6 mt-1">
+                                                <strong>📈 Complexity:</strong>
+                                                <span class="badge @GetComplexityBadgeClass(projectSummary.OverallComplexity)">
+                                                    @projectSummary.OverallComplexity
+                                                </span>
+                                            </div>
+                                        </div>
+                                        @if (projectSummary.PreIdentifiedIssues.Any())
+                                        {
+                                            <div class="mt-2 pt-2 border-top">
+                                                <small>
+                                                    <strong>⚠️ Pre-Identified Issues:</strong>
+                                                    @projectSummary.PreIdentifiedIssues.Count
+                                                    (@projectSummary.PreIdentifiedIssues.Count(i => i.Severity == "Critical" || i.Severity == "High") critical/high)
+                                                </small>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="mb-3">
+                            @if (projectSummary == null && !isPreProcessing)
+                            {
+                                <button class="btn btn-info w-100" @onclick="PreProcessFiles">
+                                    <i class="bi bi-cpu"></i> Pre-Process Files (Local Analysis)
+                                </button>
+                                <small class="text-muted d-block mt-1">
+                                    No AI cost - Static analysis only
+                                </small>
+                            }
+                            else if (projectSummary != null && !isAnalyzing)
+                            {
+                                <button class="btn btn-success w-100 mb-2"
+                                        @onclick="StartTeamAnalysis"
+                                        disabled="@(GetSelectedAgentCount() <= 0)">
+                                    <i class="bi bi-people"></i> Start AI Team Analysis
+                                </button>
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>💰 Estimated tokens: ~@EstimateTokenUsage()</span>
+                                    <span>⚡ ~@EstimateTime() sec</span>
+                                </div>
+                            }
+
+                            @if (isPreProcessing)
+                            {
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary me-2" role="status"></div>
+                                    <span>Pre-processing files... @preProcessingProgress/@selectedFiles.Count</span>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Team Analysis Progress -->
                     @if (isAnalyzing)
                     {
                         <div class="analysis-progress">
@@ -118,7 +269,7 @@
                                     <div class="spinner-border spinner-border-sm me-2"></div>
                                     Multi-Agent Collaboration in Progress
                                 </h5>
-                                <p class="text-muted mb-3">AI specialists working together on your code</p>
+                                <p class="text-muted small mb-3">AI specialists analyzing @selectedFiles.Count files</p>
                             </div>
 
                             <div class="progress mb-3" style="height: 12px;">
@@ -126,7 +277,7 @@
                                      style="width: @GetAnalysisProgress()%"></div>
                             </div>
 
-                            <div class="row text-center">
+                            <div class="row text-center small">
                                 <div class="col-md-4">
                                     <div class="mb-2">
                                         @if (currentAnalysisPhase >= 2)
@@ -135,12 +286,11 @@
                                         }
                                         else
                                         {
-
                                             <span class="text-muted">⏳</span>
                                         }
-                                        <strong>Analysis Phase</strong>
+                                        <strong>Analysis</strong>
                                     </div>
-                                    <small class="text-muted">Agents analyzing code</small>
+                                    <small class="text-muted">Agents analyzing</small>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="mb-2">
@@ -150,12 +300,11 @@
                                         }
                                         else
                                         {
-
                                             <span class="text-muted">⏳</span>
                                         }
-                                        <strong>Collaboration Phase</strong>
+                                        <strong>Collaboration</strong>
                                     </div>
-                                    <small class="text-muted">Peer review & discussion</small>
+                                    <small class="text-muted">Peer review</small>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="mb-2">
@@ -165,10 +314,9 @@
                                         }
                                         else
                                         {
-
                                             <span class="text-muted">⏳</span>
                                         }
-                                        <strong>Synthesis Phase</strong>
+                                        <strong>Synthesis</strong>
                                     </div>
                                     <small class="text-muted">Final recommendations</small>
                                 </div>
@@ -180,10 +328,11 @@
                         </div>
                     }
 
-                    @if (!string.IsNullOrEmpty(statusMessage) && !isAnalyzing)
+                    <!-- Status Messages -->
+                    @if (!string.IsNullOrEmpty(statusMessage) && !isAnalyzing && !isPreProcessing)
                     {
-                        <div class="alert alert-info">
-                            <small><i class="bi bi-info-circle"></i> @statusMessage</small>
+                        <div class="alert @GetStatusAlertClass() py-2">
+                            <small><i class="bi @GetStatusIcon()"></i> @statusMessage</small>
                         </div>
                     }
                 </div>
@@ -197,398 +346,308 @@
                 <!-- Team Performance Dashboard -->
                 <div class="metrics-dashboard">
                     <div class="text-center mb-4">
-                        <h4 class="mb-2"> Multi-Agent Analysis Complete</h4>
-                        <p class="mb-0">AI specialist team collaboration results</p>
+                        <h4 class="mb-2">✅ Multi-Agent Analysis Complete</h4>
+                        <p class="mb-0 text-muted">AI specialist team collaboration results for @selectedFiles.Count files</p>
                     </div>
 
                     <div class="row">
                         <div class="col-md-3 col-6">
                             <div class="metric-box">
-                                <div class="mb-2"></div>
+                                <div class="mb-2">📁</div>
+                                <h4>@selectedFiles.Count</h4>
+                                <small>Files Analyzed</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="metric-box">
+                                <div class="mb-2">🤖</div>
                                 <h4>@teamResult.IndividualAnalyses.Count</h4>
                                 <small>Specialist Agents</small>
                             </div>
                         </div>
                         <div class="col-md-3 col-6">
                             <div class="metric-box">
-                                <div class="mb-2"></div>
+                                <div class="mb-2">💬</div>
                                 <h4>@teamResult.TeamDiscussion.Count</h4>
                                 <small>Collaboration Messages</small>
                             </div>
                         </div>
                         <div class="col-md-3 col-6">
                             <div class="metric-box">
-                                <div class="mb-2"></div>
+                                <div class="mb-2">🎯</div>
                                 <h4>@teamResult.FinalRecommendations.HighPriorityActions.Count</h4>
                                 <small>Priority Actions</small>
                             </div>
                         </div>
-                        <div class="col-md-3 col-6">
-                            <div class="metric-box">
-                                <div class="mb-2"></div>
-                                <h4>@(teamResult.Consensus.AgreementPercentage.ToString("F0"))%</h4>
-                                <small>Team Consensus</small>
+                    </div>
+
+                    <!-- Executive Summary -->
+                    <div class="card shadow mb-3 border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0"><i class="bi bi-file-text"></i> Executive Summary</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="executive-summary">
+                                @((MarkupString)FormatExecutiveSummary(teamResult.ExecutiveSummary))
                             </div>
                         </div>
                     </div>
 
-                    <div class="text-center mt-3">
-                        <div class="badge bg-light text-success fs-5 px-3 py-2">
-                            Overall Confidence: @teamResult.OverallConfidenceScore%
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Executive Summary -->
-                <div class="card shadow mb-3 border-primary">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="bi bi-file-text"></i> Executive Summary</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="executive-summary">
-                            @((MarkupString)FormatExecutiveSummary(teamResult.ExecutiveSummary))
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Individual Agent Results -->
-                <div class="card shadow mb-3">
-                    <div class="card-header bg-dark text-white">
-                        <h5 class="mb-0"><i class="bi bi-person-badge"></i> Individual Agent Analysis</h5>
-                    </div>
-                    <div class="card-body">
-                        @foreach (var analysis in teamResult.IndividualAnalyses.OrderByDescending(a => a.ConfidenceScore))
-                        {
-                            <div class="agent-result-card mb-4">
-                                <div class="d-flex justify-content-between align-items-start mb-3">
-                                    <div>
-                                        <h6 class="text-primary mb-1">
-                                            @GetAgentIcon(analysis.AgentName) @analysis.AgentName
-                                        </h6>
-                                        <small class="text-muted">@analysis.Specialty</small>
-                                    </div>
-                                    <div class="text-end">
-                                        <span class="badge @GetConfidenceBadgeClass(analysis.ConfidenceScore) fs-6">
-                                            @analysis.ConfidenceScore% Confidence
-                                        </span>
-                                        <br>
-                                        <small class="text-muted">@analysis.Priority Priority</small>
-                                    </div>
-                                </div>
-
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <strong>Key Findings (@analysis.KeyFindings.Count):</strong>
-                                        <ul class="list-unstyled mt-2">
-                                            @foreach (var finding in analysis.KeyFindings.Take(3))
-                                            {
-                                                <li class="mb-1">
-                                                    <span class="badge @GetSeverityBadgeClass(finding.Severity) me-2">@finding.Severity</span>
-                                                    @finding.Category
-                                                </li>
-                                            }
-                                        </ul>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <strong>Recommendations (@analysis.Recommendations.Count):</strong>
-                                        <ul class="list-unstyled mt-2">
-                                            @foreach (var rec in analysis.Recommendations.Take(2))
-                                            {
-                                                <li class="mb-1">
-                                                    <strong>@rec.Title</strong><br>
-                                                    <small class="text-muted">Effort: @rec.EstimatedHours hours</small>
-                                                </li>
-                                            }
-                                        </ul>
-                                    </div>
-                                </div>
-
-                                @if (!string.IsNullOrEmpty(analysis.BusinessImpact))
-                                {
-                                    <div class="mt-3 p-3 bg-light rounded">
-                                        <strong>Business Impact:</strong><br>
-                                        <small>@analysis.BusinessImpact</small>
-                                    </div>
-                                }
-                            </div>
-                        }
-                    </div>
-                </div>
-
-                <!-- Team Discussion -->
-                @if (teamResult.TeamDiscussion.Any())
-                {
+                    <!-- Individual Agent Results -->
                     <div class="card shadow mb-3">
-                        <div class="card-header bg-info text-white">
-                            <h5 class="mb-0"><i class="bi bi-chat-dots"></i> Agent Team Discussion</h5>
+                        <div class="card-header bg-dark text-white">
+                            <h5 class="mb-0"><i class="bi bi-person-badge"></i> Individual Agent Analysis</h5>
                         </div>
-                        <div class="card-body" style="max-height: 400px; overflow-y: auto;">
-                            @foreach (var message in teamResult.TeamDiscussion.OrderBy(m => m.Timestamp))
+                        <div class="card-body">
+                            @foreach (var analysis in teamResult.IndividualAnalyses.OrderByDescending(a => a.ConfidenceScore))
                             {
-                                <div class="discussion-message mb-3">
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <strong class="text-primary">@message.FromAgent</strong>
-                                        <small class="text-muted">@message.Timestamp.ToString("HH:mm:ss")</small>
+                                <div class="agent-result-card mb-4">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <div>
+                                            <h6 class="text-primary mb-1">
+                                                @GetAgentIcon(analysis.AgentName) @analysis.AgentName
+                                            </h6>
+                                            <small class="text-muted">@analysis.Specialty</small>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="badge @GetConfidenceBadgeClass(analysis.ConfidenceScore) fs-6">
+                                                @analysis.ConfidenceScore% Confidence
+                                            </span>
+                                            <br>
+                                            <small class="text-muted">@analysis.Priority Priority</small>
+                                        </div>
                                     </div>
-                                    <div class="mt-1">
-                                        <span class="badge @GetMessageTypeBadgeClass(message.Type) me-2">
-                                            @message.Type
-                                        </span>
-                                        @message.Subject
+
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>Key Findings (@analysis.KeyFindings.Count):</strong>
+                                            <ul class="list-unstyled mt-2">
+                                                @foreach (var finding in analysis.KeyFindings.Take(3))
+                                                {
+                                                    <li class="mb-1">
+                                                        <span class="badge @GetSeverityBadgeClass(finding.Severity) me-2">@finding.Severity</span>
+                                                        @finding.Category
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Recommendations (@analysis.Recommendations.Count):</strong>
+                                            <ul class="list-unstyled mt-2">
+                                                @foreach (var rec in analysis.Recommendations.Take(2))
+                                                {
+                                                    <li class="mb-1">
+                                                        <strong>@rec.Title</strong><br>
+                                                        <small class="text-muted">Effort: @rec.EstimatedHours hours</small>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
                                     </div>
-                                    <div class="mt-2 p-2 bg-light rounded">
-                                        <small>@TruncateMessage(message.Content, 200)</small>
-                                    </div>
+
+                                    @if (!string.IsNullOrEmpty(analysis.BusinessImpact))
+                                    {
+                                        <div class="mt-3 p-3 bg-light rounded">
+                                            <strong>Business Impact:</strong><br>
+                                            <small>@analysis.BusinessImpact</small>
+                                        </div>
+                                    }
                                 </div>
                             }
                         </div>
                     </div>
-                }
 
-                <!-- Consolidated Recommendations -->
-                <div class="card shadow">
-                    <div class="card-header bg-warning text-dark">
-                        <h5 class="mb-0"><i class="bi bi-list-check"></i> Team Recommendations</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h6 class="text-danger">🚨 High Priority (@teamResult.FinalRecommendations.HighPriorityActions.Count)</h6>
-                                <ul class="list-unstyled">
-                                    @foreach (var rec in teamResult.FinalRecommendations.HighPriorityActions.Take(5))
-                                    {
-                                        <li class="mb-2">
-                                            <strong>@rec.Title</strong><br>
-                                            <small class="text-muted">@rec.EstimatedHours hours - @rec.Priority priority</small>
-                                        </li>
-                                    }
-                                </ul>
+                    <!-- Team Discussion -->
+                    @if (teamResult?.TeamDiscussion != null && teamResult.TeamDiscussion.Any())
+                    {
+                        <div class="card shadow mb-3">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0"><i class="bi bi-chat-dots"></i> Agent Team Discussion</h5>
                             </div>
-                            <div class="col-md-6">
-                                <h6 class="text-warning">⚡ Medium Priority (@teamResult.FinalRecommendations.MediumPriorityActions.Count)</h6>
-                                <ul class="list-unstyled">
-                                    @foreach (var rec in teamResult.FinalRecommendations.MediumPriorityActions.Take(3))
-                                    {
-                                        <li class="mb-2">
-                                            <strong>@rec.Title</strong><br>
-                                            <small class="text-muted">@rec.EstimatedHours hours</small>
-                                        </li>
-                                    }
-                                </ul>
+                            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                                @foreach (var message in teamResult.TeamDiscussion.OrderBy(m => m.Timestamp))
+                                {
+                                    <div class="discussion-message mb-3">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <strong class="text-primary">@message.FromAgent</strong>
+                                            <small class="text-muted">@message.Timestamp.ToString("HH:mm:ss")</small>
+                                        </div>
+                                        <div class="mt-1">
+                                            <span class="badge @GetMessageTypeBadgeClass(message.Type) me-2">
+                                                @message.Type
+                                            </span>
+                                            @message.Subject
+                                        </div>
+                                        <div class="mt-2 p-2 bg-light rounded">
+                                            <small>@TruncateMessage(message.Content, 200)</small>
+                                        </div>
+                                    </div>
+                                }
                             </div>
                         </div>
+                    }
 
-                        <div class="mt-4 p-3 bg-primary text-white rounded">
-                            <h6 class="mb-2"><i class="bi bi-clock"></i> Implementation Summary</h6>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <strong>Total Effort:</strong><br>
-                                    @teamResult.FinalRecommendations.TotalEstimatedEffort hours
+                    <!-- Consolidated Recommendations -->
+                    @if (teamResult?.FinalRecommendations != null)
+                    {
+                        <div class="mb-2 p-2 bg-light border rounded">
+                            <b>Debug:</b>
+                            HighPriorityActions: @(teamResult.FinalRecommendations.HighPriorityActions == null ? "null" : teamResult.FinalRecommendations.HighPriorityActions.Count.ToString())<br />
+                            MediumPriorityActions: @(teamResult.FinalRecommendations.MediumPriorityActions == null ? "null" : teamResult.FinalRecommendations.MediumPriorityActions.Count.ToString())
+                        </div>
+                        <div class="card shadow">
+                            <div class="card-header bg-warning text-dark">
+                                <h5 class="mb-0"><i class="bi bi-list-check"></i> Team Recommendations</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="text-danger">🚨 High Priority (@(teamResult.FinalRecommendations.HighPriorityActions?.Count ?? 0))</h6>
+                                        <ul class="list-unstyled">
+                                            @foreach (var rec in (teamResult.FinalRecommendations.HighPriorityActions ?? Enumerable.Empty<Recommendation>()).Take(5))
+                                            {
+                                                <li class="mb-2">
+                                                    <strong>@rec.Title</strong><br>
+                                                    <small class="text-muted">@rec.EstimatedHours hours - @rec.Priority priority</small>
+                                                </li>
+                                            }
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="text-warning">⚡ Medium Priority (@(teamResult.FinalRecommendations.MediumPriorityActions?.Count ?? 0))</h6>
+                                        <ul class="list-unstyled">
+                                            @foreach (var rec in (teamResult.FinalRecommendations.MediumPriorityActions ?? Enumerable.Empty<Recommendation>()).Take(3))
+                                            {
+                                                <li class="mb-2">
+                                                    <strong>@rec.Title</strong><br>
+                                                    <small class="text-muted">@rec.EstimatedHours hours</small>
+                                                </li>
+                                            }
+                                        </ul>
+                                    </div>
                                 </div>
-                                <div class="col-md-4">
-                                    <strong>Estimated Cost:</strong><br>
-                                    @((teamResult.FinalRecommendations.TotalEstimatedEffort * 125).ToString("C0"))
+
+                                <div class="mt-4 p-3 bg-primary text-white rounded">
+                                    <h6 class="mb-2"><i class="bi bi-clock"></i> Implementation Summary</h6>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <strong>Total Effort:</strong><br>
+                                            @(teamResult.FinalRecommendations.TotalEstimatedEffort) hours
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>Estimated Cost:</strong><br>
+                                            @((teamResult.FinalRecommendations.TotalEstimatedEffort * 125).ToString("C0"))
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>Timeline:</strong><br>
+                                            @GetEstimatedTimeline(teamResult.FinalRecommendations.TotalEstimatedEffort)
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="col-md-4">
-                                    <strong>Timeline:</strong><br>
-                                    @GetEstimatedTimeline(teamResult.FinalRecommendations.TotalEstimatedEffort)
-                                </div>
+
+                                @if (!string.IsNullOrEmpty(teamResult.FinalRecommendations.ImplementationStrategy))
+                                {
+                                    <div class="mt-3">
+                                        <h6><i class="bi bi-map"></i> Implementation Strategy</h6>
+                                        <div class="p-3 bg-light rounded">
+                                            @((MarkupString)FormatImplementationStrategy(teamResult.FinalRecommendations.ImplementationStrategy))
+                                        </div>
+                                    </div>
+                                }
                             </div>
                         </div>
-
-                        @if (!string.IsNullOrEmpty(teamResult.FinalRecommendations.ImplementationStrategy))
-                        {
-                            <div class="mt-3">
-                                <h6><i class="bi bi-map"></i> Implementation Strategy</h6>
-                                <div class="p-3 bg-light rounded">
-                                    @((MarkupString)FormatImplementationStrategy(teamResult.FinalRecommendations.ImplementationStrategy))
-                                </div>
-                            </div>
-                        }
-                    </div>
+                    }
                 </div>
             </div>
         }
     </div>
 </div>
 
+<!-- Styles -->
 <style>
-    .bg-gradient-primary {
-        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    .upload-area {
+        border: 2px dashed #ced4da;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+        transition: all 0.3s ease;
+        cursor: pointer;
     }
+
+        .upload-area:hover {
+            border-color: #0d6efd;
+            background-color: #e7f1ff;
+        }
+
+        .upload-area.drag-over {
+            border-color: #0d6efd;
+            background-color: #cfe2ff;
+            transform: scale(1.02);
+        }
 
     .metric-box {
-        padding: 1rem;
-        border-radius: 8px;
-        background: #f8f9fa;
-        margin: 0.5rem 0;
-    }
-
-    .agent-result-card {
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        padding: 1rem;
-        background: #fafafa;
-    }
-
-    .discussion-message {
-        border-left: 3px solid #007bff;
-        padding-left: 1rem;
-    }
-
-    .executive-summary {
-        line-height: 1.7;
-        font-size: 15px;
-    }
-
-        .executive-summary h6 {
-            color: #2c3e50;
-            margin-top: 1.5rem;
-            margin-bottom: 0.8rem;
-            font-weight: 600;
-        }
-
-        .executive-summary p {
-            margin-bottom: 1rem;
-        }
-
-    .executive-summary {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border-radius: 12px;
-        padding: 2rem;
-        line-height: 1.8;
-        font-size: 15px;
-        border-left: 5px solid #007bff;
-    }
-
-        .executive-summary h6 {
-            color: #2c3e50;
-            margin: 1.5rem 0 0.8rem 0;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-        }
-
-            .executive-summary h6::before {
-                content: "💼";
-                margin-right: 0.5rem;
-                font-size: 1.2em;
-            }
-
-
-    .agent-result-card {
-        border: 1px solid #dee2e6;
-        border-radius: 12px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
         padding: 1.5rem;
-        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
-        margin-bottom: 1.5rem;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s;
     }
 
-        .agent-result-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        .metric-box:hover {
+            transform: translateY(-5px);
         }
 
     .analysis-progress {
-        background: rgba(255,255,255,0.95);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(0,123,255,0.3);
-        border-radius: 12px;
         padding: 1.5rem;
-        margin: 1rem 0;
-    }
-
-    .metrics-dashboard {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        border-radius: 12px;
-        padding: 2rem;
-        color: white;
-        margin-bottom: 2rem;
-    }
-
-    .metric-box {
-        background: rgba(255,255,255,0.15);
-        backdrop-filter: blur(10px);
-        padding: 1.5rem;
+        background: linear-gradient(to bottom, #f8f9fa, #ffffff);
         border-radius: 8px;
-        margin: 0.5rem 0;
-        text-align: center;
-        border: 1px solid rgba(255,255,255,0.2);
+        border: 1px solid #dee2e6;
     }
 
-        .metric-box h4 {
-            font-size: 2rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-
-    .discussion-message {
-        background: #fff;
-        border: 1px solid #e9ecef;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        border-left: 4px solid #007bff;
-        transition: all 0.3s ease;
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
 
-        .discussion-message:hover {
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-    .recommendations-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-        margin-top: 1rem;
+    .complexity-badge-low {
+        background-color: #28a745 !important;
     }
 
-    .priority-section {
-        background: #fff;
-        border-radius: 8px;
-        padding: 1.5rem;
-        border-left: 4px solid;
+    .complexity-badge-medium {
+        background-color: #ffc107 !important;
     }
 
-    .priority-high {
-        border-left-color: #dc3545;
-        background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);
+    .complexity-badge-high {
+        background-color: #fd7e14 !important;
     }
 
-    .priority-medium {
-        border-left-color: #ffc107;
-        background: linear-gradient(135deg, #fffbf0 0%, #fff 100%);
+    .complexity-badge-veryhigh {
+        background-color: #dc3545 !important;
     }
-
-    @@media (max-width: 768px) {
-        .recommendations-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .metric-box h4 {
-            font-size: 1.5rem;
-        }
-
-        .agent-result-card {
-            padding: 1rem;
-        }
-    }
-
 </style>
 
 @code {
+    // File management
+    private List<IBrowserFile> selectedFiles = new();
+    private List<FileMetadata> processedMetadata = new();
+    private ProjectSummary? projectSummary = null;
+    private bool isDragging = false;
+    private int preProcessingProgress = 0;
+
+    // Team configuration
     private string selectedObjective = "comprehensive-audit";
     private string customObjective = "";
     private bool includeSecurityAgent = true;
     private bool includePerformanceAgent = true;
     private bool includeArchitectureAgent = true;
-    private string codeInput = "";
+
+    // Analysis state
+    private bool isPreProcessing = false;
     private bool isAnalyzing = false;
     private string statusMessage = "";
     private TeamAnalysisResult? teamResult;
 
+    // Progress tracking
     private int currentAnalysisPhase = 0;
     private readonly string[] analysisPhases = {
         "Planning team analysis approach",
@@ -602,7 +661,7 @@
     protected override void OnInitialized()
     {
         OnObjectiveChanged();
-        statusMessage = "Multi-agent team ready! Select agents and provide code for comprehensive analysis.";
+        statusMessage = "Multi-agent team ready! Select code files for comprehensive AI analysis.";
     }
 
     private void OnObjectiveChanged()
@@ -635,6 +694,614 @@
         StateHasChanged();
     }
 
+    #region File Handling
+
+    private async Task HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var newFiles = e.GetMultipleFiles(50);
+            var csFiles = newFiles
+                .Where(f => f.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            // Filter out generated/designer files
+            var sourceFiles = csFiles.Where(f =>
+                !f.Name.Contains(".Designer.") &&
+                !f.Name.Contains(".g.cs") &&
+                !f.Name.Contains(".g.i.cs") &&
+                !f.Name.Contains("AssemblyInfo.cs") &&
+                !f.Name.Contains("GlobalAssemblyInfo.cs") &&
+                !f.Name.StartsWith("Temp", StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+
+            selectedFiles.Clear();
+            processedMetadata.Clear();
+            projectSummary = null;
+
+            selectedFiles.AddRange(sourceFiles.Take(20)); // Limit to 20 files
+
+            if (sourceFiles.Count > 20)
+            {
+                statusMessage = $"✅ Loaded 20 files from {sourceFiles.Count} C# source files (limited for performance).";
+            }
+            else
+            {
+                statusMessage = $"✅ Successfully loaded {selectedFiles.Count} C# source files.";
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Error loading files: {ex.Message}";
+            Logger.LogError(ex, "Error in HandleFileSelection");
+        }
+    }
+
+    private async Task HandleIndividualFileSelection(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var newFiles = e.GetMultipleFiles(20);
+            selectedFiles.Clear();
+            processedMetadata.Clear();
+            projectSummary = null;
+
+            selectedFiles.AddRange(newFiles);
+            statusMessage = $"✅ Selected {selectedFiles.Count} individual files for analysis.";
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Error selecting files: {ex.Message}";
+            Logger.LogError(ex, "Error in HandleIndividualFileSelection");
+        }
+    }
+
+    private void HandleDragOver(DragEventArgs e)
+    {
+        isDragging = true;
+    }
+
+    private void HandleDragLeave(DragEventArgs e)
+    {
+        isDragging = false;
+    }
+
+    private void HandleFileDrop(DragEventArgs e)
+    {
+        isDragging = false;
+        statusMessage = "ℹ️ Please use the Browse button to select files (drag-drop from system file browser requires additional setup).";
+    }
+
+    private void RemoveFile(IBrowserFile file)
+    {
+        selectedFiles.Remove(file);
+
+        // Also remove from processed metadata
+        var metadata = processedMetadata.FirstOrDefault(m => m.FileName == file.Name);
+        if (metadata != null)
+        {
+            processedMetadata.Remove(metadata);
+        }
+
+        // Recalculate project summary if needed
+        if (processedMetadata.Any())
+        {
+            _ = RecalculateProjectSummary();
+        }
+        else
+        {
+            projectSummary = null;
+        }
+
+        statusMessage = $"Removed {file.Name}. {selectedFiles.Count} files remaining.";
+        StateHasChanged();
+    }
+
+    private void ClearFiles()
+    {
+        selectedFiles.Clear();
+        processedMetadata.Clear();
+        projectSummary = null;
+        statusMessage = "All files cleared. Ready for new selection.";
+        StateHasChanged();
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    #endregion
+
+    #region Pre-Processing (Local Analysis - No AI Cost)
+
+    private async Task PreProcessFiles()
+    {
+        if (!selectedFiles.Any())
+        {
+            statusMessage = "⚠️ Please select files first.";
+            return;
+        }
+
+        isPreProcessing = true;
+        preProcessingProgress = 0;
+        processedMetadata.Clear();
+        statusMessage = "🔍 Starting local pre-processing (no AI cost)...";
+        StateHasChanged();
+
+        try
+        {
+            foreach (var file in selectedFiles)
+            {
+                Logger.LogInformation($"Pre-processing: {file.Name}");
+
+                var metadata = await PreProcessingService.ExtractMetadataAsync(file, "csharp");
+                processedMetadata.Add(metadata);
+
+                preProcessingProgress++;
+                statusMessage = $"Processing {file.Name}... ({preProcessingProgress}/{selectedFiles.Count})";
+                StateHasChanged();
+
+                // Small delay for UI responsiveness
+                await Task.Delay(100);
+            }
+
+            // Create project summary
+            projectSummary = await PreProcessingService.CreateProjectSummaryAsync(processedMetadata);
+
+            var issueCount = projectSummary.PreIdentifiedIssues.Count;
+            var criticalCount = projectSummary.PreIdentifiedIssues.Count(i =>
+                i.Severity == "Critical" || i.Severity == "High");
+
+            statusMessage = $"✅ Pre-processing complete! Found {issueCount} issues " +
+                          $"({criticalCount} critical/high). Ready for AI team analysis.";
+
+            Logger.LogInformation($"Pre-processing complete: {projectSummary.TotalClasses} classes, " +
+                                $"{projectSummary.TotalMethods} methods, " +
+                                $"{issueCount} issues identified");
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Pre-processing error: {ex.Message}";
+            Logger.LogError(ex, "Error in PreProcessFiles");
+        }
+        finally
+        {
+            isPreProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RecalculateProjectSummary()
+    {
+        if (processedMetadata.Any())
+        {
+            projectSummary = await PreProcessingService.CreateProjectSummaryAsync(processedMetadata);
+            StateHasChanged();
+        }
+    }
+
+    #endregion
+
+    #region AI Team Analysis
+
+    private async Task StartTeamAnalysis()
+    {
+        if (projectSummary == null)
+        {
+            statusMessage = "⚠️ Please pre-process files first (click 'Pre-Process Files' button).";
+            return;
+        }
+
+        if (!includeSecurityAgent && !includePerformanceAgent && !includeArchitectureAgent)
+        {
+            statusMessage = "⚠️ Please select at least one AI agent for analysis.";
+            return;
+        }
+
+        isAnalyzing = true;
+        currentAnalysisPhase = 0;
+        statusMessage = $"🚀 Initializing multi-agent team for {selectedFiles.Count} files...";
+        StateHasChanged();
+
+        try
+        {
+            // Create optimized AI request with summaries only
+            var request = new AgentAnalysisRequest
+            {
+                ProjectSummary = projectSummary,
+                AnalysisObjective = selectedObjective == "custom" ? customObjective : selectedObjective,
+                BusinessContext = GetBusinessContext(),
+                IncludeSecurityAnalysis = includeSecurityAgent,
+                IncludePerformanceAnalysis = includePerformanceAgent,
+                IncludeArchitectureAnalysis = includeArchitectureAgent,
+                FocusAreas = GetFocusAreas()
+            };
+
+            // Simulate phases for now (replace with actual orchestration service call)
+            for (int i = 0; i < analysisPhases.Length; i++)
+            {
+                currentAnalysisPhase = i;
+                Logger.LogInformation($"Analysis phase: {analysisPhases[i]}");
+                StateHasChanged();
+                await Task.Delay(2000); // Simulate processing time
+            }
+
+            teamResult = await OrchestrationService.AnalyzeProjectSummaryAsync(request);
+
+            currentAnalysisPhase = analysisPhases.Length;
+            statusMessage = $"✅ Multi-agent analysis complete for {selectedFiles.Count} files!";
+
+            Logger.LogInformation("Team analysis completed successfully");
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Analysis error: {ex.Message}";
+            Logger.LogError(ex, "Error in StartTeamAnalysis");
+        }
+        finally
+        {
+            isAnalyzing = false;
+            StateHasChanged();
+        }
+    }
+
+    private TeamAnalysisResult CreateMockTeamResult()
+    {
+        // Create a mock result for demonstration
+        // TODO: Remove this when actual orchestration service is connected
+        return new TeamAnalysisResult
+        {
+            ConversationId = Guid.NewGuid().ToString(),
+            OverallConfidenceScore = 85,
+            IndividualAnalyses = new List<SpecialistAnalysisResult>
+            {
+                new SpecialistAnalysisResult
+                {
+                    AgentName = "SecurityAnalyst",
+                    Specialty = "Security",
+                    Priority = "Critical",
+                    ConfidenceScore = 88,
+                    BusinessImpact = "High risk of data breach due to SQL injection vulnerabilities. Immediate remediation required.",
+                    EstimatedEffort = 16,
+                    AnalysisTimestamp = DateTime.UtcNow,
+                    KeyFindings = new List<Finding>
+                    {
+                        new Finding
+                        {
+                            Category = "SQL Injection",
+                            Severity = "Critical",
+                            Description = "String concatenation used in SQL queries allows injection attacks",
+                            Location = "ReportGenerator.cs:45"
+                        },
+                        new Finding
+                        {
+                            Category = "Hardcoded Secrets",
+                            Severity = "Critical",
+                            Description = "Database password found hardcoded in source code",
+                            Location = "SessionHandler.cs:23"
+                        }
+                    },
+                    Recommendations = new List<Recommendation>
+                    {
+                        new Recommendation
+                        {
+                            Title = "Implement Parameterized Queries",
+                            Description = "Replace string concatenation with parameterized SQL queries using SqlParameter",
+                            Priority = "Critical",
+                            EstimatedHours = 8,
+                            Implementation = "Use SqlCommand with Parameters.AddWithValue() for all database queries"
+                        },
+                        new Recommendation
+                        {
+                            Title = "Move Secrets to Configuration",
+                            Description = "Extract hardcoded credentials to secure configuration (Azure Key Vault, appsettings.json)",
+                            Priority = "Critical",
+                            EstimatedHours = 4,
+                            Implementation = "Use IConfiguration and Azure Key Vault for secrets management"
+                        }
+                    },
+                    RiskLevel = new RiskAssessment
+                    {
+                        OverallRisk = "Critical",
+                        Likelihood = "High",
+                        Impact = "Severe"
+                    }
+                },
+                new SpecialistAnalysisResult
+                {
+                    AgentName = "PerformanceAnalyst",
+                    Specialty = "Performance",
+                    Priority = "Medium",
+                    ConfidenceScore = 82,
+                    BusinessImpact = "Current performance bottlenecks may impact user experience during peak loads.",
+                    EstimatedEffort = 12,
+                    AnalysisTimestamp = DateTime.UtcNow,
+                    KeyFindings = new List<Finding>
+                    {
+                        new Finding
+                        {
+                            Category = "Synchronous Operations",
+                            Severity = "Medium",
+                            Description = "Database calls executed synchronously, blocking threads",
+                            Location = "Multiple files"
+                        },
+                        new Finding
+                        {
+                            Category = "N+1 Queries",
+                            Severity = "High",
+                            Description = "Inefficient data access patterns causing excessive database roundtrips",
+                            Location = "ReportGenerator.cs"
+                        }
+                    },
+                    Recommendations = new List<Recommendation>
+                    {
+                        new Recommendation
+                        {
+                            Title = "Implement Async/Await Patterns",
+                            Description = "Convert synchronous database calls to async operations",
+                            Priority = "High",
+                            EstimatedHours = 8,
+                            Implementation = "Replace ExecuteReader with ExecuteReaderAsync throughout codebase"
+                        },
+                        new Recommendation
+                        {
+                            Title = "Optimize Database Queries",
+                            Description = "Reduce N+1 queries by implementing eager loading or batching",
+                            Priority = "Medium",
+                            EstimatedHours = 6,
+                            Implementation = "Use JOIN operations or in-memory caching for related data"
+                        }
+                    }
+                },
+                new SpecialistAnalysisResult
+                {
+                    AgentName = "ArchitectureAnalyst",
+                    Specialty = "Architecture",
+                    Priority = "Medium",
+                    ConfidenceScore = 80,
+                    BusinessImpact = "Current architecture limits scalability and maintainability. Modernization will improve long-term ROI.",
+                    EstimatedEffort = 24,
+                    AnalysisTimestamp = DateTime.UtcNow,
+                    KeyFindings = new List<Finding>
+                    {
+                        new Finding
+                        {
+                            Category = "Legacy Patterns",
+                            Severity = "Medium",
+                            Description = "Use of DataSet/DataTable instead of modern ORM patterns",
+                            Location = "Data access layer"
+                        },
+                        new Finding
+                        {
+                            Category = "Tight Coupling",
+                            Severity = "Medium",
+                            Description = "Direct dependencies between layers, violating separation of concerns",
+                            Location = "Overall architecture"
+                        }
+                    },
+                    Recommendations = new List<Recommendation>
+                    {
+                        new Recommendation
+                        {
+                            Title = "Introduce Dependency Injection",
+                            Description = "Implement DI container to reduce tight coupling and improve testability",
+                            Priority = "Medium",
+                            EstimatedHours = 16,
+                            Implementation = "Use Microsoft.Extensions.DependencyInjection for IoC container"
+                        },
+                        new Recommendation
+                        {
+                            Title = "Migrate to Entity Framework Core",
+                            Description = "Replace DataSet/DataTable with Entity Framework Core for better maintainability",
+                            Priority = "Low",
+                            EstimatedHours = 40,
+                            Implementation = "Phased migration starting with new features, then refactoring legacy code"
+                        }
+                    }
+                }
+            },
+            TeamDiscussion = new List<AgentMessage>
+            {
+                new AgentMessage
+                {
+                    FromAgent = "SecurityAnalyst",
+                    ToAgent = "All",
+                    Type = MessageType.Analysis,
+                    Subject = "Critical Security Concerns",
+                    Content = "The SQL injection vulnerabilities I identified pose an immediate business risk. These should be prioritized above all other recommendations.",
+                    Timestamp = DateTime.UtcNow.AddSeconds(-60)
+                },
+                new AgentMessage
+                {
+                    FromAgent = "PerformanceAnalyst",
+                    ToAgent = "SecurityAnalyst",
+                    Type = MessageType.Agreement,
+                    Subject = "Concur with Security Priority",
+                    Content = "I agree that security issues must be addressed first. The performance improvements I recommended can wait until security is resolved.",
+                    Timestamp = DateTime.UtcNow.AddSeconds(-45)
+                },
+                new AgentMessage
+                {
+                    FromAgent = "ArchitectureAnalyst",
+                    ToAgent = "All",
+                    Type = MessageType.Analysis,
+                    Subject = "Long-term Architecture Concerns",
+                    Content = "While addressing immediate security issues, consider that the architectural improvements I suggested will prevent similar issues in the future.",
+                    Timestamp = DateTime.UtcNow.AddSeconds(-30)
+                },
+                new AgentMessage
+                {
+                    FromAgent = "Orchestrator",
+                    ToAgent = "All",
+                    Type = MessageType.Synthesis,
+                    Subject = "Team Consensus Reached",
+                    Content = "Team has reached consensus: 1) Fix critical security issues immediately, 2) Implement performance improvements, 3) Plan long-term architectural modernization.",
+                    Timestamp = DateTime.UtcNow
+                }
+            },
+            FinalRecommendations = new ConsolidatedRecommendations
+            {
+                HighPriorityActions = new List<Recommendation>
+                {
+                    new Recommendation
+                    {
+                        Title = "Fix SQL Injection Vulnerabilities",
+                        Description = "Critical security issue requiring immediate attention. Replace string concatenation with parameterized queries.",
+                        Priority = "Critical",
+                        EstimatedHours = 8,
+                        Implementation = "Use SqlCommand.Parameters for all database operations",
+                        Dependencies = new List<string> { "Code review", "Security testing" }
+                    },
+                    new Recommendation
+                    {
+                        Title = "Secure Credentials Management",
+                        Description = "Move hardcoded secrets to Azure Key Vault or secure configuration",
+                        Priority = "Critical",
+                        EstimatedHours = 4,
+                        Implementation = "Implement IConfiguration with Azure Key Vault integration",
+                        Dependencies = new List<string> { "Azure Key Vault setup", "Configuration updates" }
+                    },
+                    new Recommendation
+                    {
+                        Title = "Implement Async Database Operations",
+                        Description = "Convert synchronous operations to async/await for better scalability",
+                        Priority = "High",
+                        EstimatedHours = 8,
+                        Implementation = "Replace sync methods with async equivalents throughout data layer",
+                        Dependencies = new List<string> { "Testing", "Performance validation" }
+                    }
+                },
+                MediumPriorityActions = new List<Recommendation>
+                {
+                    new Recommendation
+                    {
+                        Title = "Optimize Database Query Patterns",
+                        Description = "Reduce N+1 queries and implement efficient data loading strategies",
+                        Priority = "Medium",
+                        EstimatedHours = 6,
+                        Implementation = "Use JOIN operations and implement caching where appropriate"
+                    },
+                    new Recommendation
+                    {
+                        Title = "Introduce Dependency Injection",
+                        Description = "Implement DI to reduce coupling and improve testability",
+                        Priority = "Medium",
+                        EstimatedHours = 16,
+                        Implementation = "Setup DI container and refactor service dependencies"
+                    }
+                },
+                LongTermStrategic = new List<Recommendation>
+                {
+                    new Recommendation
+                    {
+                        Title = "Migrate to Entity Framework Core",
+                        Description = "Replace legacy DataSet/DataTable with modern ORM",
+                        Priority = "Low",
+                        EstimatedHours = 40,
+                        Implementation = "Phased migration starting with new features"
+                    }
+                },
+                TotalEstimatedEffort = 82,
+                ImplementationStrategy = "Phase 1 (Immediate): Address critical security vulnerabilities (12 hours). Phase 2 (Short-term): Implement performance improvements (14 hours). Phase 3 (Long-term): Architectural modernization (56 hours)."
+            },
+            Consensus = new TeamConsensusMetrics
+            {
+                AgreementPercentage = 87.5,
+                TotalMessages = 4,
+                ConflictCount = 0,
+                ResolvedConflictCount = 0,
+                AgentParticipationScores = new Dictionary<string, int>
+                {
+                    { "SecurityAnalyst", 1 },
+                    { "PerformanceAnalyst", 1 },
+                    { "ArchitectureAnalyst", 1 },
+                    { "Orchestrator", 1 }
+                }
+            },
+            ExecutiveSummary = @"
+## Executive Summary: Legacy Code Analysis
+
+**Analysis Scope:** 2 C# files analyzed by 3 specialist AI agents
+**Overall Assessment:** Critical security vulnerabilities require immediate attention
+**Team Confidence:** 85%
+
+### Critical Findings
+1. **SQL Injection Vulnerabilities (Critical)** - Direct business risk requiring immediate remediation
+2. **Hardcoded Credentials (Critical)** - Security compliance violation
+3. **Performance Bottlenecks (High)** - Impact on user experience during peak loads
+
+### Recommended Actions
+**Immediate (12 hours):**
+- Fix SQL injection vulnerabilities using parameterized queries
+- Move credentials to secure configuration
+
+**Short-term (14 hours):**
+- Implement async/await patterns
+- Optimize database query patterns
+
+**Long-term (56 hours):**
+- Migrate to modern ORM (Entity Framework Core)
+- Implement comprehensive DI architecture
+
+### Investment Required
+- **Total Effort:** 82 hours (~2 weeks for 1 developer)
+- **Estimated Cost:** $10,250 (at $125/hour)
+- **Expected ROI:** Risk mitigation, improved performance, reduced technical debt
+
+### Business Impact
+Addressing these issues will:
+- Eliminate critical security risks
+- Improve application performance by ~40%
+- Reduce future maintenance costs
+- Enable easier scaling and feature development
+"
+        };
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    private int GetSelectedAgentCount()
+    {
+        int count = 0;
+        if (includeSecurityAgent) count++;
+        if (includePerformanceAgent) count++;
+        if (includeArchitectureAgent) count++;
+        return count;
+    }
+
+    private int EstimateTokenUsage()
+    {
+        if (projectSummary == null) return 0;
+
+        // Compact summary uses ~50 tokens per file vs ~2000 for raw code
+        int summaryTokens = selectedFiles.Count * 50;
+        int agentMultiplier = GetSelectedAgentCount();
+
+        return summaryTokens * agentMultiplier;
+    }
+
+    private int EstimateTime()
+    {
+        // Estimate based on file count and agents
+        int baseTime = selectedFiles.Count * 2; // 2 seconds per file
+        int agentMultiplier = GetSelectedAgentCount();
+        return Math.Max(10, Math.Min(60, baseTime * agentMultiplier / 2));
+    }
+
     private string GetCurrentAnalysisPhase()
     {
         if (currentAnalysisPhase < analysisPhases.Length)
@@ -647,239 +1314,67 @@
         return (int)((double)currentAnalysisPhase / analysisPhases.Length * 100);
     }
 
-    private void LoadTeamSampleCode()
+    private string GetComplexityBadgeClass(string complexity)
     {
-        codeInput = @"using System;
-using System.Data.SqlClient;
-using System.Security.Cryptography;
-using System.Text;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace LegacyFinancialSystem
-{
-    // Poor separation of concerns - business logic mixed with data access
-    public class AccountManager
-    {
-        private string connectionString = ""Server=localhost;Database=Finance;Trusted_Connection=true;"";
-
-        // Security issue: Hardcoded admin credentials
-        private const string ADMIN_PASSWORD = ""admin123"";
-
-        // Performance issue: Synchronous operations
-        public List<Account> GetUserAccounts(string userId)
+        return complexity.ToLower() switch
         {
-            var accounts = new List<Account>();
-
-            // Security vulnerability: SQL injection possible
-            string sql = ""SELECT * FROM Accounts WHERE UserId = '"" + userId + ""'"";
-
-            using (var connection = new SqlConnection(connectionString))
-            {
-                connection.Open();
-                var command = new SqlCommand(sql, connection);
-                var reader = command.ExecuteReader();
-
-                // Performance issue: Loading all data into memory
-                while (reader.Read())
-                {
-                    accounts.Add(new Account
-                    {
-                        Id = (int)reader[""Id""],
-                        Balance = (decimal)reader[""Balance""],
-                        AccountType = reader[""AccountType""].ToString(),
-                        // Security issue: Storing sensitive data in plain text
-                        SocialSecurityNumber = reader[""SSN""].ToString()
-                    });
-                }
-            }
-
-            return accounts;
-        }
-
-        // Architecture violation: Mixed responsibilities
-        public bool ProcessPayment(int fromAccountId, int toAccountId, decimal amount)
-        {
-            // Performance issue: Multiple database calls
-            var fromAccount = GetAccountById(fromAccountId);
-            var toAccount = GetAccountById(toAccountId);
-
-            if (fromAccount.Balance < amount)
-            {
-                // Poor error handling: Silent failure
-                return false;
-            }
-
-            // Security issue: No transaction isolation
-            fromAccount.Balance -= amount;
-            toAccount.Balance += amount;
-
-            // Performance issue: Separate update calls
-            UpdateAccount(fromAccount);
-            UpdateAccount(toAccount);
-
-            // Missing audit trail for financial transactions
-            return true;
-        }
-
-        // Security issue: Weak password validation
-        public bool ValidateUser(string username, string password)
-        {
-            if (password == ADMIN_PASSWORD)
-                return true;
-
-            // Performance issue: Inefficient string comparison
-            var storedPassword = GetStoredPassword(username);
-            return password.Equals(storedPassword);
-        }
-
-        // Architecture issue: Tight coupling to specific data access
-        private Account GetAccountById(int accountId)
-        {
-            // Repeated connection code - violation of DRY principle
-            using (var connection = new SqlConnection(connectionString))
-            {
-                connection.Open();
-                var sql = ""SELECT * FROM Accounts WHERE Id = "" + accountId;
-                var command = new SqlCommand(sql, connection);
-                var reader = command.ExecuteReader();
-
-                if (reader.Read())
-                {
-                    return new Account
-                    {
-                        Id = (int)reader[""Id""],
-                        Balance = (decimal)reader[""Balance""],
-                        AccountType = reader[""AccountType""].ToString()
-                    };
-                }
-                return null;
-            }
-        }
-
-        private void UpdateAccount(Account account)
-        {
-            // More duplicated connection code
-            using (var connection = new SqlConnection(connectionString))
-            {
-                connection.Open();
-                // Another SQL injection vulnerability
-                var sql = $""UPDATE Accounts SET Balance = {account.Balance} WHERE Id = {account.Id}"";
-                var command = new SqlCommand(sql, connection);
-                command.ExecuteNonQuery();
-            }
-        }
-
-        private string GetStoredPassword(string username)
-        {
-            // Security issue: Storing passwords in plain text
-            using (var connection = new SqlConnection(connectionString))
-            {
-                connection.Open();
-                var sql = ""SELECT Password FROM Users WHERE Username = '"" + username + ""'"";
-                var command = new SqlCommand(sql, connection);
-                return command.ExecuteScalar()?.ToString() ?? """";
-            }
-        }
-    }
-
-    public class Account
-    {
-        public int Id { get; set; }
-        public decimal Balance { get; set; }
-        public string AccountType { get; set; }
-        public string SocialSecurityNumber { get; set; } // PII exposure
-    }
-}";
-
-        selectedObjective = "comprehensive-audit";
-        OnObjectiveChanged();
-        statusMessage = "Complex financial system sample loaded - perfect for multi-agent team analysis!";
-        StateHasChanged();
-    }
-
-    private async Task StartTeamAnalysis()
-    {
-        if (string.IsNullOrWhiteSpace(codeInput))
-        {
-            statusMessage = "Please enter code for team analysis.";
-            return;
-        }
-
-        // Validate at least one agent is selected
-        var selectedAgents = new List<string>();
-        if (includeSecurityAgent) selectedAgents.Add("security");
-        if (includePerformanceAgent) selectedAgents.Add("performance");
-        if (includeArchitectureAgent) selectedAgents.Add("architecture");
-
-        if (!selectedAgents.Any())
-        {
-            statusMessage = "Please select at least one specialist agent.";
-            return;
-        }
-
-        isAnalyzing = true;
-        currentAnalysisPhase = 0;
-
-        try
-        {
-            var businessObjective = selectedObjective == "custom" ? customObjective : GetObjectiveDescription(selectedObjective);
-
-            // Simulate progressive phases for demo
-            for (int i = 0; i < analysisPhases.Length; i++)
-            {
-                currentAnalysisPhase = i;
-                statusMessage = $"Phase {i + 1}: {analysisPhases[i]}...";
-                StateHasChanged();
-
-                // Realistic timing for each phase
-                await Task.Delay(i switch
-                {
-                    0 => 1000,  // Planning
-                    1 => 1500,  // Deployment
-                    2 => 3000,  // Analysis (longest phase)
-                    3 => 2000,  // Discussion
-                    4 => 1500,  // Synthesis
-                    5 => 1000   // Summary
-                });
-            }
-
-            // Execute the actual team analysis
-            teamResult = await OrchestrationService.CoordinateTeamAnalysisAsync(
-                codeInput,
-                businessObjective,
-                selectedAgents);
-
-            currentAnalysisPhase = analysisPhases.Length;
-            statusMessage = $"✅ Team analysis complete! {teamResult.IndividualAnalyses.Count} agents collaborated with {teamResult.OverallConfidenceScore}% confidence.";
-        }
-        catch (Exception ex)
-        {
-            statusMessage = $"❌ Team analysis failed: {ex.Message}";
-            teamResult = null;
-        }
-        finally
-        {
-            isAnalyzing = false;
-            StateHasChanged();
-        }
-    }
-
-    private string GetObjectiveDescription(string objective)
-    {
-        return objective switch
-        {
-            "security-compliance" => "Comprehensive security assessment with focus on vulnerability identification and compliance requirements (SOX, GDPR, PCI-DSS)",
-            "performance-optimization" => "Performance bottleneck analysis and scalability assessment for enterprise-grade optimization recommendations",
-            "architecture-modernization" => "Architectural analysis and modernization planning with focus on SOLID principles, design patterns, and maintainability improvements",
-            "comprehensive-audit" => "Complete code audit covering security, performance, and architectural aspects for holistic modernization planning",
-            _ => "Custom business-focused code analysis and improvement recommendations"
+            "low" => "bg-success",
+            "medium" => "bg-warning text-dark",
+            "high" => "bg-warning",
+            "very high" => "bg-danger",
+            _ => "bg-secondary"
         };
+    }
+
+    private string GetStatusAlertClass()
+    {
+        if (statusMessage.StartsWith("✅")) return "alert-success";
+        if (statusMessage.StartsWith("⚠️")) return "alert-warning";
+        if (statusMessage.StartsWith("❌")) return "alert-danger";
+        return "alert-info";
+    }
+
+    private string GetStatusIcon()
+    {
+        if (statusMessage.StartsWith("✅")) return "bi-check-circle-fill";
+        if (statusMessage.StartsWith("⚠️")) return "bi-exclamation-triangle-fill";
+        if (statusMessage.StartsWith("❌")) return "bi-x-circle-fill";
+        return "bi-info-circle-fill";
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    private string GetBusinessContext()
+    {
+        return selectedObjective switch
+        {
+            "security-compliance" => "Focus on security vulnerabilities and compliance requirements",
+            "performance-optimization" => "Identify performance bottlenecks and optimization opportunities",
+            "architecture-modernization" => "Assess modernization readiness and architectural improvements",
+            "comprehensive-audit" => "Complete assessment across security, performance, and architecture",
+            _ => customObjective
+        };
+    }
+
+    private List<string> GetFocusAreas()
+    {
+        var areas = new List<string>();
+
+        if (projectSummary != null && projectSummary.PreIdentifiedIssues.Any())
+        {
+            areas.Add("Pre-identified security issues");
+            areas.Add("High complexity methods");
+            areas.Add("Legacy patterns");
+        }
+
+        return areas;
     }
 
     private string FormatExecutiveSummary(string summary)
     {
-        if (string.IsNullOrEmpty(summary)) return "";
+        if (string.IsNullOrEmpty(summary)) return "<p>No executive summary available.</p>";
 
         // Basic formatting for executive consumption
         summary = summary.Replace("\n\n", "</p><p>");
@@ -888,8 +1383,8 @@ namespace LegacyFinancialSystem
         // Format headers
         summary = System.Text.RegularExpressions.Regex.Replace(
             summary,
-            @"^(\d+\.\s*)([A-Z][^<\n]*?)(<br>|</p>)",
-            "<h6 class='text-primary mb-2'>$1$2</h6>");
+            @"^(#{1,3})\s*([^<\n]+?)(<br>|</p>|$)",
+            "<h6 class='text-primary mb-2'>$2</h6>");
 
         // Format bullet points
         summary = summary.Replace("• ", "<i class='bi bi-arrow-right text-success me-2'></i>");
@@ -905,7 +1400,7 @@ namespace LegacyFinancialSystem
 
     private string FormatImplementationStrategy(string strategy)
     {
-        if (string.IsNullOrEmpty(strategy)) return "";
+        if (string.IsNullOrEmpty(strategy)) return "<p>No implementation strategy available.</p>";
 
         // Format phases and sections
         strategy = strategy.Replace("Phase 1:", "<h6 class='text-primary mt-3 mb-2'><i class='bi bi-1-circle'></i> Phase 1:</h6>");
@@ -930,7 +1425,7 @@ namespace LegacyFinancialSystem
         {
             var name when name.Contains("security") => "🛡️",
             var name when name.Contains("performance") => "⚡",
-            var name when name.Contains("architectural") => "🏗️",
+            var name when name.Contains("architect") => "🏗️",
             _ => "🤖"
         };
     }
@@ -990,4 +1485,6 @@ namespace LegacyFinancialSystem
             _ => "3+ months"
         };
     }
+
+    #endregion
 }
