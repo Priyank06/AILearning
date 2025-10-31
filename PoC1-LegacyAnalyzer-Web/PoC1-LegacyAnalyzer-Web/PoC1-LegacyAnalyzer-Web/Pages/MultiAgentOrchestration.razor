@@ -85,12 +85,52 @@
                         </div>
                     </div>
 
-                    <!-- Code Input -->
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Code to Analyze:</label>
-                        <textarea class="form-control font-monospace" rows="10" @bind="codeInput"
-                                  placeholder="Paste your C# code here..." style="font-size: 13px;"></textarea>
+                    <!-- Replace lines 88-93 with: -->
+                    <div class="upload-area mb-3">
+                        <div class="text-center p-4">
+                            <div style="font-size: 3rem;" class="text-muted mb-3">
+                                <i class="bi bi-folder2-open"></i>
+                            </div>
+                            <h6>Upload Legacy Code Files</h6>
+                            <p class="text-muted mb-3">Select C# files for multi-agent analysis</p>
+
+                            <InputFile id="folderInput" OnChange="HandleFileSelection"
+                                       multiple accept=".cs" class="d-none" webkitdirectory />
+                            <label for="folderInput" class="btn btn-primary me-2">
+                                <i class="bi bi-folder-plus"></i> Select Project Folder
+                            </label>
+
+                            <InputFile id="individualFiles" OnChange="HandleIndividualFileSelection"
+                                       multiple accept=".cs" class="d-none" />
+                            <label for="individualFiles" class="btn btn-outline-secondary">
+                                <i class="bi bi-file-plus"></i> Select Individual Files
+                            </label>
+                        </div>
                     </div>
+                    @if (selectedFiles.Any())
+                    {
+                        <div class="mb-3">
+                            <h6>Selected Files (@selectedFiles.Count):</h6>
+                            <div style="max-height: 200px; overflow-y: auto;">
+                                @foreach (var file in selectedFiles)
+                                {
+                                    <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-1">
+                                        <span><i class="bi bi-file-earmark-code"></i> @file.Name</span>
+                                        <div>
+                                            <small class="text-muted me-2">@FormatFileSize(file.Size)</small>
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    @onclick="@(() => RemoveFile(file))">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary mt-2" @onclick="ClearFiles">
+                                <i class="bi bi-trash"></i> Clear All Files
+                            </button>
+                        </div>
+                    }
 
                     <!-- Action Buttons -->
                     <div class="mb-3">
@@ -588,6 +628,7 @@
     private bool isAnalyzing = false;
     private string statusMessage = "";
     private TeamAnalysisResult? teamResult;
+    private List<IBrowserFile> selectedFiles = new();
 
     private int currentAnalysisPhase = 0;
     private readonly string[] analysisPhases = {
@@ -851,11 +892,11 @@ namespace LegacyFinancialSystem
                 selectedAgents);
 
             currentAnalysisPhase = analysisPhases.Length;
-            statusMessage = $"✅ Team analysis complete! {teamResult.IndividualAnalyses.Count} agents collaborated with {teamResult.OverallConfidenceScore}% confidence.";
+            statusMessage = $"Team analysis complete! {teamResult.IndividualAnalyses.Count} agents collaborated with {teamResult.OverallConfidenceScore}% confidence.";
         }
         catch (Exception ex)
         {
-            statusMessage = $"❌ Team analysis failed: {ex.Message}";
+            statusMessage = $"Team analysis failed: {ex.Message}";
             teamResult = null;
         }
         finally
@@ -931,7 +972,7 @@ namespace LegacyFinancialSystem
             var name when name.Contains("security") => "🛡️",
             var name when name.Contains("performance") => "⚡",
             var name when name.Contains("architectural") => "🏗️",
-            _ => "🤖"
+            _ => ""
         };
     }
 
@@ -989,5 +1030,62 @@ namespace LegacyFinancialSystem
             <= 320 => "2 months",
             _ => "3+ months"
         };
+    }
+
+    private async Task HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        var newFiles = e.GetMultipleFiles(50);
+        var csFiles = newFiles.Where(f =>
+            f.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        // Filter out generated files
+        var sourceFiles = csFiles.Where(f =>
+            !f.Name.Contains(".Designer.") &&
+            !f.Name.Contains(".g.cs") &&
+            !f.Name.Contains("AssemblyInfo.cs")
+        ).ToList();
+
+        selectedFiles.Clear();
+        selectedFiles.AddRange(sourceFiles.Take(20));
+
+        statusMessage = $"Loaded {selectedFiles.Count} C# source files for team analysis.";
+        StateHasChanged();
+    }
+
+    private async Task HandleIndividualFileSelection(InputFileChangeEventArgs e)
+    {
+        var newFiles = e.GetMultipleFiles(20);
+        selectedFiles.Clear();
+        selectedFiles.AddRange(newFiles);
+
+        statusMessage = $"Selected {selectedFiles.Count} individual files.";
+        StateHasChanged();
+    }
+
+    private void RemoveFile(IBrowserFile file)
+    {
+        selectedFiles.Remove(file);
+        statusMessage = $"Removed {file.Name}. {selectedFiles.Count} files remaining.";
+        StateHasChanged();
+    }
+
+    private void ClearFiles()
+    {
+        selectedFiles.Clear();
+        statusMessage = "All files cleared. Ready for new selection.";
+        StateHasChanged();
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
     }
 }
