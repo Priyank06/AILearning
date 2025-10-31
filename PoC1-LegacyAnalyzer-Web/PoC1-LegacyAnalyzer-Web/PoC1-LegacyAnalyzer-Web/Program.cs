@@ -35,8 +35,6 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<ArchitecturalAnalystAgent>()
         ]);
 
-        services.AddScoped<IFilePreProcessingService, FilePreProcessingService>();
-
         return services;
     }
 

@@ -224,13 +224,13 @@ Provide performance-focused peer review.";
             return findings;
         }
 
-        private List<Recommendation> ExtractPerformanceRecommendations(string analysis)
+        private List<object> ExtractPerformanceRecommendations(string analysis)
         {
-            var recommendations = new List<Recommendation>();
+            var recommendations = new List<object>();
 
             if (analysis.Contains("database", StringComparison.OrdinalIgnoreCase))
             {
-                recommendations.Add(new Recommendation
+                recommendations.Add(new
                 {
                     Title = "Optimize Database Queries",
                     Description = "Implement query optimization and indexing strategies",
@@ -242,7 +242,7 @@ Provide performance-focused peer review.";
 
             if (analysis.Contains("async", StringComparison.OrdinalIgnoreCase))
             {
-                recommendations.Add(new Recommendation
+                recommendations.Add(new
                 {
                     Title = "Implement Asynchronous Operations",
                     Description = "Convert blocking operations to async/await patterns",
