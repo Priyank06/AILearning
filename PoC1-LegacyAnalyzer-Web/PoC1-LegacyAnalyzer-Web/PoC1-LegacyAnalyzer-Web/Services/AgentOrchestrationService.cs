@@ -99,7 +99,7 @@ Respond with specific, actionable orchestration plan.";
             try
             {
                 // Step 1: Create analysis plan
-                var analysisPlan = await CreateAnalysisPlanAsync(businessObjective, $"Code length: {code.Length} characters");
+                var analysisPlan = await CreateAnalysisPlanAsync(businessObjective, GetCodeContextSummary(code));
                 _logger.LogInformation("Analysis plan created: {Plan}", analysisPlan);
 
                 // Step 2: Execute specialist analyses in parallel
@@ -117,6 +117,7 @@ Respond with specific, actionable orchestration plan.";
                 var discussion = await FacilitateAgentDiscussionAsync(
                     $"Code Analysis for: {businessObjective}",
                     specialistResults.ToList(),
+                    GetCodeContextSummary(code),
                     cancellationToken);
 
                 teamResult.TeamDiscussion = discussion.Messages;
@@ -206,6 +207,7 @@ Respond with specific, actionable orchestration plan.";
         public async Task<AgentConversation> FacilitateAgentDiscussionAsync(
             string topic,
             List<SpecialistAnalysisResult> initialAnalyses,
+            string? codeContext = null,
             CancellationToken cancellationToken = default)
         {
             var conversation = new AgentConversation
@@ -248,9 +250,9 @@ Respond with specific, actionable orchestration plan.";
                             var reviewerAgent = await GetAgentByNameAsync(reviewer.AgentName);
                             if (reviewerAgent != null)
                             {
-                                var peerReview = await reviewerAgent.ReviewPeerAnalysisAsync(
+                            var peerReview = await reviewerAgent.ReviewPeerAnalysisAsync(
                                     JsonSerializer.Serialize(reviewee, new JsonSerializerOptions { WriteIndented = true }),
-                                    "Original code context", // In real implementation, pass the original code
+                                    codeContext ?? "Context unavailable",
                                     cancellationToken);
 
                                 var reviewMessage = new AgentMessage
@@ -641,6 +643,26 @@ Format for 5-minute executive briefing with clear action items.";
                 var name when name.Contains("architectural") => 1.3, // Architecture has long-term impact
                 _ => 1.0
             };
+        }
+
+        private static bool IsPreprocessedPattern(string code)
+        {
+            return code.StartsWith("[Preprocessed Project Pattern", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetCodeContextSummary(string code)
+        {
+            if (!IsPreprocessedPattern(code))
+            {
+                return $"Code length: {code.Length} characters";
+            }
+
+            // Extract first few lines as compact summary (header + stats)
+            var lines = code.Split('\n');
+            var take = Math.Min(6, lines.Length);
+            var header = string.Join(" ", lines.Take(take).Select(l => l.Trim()));
+            // Keep it compact to save tokens for planning
+            return header.Length > 800 ? header.Substring(0, 800) + "..." : header;
         }
     }
 }

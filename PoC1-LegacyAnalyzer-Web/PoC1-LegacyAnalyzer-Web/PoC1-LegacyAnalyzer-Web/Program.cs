@@ -12,6 +12,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMultiFileAnalysisService, MultiFileAnalysisService>();
         services.AddScoped<IFileDownloadService, FileDownloadService>();
         services.AddScoped<ICodeAnalysisAgentService, CodeAnalysisAgentService>();
+        services.AddScoped<IFilePreProcessingService, FilePreProcessingService>();
 
         return services;
     }

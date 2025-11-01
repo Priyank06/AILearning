@@ -4,6 +4,8 @@
 @using PoC1_LegacyAnalyzer_Web.Services
 @inject IAgentOrchestrationService OrchestrationService
 @inject ICodeAnalysisService CodeAnalysisService
+@inject IFilePreProcessingService FilePreProcessingService
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnvironment
 
 <PageTitle>Multi-Agent Team Analysis</PageTitle>
 
@@ -134,9 +136,12 @@
 
                     <!-- Action Buttons -->
                     <div class="mb-3">
-                        <button class="btn btn-outline-secondary me-2" @onclick="LoadTeamSampleCode">
-                            <i class="bi bi-file-code"></i> Load Team Analysis Sample
-                        </button>
+                        @if (HostEnvironment.IsDevelopment())
+                        {
+                            <button class="btn btn-outline-secondary me-2" @onclick="LoadTeamSampleCode">
+                                <i class="bi bi-file-code"></i> Load Team Analysis Sample
+                            </button>
+                        }
                         <button class="btn btn-success btn-lg" @onclick="StartTeamAnalysis" disabled="@isAnalyzing">
                             @if (isAnalyzing)
                             {
@@ -841,9 +846,9 @@ namespace LegacyFinancialSystem
 
     private async Task StartTeamAnalysis()
     {
-        if (string.IsNullOrWhiteSpace(codeInput))
+        if (string.IsNullOrWhiteSpace(codeInput) && !selectedFiles.Any())
         {
-            statusMessage = "Please enter code for team analysis.";
+            statusMessage = "Please enter code or select files for team analysis.";
             return;
         }
 
@@ -866,6 +871,35 @@ namespace LegacyFinancialSystem
         {
             var businessObjective = selectedObjective == "custom" ? customObjective : GetObjectiveDescription(selectedObjective);
 
+            // Build compact AI input: use Roslyn-preprocessed project pattern if files are selected
+            string aiInput;
+            if (selectedFiles.Any())
+            {
+                statusMessage = "Preprocessing files locally (Roslyn) to reduce tokens...";
+                StateHasChanged();
+
+                var tasks = selectedFiles.Select(f => FilePreProcessingService.ExtractMetadataAsync(f, "csharp")).ToList();
+                var metadatas = await Task.WhenAll(tasks);
+                var summary = await FilePreProcessingService.CreateProjectSummaryAsync(metadatas.ToList());
+
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("[Preprocessed Project Pattern - Token Optimized]");
+                sb.AppendLine($"Files: {summary.TotalFiles}, Classes: {summary.TotalClasses}, Methods: {summary.TotalMethods}, Properties: {summary.TotalProperties}");
+                sb.AppendLine($"RiskLevel: {summary.RiskLevel}, ComplexityScore: {summary.ComplexityScore}");
+                sb.AppendLine("KeyRecommendations: " + string.Join(" | ", summary.KeyRecommendations));
+                sb.AppendLine();
+                foreach (var m in metadatas.Take(20))
+                {
+                    sb.AppendLine(m.PatternSummary.Trim());
+                }
+
+                aiInput = sb.ToString();
+            }
+            else
+            {
+                aiInput = codeInput;
+            }
+
             // Simulate progressive phases for demo
             for (int i = 0; i < analysisPhases.Length; i++)
             {
@@ -887,7 +921,7 @@ namespace LegacyFinancialSystem
 
             // Execute the actual team analysis
             teamResult = await OrchestrationService.CoordinateTeamAnalysisAsync(
-                codeInput,
+                aiInput,
                 businessObjective,
                 selectedAgents);
 

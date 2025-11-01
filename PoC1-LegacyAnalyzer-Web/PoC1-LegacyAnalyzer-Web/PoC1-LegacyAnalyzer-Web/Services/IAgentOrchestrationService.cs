@@ -25,7 +25,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// <param name="initialAnalyses">The initial analyses provided by specialists.</param>
         /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
         /// <returns>An <see cref="AgentConversation"/> representing the discussion.</returns>
-        Task<AgentConversation> FacilitateAgentDiscussionAsync(string topic, List<SpecialistAnalysisResult> initialAnalyses, CancellationToken cancellationToken = default);
+        Task<AgentConversation> FacilitateAgentDiscussionAsync(string topic, List<SpecialistAnalysisResult> initialAnalyses, string? codeContext = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Synthesizes consolidated recommendations from multiple specialist analyses within a business context.
