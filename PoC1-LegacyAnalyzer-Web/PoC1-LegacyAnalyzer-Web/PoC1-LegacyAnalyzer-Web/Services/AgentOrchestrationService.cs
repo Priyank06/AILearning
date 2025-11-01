@@ -98,8 +98,11 @@ Respond with specific, actionable orchestration plan.";
 
             try
             {
+                var estimatedPromptTokens = EstimateTokens(code);
+                var estimatedCompletionTokens = 0;
                 // Step 1: Create analysis plan
                 var analysisPlan = await CreateAnalysisPlanAsync(businessObjective, GetCodeContextSummary(code));
+                estimatedCompletionTokens += EstimateTokens(analysisPlan);
                 _logger.LogInformation("Analysis plan created: {Plan}", analysisPlan);
 
                 // Step 2: Execute specialist analyses in parallel
@@ -136,9 +139,19 @@ Respond with specific, actionable orchestration plan.";
                     teamResult,
                     businessObjective,
                     cancellationToken);
+                estimatedCompletionTokens += EstimateTokens(teamResult.ExecutiveSummary);
 
                 // Step 7: Calculate overall confidence
                 teamResult.OverallConfidenceScore = CalculateTeamConfidenceScore(specialistResults);
+
+                // Populate token usage (estimated fallback)
+                teamResult.TokenUsage = new TokenUsage
+                {
+                    Provider = "semantic-kernel",
+                    Model = "unknown",
+                    PromptTokens = estimatedPromptTokens,
+                    CompletionTokens = estimatedCompletionTokens
+                };
 
                 _logger.LogInformation("Team analysis completed with confidence: {Confidence}%", teamResult.OverallConfidenceScore);
 
@@ -663,6 +676,13 @@ Format for 5-minute executive briefing with clear action items.";
             var header = string.Join(" ", lines.Take(take).Select(l => l.Trim()));
             // Keep it compact to save tokens for planning
             return header.Length > 800 ? header.Substring(0, 800) + "..." : header;
+        }
+
+        private static int EstimateTokens(string? text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+            // Rough heuristic ~4 chars per token
+            return Math.Max(1, text.Length / 4);
         }
     }
 }

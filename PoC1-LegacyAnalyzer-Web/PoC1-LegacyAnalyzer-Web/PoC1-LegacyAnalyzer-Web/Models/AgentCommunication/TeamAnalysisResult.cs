@@ -12,5 +12,6 @@ namespace PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
         public DateTime CompletedAt { get; set; } = DateTime.Now;
         public int OverallConfidenceScore { get; set; }
         public string ExecutiveSummary { get; set; } = "";
+        public TokenUsage? TokenUsage { get; set; }
     }
 }

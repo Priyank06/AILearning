@@ -1,13 +1,18 @@
 ﻿@page "/multiagent"
 @using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
 @using PoC1_LegacyAnalyzer_Web.Models.MultiAgent
+@using PoC1_LegacyAnalyzer_Web.Models
 @using PoC1_LegacyAnalyzer_Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
 @inject IAgentOrchestrationService OrchestrationService
 @inject ICodeAnalysisService CodeAnalysisService
 @inject IFilePreProcessingService FilePreProcessingService
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnvironment
+@inject IReportService ReportService
+@inject IFileDownloadService FileDownloadService
 
-<PageTitle>Multi-Agent Team Analysis</PageTitle>
+@* <PageTitle>Multi-Agent Team Analysis</PageTitle> *@
 
 <div class="container-fluid">
     <div class="row mb-4">
@@ -96,14 +101,14 @@
                             <h6>Upload Legacy Code Files</h6>
                             <p class="text-muted mb-3">Select C# files for multi-agent analysis</p>
 
-                            <InputFile id="folderInput" OnChange="HandleFileSelection"
-                                       multiple accept=".cs" class="d-none" webkitdirectory />
+                            @* <InputFile id="folderInput" OnChange="HandleFileSelection"
+                                       multiple accept=".cs" class="d-none" webkitdirectory /> *@
                             <label for="folderInput" class="btn btn-primary me-2">
                                 <i class="bi bi-folder-plus"></i> Select Project Folder
                             </label>
 
-                            <InputFile id="individualFiles" OnChange="HandleIndividualFileSelection"
-                                       multiple accept=".cs" class="d-none" />
+                            @* <InputFile id="individualFiles" OnChange="HandleIndividualFileSelection"
+                                       multiple accept=".cs" class="d-none" /> *@
                             <label for="individualFiles" class="btn btn-outline-secondary">
                                 <i class="bi bi-file-plus"></i> Select Individual Files
                             </label>
@@ -138,7 +143,7 @@
                     <div class="mb-3">
                         @if (HostEnvironment.IsDevelopment())
                         {
-                            <button class="btn btn-outline-secondary me-2" @onclick="LoadTeamSampleCode">
+                            <button class="btn btn-outline-secondary me-2" @onclick="LoadTeamSampleCode" disabled="@selectedFiles.Any()">
                                 <i class="bi bi-file-code"></i> Load Team Analysis Sample
                             </button>
                         }
@@ -239,6 +244,174 @@
         @if (teamResult != null)
         {
             <div class="col-lg-7">
+                <!-- Business Context -->
+                <div class="card shadow mb-3 border-info">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="bi bi-briefcase"></i> Business Context</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-2">
+                                    <strong>Analysis Objective:</strong><br>
+                                    <small>@GetObjectiveDescription(selectedObjective)</small>
+                                </div>
+                                <div class="mb-2">
+                                    <strong>Specialist Agents Deployed:</strong><br>
+                                    <small>@string.Join(", ", GetSelectedAgentsList())</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-2">
+                                    <strong>Estimated Hours Saved:</strong><br>
+                                    <small>@EstimateTeamHoursSaved()</small>
+                                </div>
+                                <div class="mb-2">
+                                    <strong>Estimated Cost Avoidance:</strong><br>
+                                    <small>@EstimateCostAvoidance()</small>
+                                </div>
+                            </div>
+                        </div>
+                        @if (projectSummary != null)
+                        {
+                            <div class="mt-3 pt-3 border-top">
+                                <strong>Input Summary:</strong><br>
+                                <small class="text-muted">
+                                    Analyzed @projectSummary.TotalFiles file(s) with @projectSummary.TotalClasses class(es), 
+                                    @projectSummary.TotalMethods method(s), and @projectSummary.TotalProperties propertie(s).
+                                    Risk Level: <span class="badge bg-warning">@projectSummary.RiskLevel</span>
+                                </small>
+                            </div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(codeInput))
+                        {
+                            <div class="mt-3 pt-3 border-top">
+                                <strong>Input Summary:</strong><br>
+                                <small class="text-muted">
+                                    Analyzing pasted code: @codeInput.Split('\n').Length line(s), 
+                                    approximately @((codeInput.Length / 4).ToString("N0")) tokens
+                                </small>
+                            </div>
+                        }
+                    </div>
+                </div>
+                @if (projectSummary != null)
+                {
+                    <!-- Project Overview from Preprocessing -->
+                    <div class="card shadow mb-3 border-success">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Project Overview</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center mb-3">
+                                <div class="col-6 col-md-3">
+                                    <div class="metric-box">
+                                        <h4>@projectSummary.TotalFiles</h4>
+                                        <small>Files</small>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="metric-box">
+                                        <h4>@projectSummary.TotalClasses</h4>
+                                        <small>Classes</small>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="metric-box">
+                                        <h4>@projectSummary.TotalMethods</h4>
+                                        <small>Methods</small>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="metric-box">
+                                        <h4>@projectSummary.TotalProperties</h4>
+                                        <small>Properties</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-light text-dark">Risk: <strong>@projectSummary.RiskLevel</strong></span>
+                                <small class="text-muted">Complexity: @projectSummary.ComplexityScore | @projectSummary.OverallAssessment</small>
+                            </div>
+
+                            @if (projectSummary.KeyRecommendations.Any())
+                            {
+                                <div class="mb-3">
+                                    <strong>Key Preprocessing Recommendations:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        @foreach (var tip in projectSummary.KeyRecommendations.Take(3))
+                                        {
+                                            <li><small>@tip</small></li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+
+                            @if (projectSummary.FileResults?.Any() == true)
+                            {
+                                <div style="max-height: 220px; overflow:auto;">
+                                    <table class="table table-sm align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>File</th>
+                                                <th class="text-end">Classes</th>
+                                                <th class="text-end">Methods</th>
+                                                <th class="text-end">Props</th>
+                                                <th class="text-end">Size</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var f in projectSummary.FileResults
+                                                .OrderByDescending(fr => fr.ComplexityScore)
+                                                .Take(10))
+                                            {
+                                                <tr>
+                                                    <td class="text-truncate" style="max-width: 260px;" title="@f.FileName">
+                                                        <i class="bi bi-file-earmark-code"></i> @f.FileName
+                                                    </td>
+                                                    <td class="text-end">@f.StaticAnalysis.ClassCount</td>
+                                                    <td class="text-end">@f.StaticAnalysis.MethodCount</td>
+                                                    <td class="text-end">@f.StaticAnalysis.PropertyCount</td>
+                                                    <td class="text-end"><small>@FormatFileSize(f.FileSize)</small></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                <!-- Token Usage -->
+                <div class="card shadow mb-3 border-secondary">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0"><i class="bi bi-ticket-detailed"></i> Token Usage</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (teamResult?.TokenUsage != null)
+                        {
+                            <div class="row text-center">
+                                <div class="col-6 col-md-3"><div class="metric-box"><h4>@teamResult.TokenUsage.PromptTokens</h4><small>Prompt</small></div></div>
+                                <div class="col-6 col-md-3"><div class="metric-box"><h4>@teamResult.TokenUsage.CompletionTokens</h4><small>Completion</small></div></div>
+                                <div class="col-6 col-md-3"><div class="metric-box"><h4>@teamResult.TokenUsage.TotalTokens</h4><small>Total</small></div></div>
+                                <div class="col-6 col-md-3"><div class="metric-box"><h6 class="mb-0">@teamResult.TokenUsage.Model</h6><small>@teamResult.TokenUsage.Provider</small></div></div>
+                            </div>
+                        }
+                        else
+                        {
+                            var estPrompt = Math.Max(1, lastAiInputCharCount / 4);
+                            var estCompletion = Math.Max(1, (teamResult?.ExecutiveSummary?.Length ?? 0) / 4);
+                            <div class="alert alert-light mb-2"><small><strong>Estimated</strong> (provider usage not available)</small></div>
+                            <div class="row text-center">
+                                <div class="col-6 col-md-3"><div class="metric-box"><h4>@estPrompt</h4><small>Prompt</small></div></div>
+                                <div class="col-6 col-md-3"><div class="metric-box"><h4>@estCompletion</h4><small>Completion</small></div></div>
+                                <div class="col-6 col-md-3"><div class="metric-box"><h4>@(estPrompt + estCompletion)</h4><small>Total</small></div></div>
+                                <div class="col-6 col-md-3"><div class="metric-box"><h6 class="mb-0">unknown</h6><small>semantic-kernel</small></div></div>
+                            </div>
+                        }
+                    </div>
+                </div>
                 <!-- Team Performance Dashboard -->
                 <div class="metrics-dashboard">
                     <div class="text-center mb-4">
@@ -450,6 +623,11 @@
                                 </div>
                             </div>
                         }
+                        <div class="mt-3 d-flex justify-content-end">
+                            <button class="btn btn-outline-primary" @onclick="DownloadTeamReport">
+                                <i class="bi bi-file-earmark-text"></i> Download Team Report (MD)
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -634,6 +812,8 @@
     private string statusMessage = "";
     private TeamAnalysisResult? teamResult;
     private List<IBrowserFile> selectedFiles = new();
+    private PoC1_LegacyAnalyzer_Web.Services.ProjectSummary? projectSummary;
+    private int lastAiInputCharCount = 0;
 
     private int currentAnalysisPhase = 0;
     private readonly string[] analysisPhases = {
@@ -873,6 +1053,7 @@ namespace LegacyFinancialSystem
 
             // Build compact AI input: use Roslyn-preprocessed project pattern if files are selected
             string aiInput;
+            projectSummary = null;
             if (selectedFiles.Any())
             {
                 statusMessage = "Preprocessing files locally (Roslyn) to reduce tokens...";
@@ -881,6 +1062,7 @@ namespace LegacyFinancialSystem
                 var tasks = selectedFiles.Select(f => FilePreProcessingService.ExtractMetadataAsync(f, "csharp")).ToList();
                 var metadatas = await Task.WhenAll(tasks);
                 var summary = await FilePreProcessingService.CreateProjectSummaryAsync(metadatas.ToList());
+                projectSummary = summary;
 
                 var sb = new System.Text.StringBuilder();
                 sb.AppendLine("[Preprocessed Project Pattern - Token Optimized]");
@@ -894,10 +1076,13 @@ namespace LegacyFinancialSystem
                 }
 
                 aiInput = sb.ToString();
+                lastAiInputCharCount = aiInput.Length;
             }
             else
             {
                 aiInput = codeInput;
+                projectSummary = null;
+                lastAiInputCharCount = string.IsNullOrEmpty(aiInput) ? 0 : aiInput.Length;
             }
 
             // Simulate progressive phases for demo
@@ -1106,6 +1291,7 @@ namespace LegacyFinancialSystem
     private void ClearFiles()
     {
         selectedFiles.Clear();
+        projectSummary = null;
         statusMessage = "All files cleared. Ready for new selection.";
         StateHasChanged();
     }
@@ -1121,5 +1307,158 @@ namespace LegacyFinancialSystem
             len = len / 1024;
         }
         return $"{len:0.##} {sizes[order]}";
+    }
+
+    private async Task DownloadTeamReport()
+    {
+        if (teamResult == null) return;
+
+        var content = GenerateTeamReport();
+        var bytes = System.Text.Encoding.UTF8.GetBytes(content);
+        var fileName = $"team-analysis-{selectedObjective}-{DateTime.Now:yyyyMMdd-HHmmss}.md";
+        await FileDownloadService.DownloadFileAsync(fileName, bytes, "text/markdown");
+    }
+
+    private string GenerateTeamReport()
+    {
+        var sb = new System.Text.StringBuilder();
+        var objectiveText = selectedObjective == "custom" ? customObjective : GetObjectiveDescription(selectedObjective);
+
+        sb.AppendLine("# Multi-Agent Team Analysis Report");
+        sb.AppendLine($"**Objective:** {objectiveText}");
+        sb.AppendLine($"**Agents:** {string.Join(", ", GetSelectedAgentsList())}");
+        sb.AppendLine($"**Completed:** {DateTime.Now:yyyy-MM-dd HH:mm}");
+        sb.AppendLine();
+
+        if (projectSummary != null)
+        {
+            sb.AppendLine("## Preprocessed Project Summary");
+            sb.AppendLine($"- Files: {projectSummary.TotalFiles}");
+            sb.AppendLine($"- Classes: {projectSummary.TotalClasses}");
+            sb.AppendLine($"- Methods: {projectSummary.TotalMethods}");
+            sb.AppendLine($"- Properties: {projectSummary.TotalProperties}");
+            sb.AppendLine($"- Risk Level: {projectSummary.RiskLevel}");
+            sb.AppendLine($"- Complexity Score: {projectSummary.ComplexityScore}");
+            if (projectSummary.KeyRecommendations.Any())
+            {
+                sb.AppendLine("- Key Preprocessing Recommendations:");
+                foreach (var tip in projectSummary.KeyRecommendations.Take(5)) sb.AppendLine($"  - {tip}");
+            }
+            sb.AppendLine();
+        }
+
+        if (teamResult != null)
+        {
+            sb.AppendLine("## Team Metrics");
+            sb.AppendLine($"- Specialist Agents: {teamResult.IndividualAnalyses.Count}");
+            sb.AppendLine($"- Collaboration Messages: {teamResult.TeamDiscussion.Count}");
+            sb.AppendLine($"- Team Consensus: {teamResult.Consensus.AgreementPercentage:F0}%");
+            sb.AppendLine($"- Overall Confidence: {teamResult.OverallConfidenceScore}%");
+            sb.AppendLine();
+
+            if (!string.IsNullOrWhiteSpace(teamResult.ExecutiveSummary))
+            {
+                sb.AppendLine("## Executive Summary");
+                sb.AppendLine(teamResult.ExecutiveSummary.Replace("\r\n", "\n"));
+                sb.AppendLine();
+            }
+
+            sb.AppendLine("## Priority Recommendations");
+            if (teamResult.FinalRecommendations.HighPriorityActions.Any())
+            {
+                sb.AppendLine("### High Priority");
+                foreach (var rec in teamResult.FinalRecommendations.HighPriorityActions.Take(10))
+                {
+                    sb.AppendLine($"- {rec.Title} ({rec.EstimatedHours}h)");
+                }
+            }
+            if (teamResult.FinalRecommendations.MediumPriorityActions.Any())
+            {
+                sb.AppendLine("### Medium Priority");
+                foreach (var rec in teamResult.FinalRecommendations.MediumPriorityActions.Take(10))
+                {
+                    sb.AppendLine($"- {rec.Title} ({rec.EstimatedHours}h)");
+                }
+            }
+            sb.AppendLine();
+
+            if (!string.IsNullOrWhiteSpace(teamResult.FinalRecommendations.ImplementationStrategy))
+            {
+                sb.AppendLine("## Implementation Strategy");
+                sb.AppendLine(teamResult.FinalRecommendations.ImplementationStrategy.Replace("\r\n", "\n"));
+                sb.AppendLine();
+            }
+
+            var usage = teamResult.TokenUsage;
+            var estPrompt = Math.Max(1, lastAiInputCharCount / 4);
+            var estCompletion = Math.Max(1, (teamResult.ExecutiveSummary?.Length ?? 0) / 4);
+            sb.AppendLine("## Token Usage");
+            if (usage != null)
+            {
+                sb.AppendLine($"- Provider: {usage.Provider}");
+                sb.AppendLine($"- Model: {usage.Model}");
+                sb.AppendLine($"- Prompt Tokens: {usage.PromptTokens}");
+                sb.AppendLine($"- Completion Tokens: {usage.CompletionTokens}");
+                sb.AppendLine($"- Total Tokens: {usage.TotalTokens}");
+            }
+            else
+            {
+                sb.AppendLine("- Estimated (provider usage not available)");
+                sb.AppendLine($"- Prompt Tokens: {estPrompt}");
+                sb.AppendLine($"- Completion Tokens: {estCompletion}");
+                sb.AppendLine($"- Total Tokens: {estPrompt + estCompletion}");
+            }
+
+            if (projectSummary?.FileResults?.Any() == true)
+            {
+                sb.AppendLine();
+                sb.AppendLine("## Appendix: Top Files");
+                sb.AppendLine("| File | Classes | Methods | Props | Size |");
+                sb.AppendLine("|------|---------|---------|-------|------|");
+                foreach (var f in projectSummary.FileResults.OrderByDescending(fr => fr.ComplexityScore).Take(10))
+                {
+                    sb.AppendLine($"| {f.FileName} | {f.StaticAnalysis.ClassCount} | {f.StaticAnalysis.MethodCount} | {f.StaticAnalysis.PropertyCount} | {FormatFileSize(f.FileSize)} |");
+                }
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private IEnumerable<string> GetSelectedAgentsList()
+    {
+        var agents = new List<string>();
+        if (includeSecurityAgent) agents.Add("Security Analyst");
+        if (includePerformanceAgent) agents.Add("Performance Analyst");
+        if (includeArchitectureAgent) agents.Add("Architecture Analyst");
+        return agents;
+    }
+
+    private string EstimateTeamHoursSaved()
+    {
+        // Simple heuristic based on preprocessing or fallback to pasted code length
+        if (projectSummary != null)
+        {
+            var estimatedManual = projectSummary.TotalClasses * 2 + projectSummary.TotalMethods * 0.25m;
+            var saved = Math.Max(1m, estimatedManual - 0.1m * estimatedManual);
+            return $"{saved:F1} hours";
+        }
+
+        // Fallback estimation from code length
+        var chars = string.IsNullOrEmpty(codeInput) ? 0 : codeInput.Length;
+        var approxTokens = chars / 4m;
+        var savedFromTokens = Math.Max(0.5m, approxTokens / 200m); // ~200 tokens ~ 1 hour saved
+        return $"{savedFromTokens:F1} hours";
+    }
+
+    private string EstimateCostAvoidance()
+    {
+        const decimal rate = 125m;
+        var savedText = EstimateTeamHoursSaved().Replace(" hours", "");
+        if (decimal.TryParse(savedText, out var hours))
+        {
+            return (hours * rate).ToString("C0");
+        }
+        return (0m).ToString("C0");
     }
 }
