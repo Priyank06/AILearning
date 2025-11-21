@@ -1,6 +1,9 @@
 ﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using PoC1_LegacyAnalyzer_Web.Models;
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 using System.Text.Json;
 
@@ -10,17 +13,22 @@ namespace PoC1_LegacyAnalyzer_Web.Services
     {
         private readonly Kernel _kernel;
         private readonly ILogger<SecurityAnalystAgent> _logger;
+        private readonly AgentConfiguration _agentConfig;
 
-        public string AgentName => "SecurityAnalyst-Alpha";
-        public string Specialty => "Application Security & Compliance Analysis";
-        public string AgentPersona => "Senior Application Security Engineer with 15+ years experience in enterprise security, OWASP expertise, and compliance frameworks (SOX, GDPR, PCI-DSS)";
-        public int ConfidenceThreshold => 75;
+        public string AgentName => _agentConfig.AgentProfiles["security"].AgentName;
+        public string Specialty => _agentConfig.AgentProfiles["security"].Specialty;
+        public string AgentPersona => _agentConfig.AgentProfiles["security"].AgentPersona;
+        public int ConfidenceThreshold => _agentConfig.AgentProfiles["security"].ConfidenceThreshold;
 
-        public SecurityAnalystAgent(Kernel kernel, ILogger<SecurityAnalystAgent> logger)
+        public SecurityAnalystAgent(Kernel kernel, ILogger<SecurityAnalystAgent> logger, IConfiguration configuration)
         {
             _kernel = kernel;
             _logger = logger;
             _kernel.Plugins.AddFromObject(this, "SecurityAnalyst");
+
+            _agentConfig = new AgentConfiguration();
+            configuration.GetSection("AgentConfiguration").Bind(_agentConfig);
+            var profile = _agentConfig.AgentProfiles["security"];
         }
 
         [KernelFunction, Description("Perform comprehensive security analysis of C# code")]
@@ -29,78 +37,36 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             [Description("Security compliance requirements (OWASP, PCI-DSS, etc.)")] string complianceStandards,
             [Description("Business context and risk tolerance")] string businessContext)
         {
-            var prompt = $@"
-You are {AgentPersona}.
+            var template = _agentConfig.AgentPromptTemplates["security"].AnalysisPrompt;
+            var prompt = template
+                .Replace("{agentPersona}", AgentPersona)
+                .Replace("{code}", code)
+                .Replace("{complianceStandards}", complianceStandards)
+                .Replace("{businessContext}", businessContext);
 
-ANALYSIS TARGET:
-{code}
-
-COMPLIANCE REQUIREMENTS: {complianceStandards}
-BUSINESS CONTEXT: {businessContext}
-
-Perform comprehensive security analysis:
-
-1. VULNERABILITY ASSESSMENT
-   - Identify SQL injection risks
-   - Authentication/authorization flaws  
-   - Input validation issues
-   - Data exposure risks
-   - Cryptographic weaknesses
-
-2. COMPLIANCE EVALUATION
-   - Map findings to compliance standards
-   - Assess regulatory risk levels
-   - Identify mandatory remediation items
-
-3. BUSINESS RISK ANALYSIS
-   - Quantify potential business impact
-   - Prioritize fixes by risk level
-   - Estimate remediation effort
-
-4. ACTIONABLE RECOMMENDATIONS
-   - Specific code changes required
-   - Security architecture improvements
-   - Process and policy updates
-
-Provide detailed, actionable analysis with confidence scores.";
-
-            var chatCompletion = _kernel.GetRequiredService<Microsoft.SemanticKernel.ChatCompletion.IChatCompletionService>();
+            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);
-            return result.Content ?? "Security analysis unavailable";
+            return result.Content ?? _agentConfig.AgentPromptTemplates["security"].DefaultResponse;
         }
 
         [KernelFunction, Description("Review another agent's analysis from security perspective")]
         public async Task<string> ReviewPeerAnalysisFromSecurityPerspective(
             [Description("Another agent's analysis to review")] string peerAnalysis,
             [Description("Original code being analyzed")] string originalCode,
-            [Description("Security-specific concerns to validate")] string securityFocus)
+            [Description("Security-specific concerns to validate")] string reviewFocus)
         {
-            var prompt = $@"
-As {AgentPersona}, review this colleague's analysis:
+            var template = _agentConfig.AgentPromptTemplates["security"].PeerReviewPrompt;
+            var prompt = template
+                .Replace("{agentPersona}", AgentPersona)
+                .Replace("{peerAnalysis}", peerAnalysis)
+                .Replace("{originalCode}", originalCode)
+                .Replace("{reviewFocus}", reviewFocus);
 
-PEER ANALYSIS:
-{peerAnalysis}
-
-ORIGINAL CODE:
-{originalCode}
-
-SECURITY REVIEW FOCUS: {securityFocus}
-
-Provide security-focused peer review:
-1. Security aspects the peer analysis missed
-2. Security implications of their recommendations  
-3. Additional security measures needed
-4. Risks introduced by suggested changes
-5. Security best practices to incorporate
-
-Be collaborative but thorough in identifying security gaps.";
-
-            var chatCompletion = _kernel.GetRequiredService<Microsoft.SemanticKernel.ChatCompletion.IChatCompletionService>();
+            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);
-            return result.Content ?? "Peer review unavailable";
+            return result.Content ?? _agentConfig.AgentPromptTemplates["security"].DefaultResponse;
         }
 
-        // FIXED: Changed return type from Task<SpecialistAnalysisResult> to Task<string>
         public async Task<string> AnalyzeAsync(
             string code,
             string businessContext,
@@ -110,13 +76,11 @@ Be collaborative but thorough in identifying security gaps.";
             {
                 _logger.LogInformation("SecurityAnalyst starting analysis for business context: {BusinessContext}", businessContext);
 
-                // Perform comprehensive security analysis
                 var securityAnalysis = await AnalyzeSecurityVulnerabilities(
                     code,
                     "OWASP Top 10, PCI-DSS, SOX Compliance",
                     businessContext);
 
-                // Create structured result but return as JSON string to match interface
                 var result = new
                 {
                     AgentName = AgentName,

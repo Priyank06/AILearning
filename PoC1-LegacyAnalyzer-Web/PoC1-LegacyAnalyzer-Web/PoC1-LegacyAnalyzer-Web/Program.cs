@@ -18,16 +18,36 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddMultiAgentOrchestration(this IServiceCollection services)
+    public static IServiceCollection AddMultiAgentOrchestration(this IServiceCollection services, IConfiguration configuration)
     {
         // Agent orchestration (scoped - each circuit gets fresh state)
-        services.AddScoped<IAgentOrchestrationService, AgentOrchestrationService>();
+        services.AddScoped<IAgentOrchestrationService>(sp =>
+            new AgentOrchestrationService(
+                sp,
+                sp.GetRequiredService<Kernel>(),
+                sp.GetRequiredService<ILogger<AgentOrchestrationService>>(),
+                configuration));
+
         services.AddScoped<IEnhancedProjectAnalysisService, EnhancedProjectAnalysisService>();
 
         // Specialist agents (scoped - isolated per analysis session)
-        services.AddScoped<SecurityAnalystAgent>();
-        services.AddScoped<PerformanceAnalystAgent>();
-        services.AddScoped<ArchitecturalAnalystAgent>();
+        services.AddScoped<SecurityAnalystAgent>(sp =>
+            new SecurityAnalystAgent(
+                sp.GetRequiredService<Kernel>(),
+                sp.GetRequiredService<ILogger<SecurityAnalystAgent>>(),
+                configuration));
+
+        services.AddScoped<PerformanceAnalystAgent>(sp =>
+            new PerformanceAnalystAgent(
+                sp.GetRequiredService<Kernel>(),
+                sp.GetRequiredService<ILogger<PerformanceAnalystAgent>>(),
+                configuration));
+
+        services.AddScoped<ArchitecturalAnalystAgent>(sp =>
+            new ArchitecturalAnalystAgent(
+                sp.GetRequiredService<Kernel>(),
+                sp.GetRequiredService<ILogger<ArchitecturalAnalystAgent>>(),
+                configuration));
 
         // Register as collection for orchestrator
         services.AddScoped<IEnumerable<ISpecialistAgentService>>(sp =>
@@ -74,7 +94,7 @@ public class Program
         builder.Logging.AddConsole();
         // Register your AI services
         builder.Services.AddCodeAnalysisServices();
-        builder.Services.AddMultiAgentOrchestration();
+        builder.Services.AddMultiAgentOrchestration(builder.Configuration);
         builder.Services.AddSemanticKernel(builder.Configuration);
 
         var promptConfig = builder.Configuration.GetSection("PromptConfiguration").Get<PromptConfiguration>();
@@ -91,8 +111,33 @@ public class Program
         {
             throw new InvalidOperationException("PromptConfiguration.AnalysisPromptTemplates.Templates is missing in appsettings.json.");
         }
-                
-        var app = builder.Build();        
+
+        // AgentConfiguration validation
+        var agentConfig = builder.Configuration.GetSection("AgentConfiguration").Get<AgentConfiguration>();
+        if (agentConfig == null)
+        {
+            throw new InvalidOperationException("AgentConfiguration section is missing in appsettings.json.");
+        }
+        if (agentConfig.AgentProfiles == null ||
+            !agentConfig.AgentProfiles.ContainsKey("security") ||
+            !agentConfig.AgentProfiles.ContainsKey("performance") ||
+            !agentConfig.AgentProfiles.ContainsKey("architecture"))
+        {
+            throw new InvalidOperationException("AgentConfiguration.AgentProfiles must contain 'security', 'performance', and 'architecture' profiles.");
+        }
+        if (agentConfig.AgentPromptTemplates == null ||
+            !agentConfig.AgentPromptTemplates.ContainsKey("security") ||
+            !agentConfig.AgentPromptTemplates.ContainsKey("performance") ||
+            !agentConfig.AgentPromptTemplates.ContainsKey("architecture"))
+        {
+            throw new InvalidOperationException("AgentConfiguration.AgentPromptTemplates must contain 'security', 'performance', and 'architecture' templates.");
+        }
+        if (agentConfig.OrchestrationPrompts == null)
+        {
+            throw new InvalidOperationException("AgentConfiguration.OrchestrationPrompts is missing in appsettings.json.");
+        }
+
+        var app = builder.Build();
         // Configure the HTTP request pipeline.
         if (!app.Environment.IsDevelopment())
         {

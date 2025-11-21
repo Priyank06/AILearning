@@ -1,6 +1,6 @@
 ﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
+using PoC1_LegacyAnalyzer_Web.Models;
 using System.ComponentModel;
 using System.Text.Json;
 
@@ -10,17 +10,22 @@ namespace PoC1_LegacyAnalyzer_Web.Services
     {
         private readonly Kernel _kernel;
         private readonly ILogger<PerformanceAnalystAgent> _logger;
+        private readonly AgentConfiguration _agentConfig;
 
-        public string AgentName => "PerformanceAnalyst-Beta";
-        public string Specialty => "Performance Optimization & Scalability Engineering";
-        public string AgentPersona => "Senior Performance Engineer with expertise in .NET optimization, database performance, memory management, and enterprise scalability patterns";
-        public int ConfidenceThreshold => 80;
+        public string AgentName => _agentConfig.AgentProfiles["performance"].AgentName;
+        public string Specialty => _agentConfig.AgentProfiles["performance"].Specialty;
+        public string AgentPersona => _agentConfig.AgentProfiles["performance"].AgentPersona;
+        public int ConfidenceThreshold => _agentConfig.AgentProfiles["performance"].ConfidenceThreshold;
 
-        public PerformanceAnalystAgent(Kernel kernel, ILogger<PerformanceAnalystAgent> logger)
+        public PerformanceAnalystAgent(Kernel kernel, ILogger<PerformanceAnalystAgent> logger, IConfiguration configuration)
         {
             _kernel = kernel;
             _logger = logger;
             _kernel.Plugins.AddFromObject(this, "PerformanceAnalyst");
+
+            _agentConfig = new AgentConfiguration();
+            configuration.GetSection("AgentConfiguration").Bind(_agentConfig);
+            var profile = _agentConfig.AgentProfiles["performance"];
         }
 
         [KernelFunction, Description("Analyze code for performance bottlenecks and optimization opportunities")]
@@ -29,49 +34,18 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             [Description("Expected performance requirements")] string performanceRequirements,
             [Description("Scalability targets and constraints")] string scalabilityTargets)
         {
-            var prompt = $@"
-You are {AgentPersona}.
+            var template = _agentConfig.AgentPromptTemplates["performance"].AnalysisPrompt;
+            var prompt = template
+                .Replace("{agentPersona}", AgentPersona)
+                .Replace("{code}", code)
+                .Replace("{performanceRequirements}", performanceRequirements)
+                .Replace("{scalabilityTargets}", scalabilityTargets);
 
-PERFORMANCE ANALYSIS TARGET:
-{code}
-
-PERFORMANCE REQUIREMENTS: {performanceRequirements}
-SCALABILITY TARGETS: {scalabilityTargets}
-
-Conduct comprehensive performance analysis:
-
-1. BOTTLENECK IDENTIFICATION
-   - Database query inefficiencies  
-   - Memory allocation patterns
-   - CPU-intensive operations
-   - I/O blocking operations
-   - Algorithmic complexity issues
-
-2. SCALABILITY ASSESSMENT
-   - Concurrent access patterns
-   - Resource utilization analysis
-   - Caching opportunities
-   - Load balancing considerations
-
-3. OPTIMIZATION OPPORTUNITIES
-   - Specific code improvements
-   - Architecture pattern enhancements
-   - Database optimization strategies
-   - Memory management improvements
-
-4. PERFORMANCE PROJECTIONS
-   - Expected improvement metrics
-   - Scalability increase estimates
-   - Resource requirement changes
-
-Provide detailed technical recommendations with measurable performance improvements.";
-
-            var chatCompletion = _kernel.GetRequiredService<Microsoft.SemanticKernel.ChatCompletion.IChatCompletionService>();
+            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);
-            return result.Content ?? "Performance analysis unavailable";
+            return result.Content ?? _agentConfig.AgentPromptTemplates["performance"].DefaultResponse;
         }
 
-        // FIXED: Changed return type from Task<SpecialistAnalysisResult> to Task<string>
         public async Task<string> AnalyzeAsync(
             string code,
             string businessContext,
@@ -86,7 +60,6 @@ Provide detailed technical recommendations with measurable performance improveme
                     "Sub-second response times, 1000+ concurrent users",
                     "10x user growth over 2 years, 99.9% availability");
 
-                // Create structured result but return as JSON string to match interface
                 var result = new
                 {
                     AgentName = AgentName,
@@ -119,24 +92,16 @@ Provide detailed technical recommendations with measurable performance improveme
             string originalCode,
             CancellationToken cancellationToken = default)
         {
-            var prompt = $@"
-As {AgentPersona}, review this analysis for performance implications:
+            var template = _agentConfig.AgentPromptTemplates["performance"].PeerReviewPrompt;
+            var prompt = template
+                .Replace("{agentPersona}", AgentPersona)
+                .Replace("{peerAnalysis}", peerAnalysis)
+                .Replace("{originalCode}", originalCode)
+                .Replace("{reviewFocus}", "Performance impact, scalability, resource utilization, optimization opportunities");
 
-PEER ANALYSIS: {peerAnalysis}
-ORIGINAL CODE: {originalCode}
-
-Performance review focus:
-1. Performance impact of suggested changes
-2. Scalability considerations missed
-3. Resource utilization implications  
-4. Additional optimization opportunities
-5. Performance monitoring recommendations
-
-Provide performance-focused peer review.";
-
-            var chatCompletion = _kernel.GetRequiredService<Microsoft.SemanticKernel.ChatCompletion.IChatCompletionService>();
+            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);
-            return result.Content ?? "Performance peer review unavailable";
+            return result.Content ?? _agentConfig.AgentPromptTemplates["performance"].DefaultResponse;
         }
 
         // Helper methods for performance-specific analysis

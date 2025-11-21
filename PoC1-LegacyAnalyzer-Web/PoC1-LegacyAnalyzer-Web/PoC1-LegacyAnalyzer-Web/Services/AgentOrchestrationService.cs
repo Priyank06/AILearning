@@ -2,6 +2,8 @@
 using Microsoft.SemanticKernel.ChatCompletion;
 using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication;
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
+using PoC1_LegacyAnalyzer_Web.Models;
+using Microsoft.Extensions.Configuration;
 using System.ComponentModel;
 using System.Text.Json;
 
@@ -12,6 +14,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly IServiceProvider _serviceProvider;
         private readonly Kernel _kernel;
         private readonly ILogger<AgentOrchestrationService> _logger;
+        private readonly AgentConfiguration _agentConfig;
 
         // Agent registry
         private readonly Dictionary<string, Type> _agentRegistry;
@@ -19,7 +22,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         public AgentOrchestrationService(
             IServiceProvider serviceProvider,
             Kernel kernel,
-            ILogger<AgentOrchestrationService> logger)
+            ILogger<AgentOrchestrationService> logger,
+            IConfiguration configuration)
         {
             _serviceProvider = serviceProvider;
             _kernel = kernel;
@@ -35,6 +39,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
             // Register orchestrator functions with kernel
             _kernel.Plugins.AddFromObject(this, "AgentOrchestrator");
+
+            _agentConfig = new AgentConfiguration();
+            configuration.GetSection("AgentConfiguration").Bind(_agentConfig);
         }
 
         [KernelFunction, Description("Create analysis plan and assign agents")]
@@ -42,42 +49,12 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             [Description("Business objective and requirements")] string businessObjective,
             [Description("Code complexity and domain")] string codeContext)
         {
-            var prompt = $@"
-You are a Master AI Orchestrator responsible for coordinating specialist AI agents.
+            var template = _agentConfig.OrchestrationPrompts.CreateAnalysisPlan;
+            var prompt = template
+                .Replace("{businessObjective}", businessObjective)
+                .Replace("{codeContext}", codeContext);
 
-BUSINESS OBJECTIVE: {businessObjective}
-CODE CONTEXT: {codeContext}
-
-Available Specialist Agents:
-1. SecurityAnalyst - Security vulnerabilities, compliance, risk assessment
-2. PerformanceAnalyst - Performance bottlenecks, scalability, optimization
-3. ArchitecturalAnalyst - Design patterns, SOLID principles, code structure
-
-Create an analysis plan:
-
-1. REQUIRED SPECIALISTS
-   - Which agents should analyze this code?
-   - What order should they work in?
-   - Are there dependencies between analyses?
-
-2. ANALYSIS STRATEGY
-   - What specific aspects should each agent focus on?
-   - How should the business objective guide their analysis?
-   - What success criteria should they use?
-
-3. COLLABORATION PLAN
-   - Should agents review each other's work?
-   - What potential conflicts might arise?
-   - How should disagreements be resolved?
-
-4. SYNTHESIS APPROACH
-   - How should individual analyses be combined?
-   - What final recommendations should be prioritized?
-   - How should business value be calculated?
-
-Respond with specific, actionable orchestration plan.";
-
-            var chatCompletion = _kernel.GetRequiredService<Microsoft.SemanticKernel.ChatCompletion.IChatCompletionService>();
+            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);
             return result.Content ?? "Analysis plan creation failed";
         }
@@ -263,7 +240,7 @@ Respond with specific, actionable orchestration plan.";
                             var reviewerAgent = await GetAgentByNameAsync(reviewer.AgentName);
                             if (reviewerAgent != null)
                             {
-                            var peerReview = await reviewerAgent.ReviewPeerAnalysisAsync(
+                                var peerReview = await reviewerAgent.ReviewPeerAnalysisAsync(
                                     JsonSerializer.Serialize(reviewee, new JsonSerializerOptions { WriteIndented = true }),
                                     codeContext ?? "Context unavailable",
                                     cancellationToken);
@@ -287,6 +264,28 @@ Respond with specific, actionable orchestration plan.";
 
                 // Step 3: Identify and address conflicts
                 await IdentifyAndResolveConflictsAsync(conversation, initialAnalyses);
+
+                // Orchestration prompt for facilitating discussion
+                var template = _agentConfig.OrchestrationPrompts.FacilitateDiscussion;
+                var agentNames = string.Join(", ", initialAnalyses.Select(a => a.AgentName));
+                var findings = string.Join("\n", initialAnalyses.Select(a => JsonSerializer.Serialize(a.KeyFindings)));
+                var discussionPrompt = template
+                    .Replace("{topic}", topic)
+                    .Replace("{findings}", findings)
+                    .Replace("{agentNames}", agentNames);
+
+                var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
+                var orchestrationResult = await chatCompletion.GetChatMessageContentAsync(discussionPrompt);
+                var orchestrationMessage = new AgentMessage
+                {
+                    FromAgent = "MasterOrchestrator",
+                    Type = MessageType.Synthesis,
+                    Subject = "Orchestrated Team Discussion",
+                    Content = orchestrationResult.Content ?? "Discussion orchestration failed",
+                    ConversationId = conversation.ConversationId,
+                    Priority = 10
+                };
+                conversation.Messages.Add(orchestrationMessage);
 
                 conversation.Status = ConversationStatus.Completed;
                 conversation.EndTime = DateTime.Now;
@@ -402,7 +401,7 @@ Resolve this conflict by:
 
 Provide diplomatic but decisive conflict resolution.";
 
-            var chatCompletion = _kernel.GetRequiredService<Microsoft.SemanticKernel.ChatCompletion.IChatCompletionService>();
+            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);
             return result.Content ?? "Conflict resolution failed";
         }
@@ -418,11 +417,11 @@ Provide diplomatic but decisive conflict resolution.";
 
                 // Collect all recommendations from all agents
                 var allRecommendations = analyses.SelectMany(a => a.Recommendations.Select(r => new
-            {
-                Agent = a.AgentName,
-                Recommendation = r
-            }))
-            .ToList();
+                {
+                    Agent = a.AgentName,
+                    Recommendation = r
+                }))
+                .ToList();
 
                 // Group by priority
                 var criticalRecs = allRecommendations.Where(r => r.Recommendation.Priority == "CRITICAL").ToList();
@@ -442,6 +441,20 @@ Provide diplomatic but decisive conflict resolution.";
 
                 // Calculate total effort
                 consolidatedRecs.TotalEstimatedEffort = allRecommendations.Sum(r => r.Recommendation.EstimatedHours);
+
+                // Orchestration prompt for synthesizing recommendations
+                var template = _agentConfig.OrchestrationPrompts.SynthesizeRecommendations;
+                var analysesJson = JsonSerializer.Serialize(analyses);
+                var consensus = "Consensus calculation logic here"; // Replace with actual consensus if available
+                var conflicts = "Conflict resolution logic here"; // Replace with actual conflicts if available
+                var synthPrompt = template
+                    .Replace("{analyses}", analysesJson)
+                    .Replace("{consensus}", consensus)
+                    .Replace("{conflicts}", conflicts);
+
+                var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
+                var synthResult = await chatCompletion.GetChatMessageContentAsync(synthPrompt);
+                consolidatedRecs.SynthesisSummary = synthResult.Content ?? "Synthesis failed";
 
                 // Generate implementation strategy
                 consolidatedRecs.ImplementationStrategy = await GenerateImplementationStrategyAsync(
@@ -469,47 +482,17 @@ Provide diplomatic but decisive conflict resolution.";
             [Description("Consolidated recommendations")] ConsolidatedRecommendations recommendations,
             [Description("Business context and constraints")] string businessContext)
         {
+            var template = _agentConfig.OrchestrationPrompts.CreateImplementationStrategy;
             var recContext = $"High priority: {recommendations.HighPriorityActions.Count}, " +
                            $"Medium priority: {recommendations.MediumPriorityActions.Count}, " +
                            $"Strategic: {recommendations.LongTermStrategic.Count}, " +
                            $"Total effort: {recommendations.TotalEstimatedEffort} hours";
+            var prompt = template
+                .Replace("{recommendations}", recContext)
+                .Replace("{constraints}", businessContext)
+                .Replace("{resources}", "Resource allocation logic here");
 
-            var prompt = $@"
-You are a Master Implementation Strategist creating execution plans for AI-generated recommendations.
-
-RECOMMENDATIONS SUMMARY: {recContext}
-BUSINESS CONTEXT: {businessContext}
-
-Create comprehensive implementation strategy:
-
-1. PHASED EXECUTION PLAN
-   - Phase 1 (Immediate): Critical items requiring immediate attention
-   - Phase 2 (Short-term): High-impact improvements
-   - Phase 3 (Long-term): Strategic modernization initiatives
-
-2. RESOURCE ALLOCATION
-   - Team composition and skills required
-   - Timeline for each phase
-   - Budget considerations and cost optimization
-
-3. RISK MANAGEMENT
-   - Implementation risks and mitigation strategies
-   - Dependencies and critical path analysis
-   - Rollback plans and validation checkpoints
-
-4. SUCCESS METRICS
-   - Measurable outcomes for each phase
-   - Business value realization timeline
-   - Quality gates and acceptance criteria
-
-5. CHANGE MANAGEMENT
-   - Stakeholder communication plan
-   - Team training and knowledge transfer
-   - Process updates and documentation
-
-Provide executive-ready implementation roadmap.";
-
-            var chatCompletion = _kernel.GetRequiredService<Microsoft.SemanticKernel.ChatCompletion.IChatCompletionService>();
+            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);
             return result.Content ?? "Implementation strategy generation failed";
         }
@@ -545,48 +528,17 @@ Provide executive-ready implementation roadmap.";
             string businessObjective,
             CancellationToken cancellationToken = default)
         {
+            var template = _agentConfig.OrchestrationPrompts.CreateExecutiveSummary;
             var summaryContext = $"Objective: {businessObjective}, " +
                                $"Agents: {teamResult.IndividualAnalyses.Count}, " +
                                $"Recommendations: {teamResult.FinalRecommendations.HighPriorityActions.Count} high priority, " +
                                $"Confidence: {teamResult.OverallConfidenceScore}%, " +
                                $"Effort: {teamResult.FinalRecommendations.TotalEstimatedEffort} hours";
+            var prompt = template
+                .Replace("{businessObjective}", businessObjective)
+                .Replace("{summaryContext}", summaryContext);
 
-            var prompt = $@"
-You are an Executive Communications Specialist creating C-suite ready summaries.
-
-TEAM ANALYSIS RESULTS: {summaryContext}
-BUSINESS OBJECTIVE: {businessObjective}
-
-Create executive summary that includes:
-
-1. BUSINESS IMPACT OVERVIEW
-   - What was analyzed and why
-   - Key business risks identified
-   - Strategic opportunities discovered
-
-2. CRITICAL FINDINGS
-   - Top 3 most important discoveries
-   - Business implications of each finding
-   - Urgency level and recommended timeline
-
-3. INVESTMENT REQUIREMENTS
-   - Resource requirements (time, people, budget)
-   - Expected ROI and value realization timeline
-   - Risk mitigation cost considerations
-
-4. RECOMMENDED ACTIONS
-   - Immediate decisions required from leadership
-   - Implementation approach and timeline
-   - Success metrics and validation checkpoints
-
-5. STRATEGIC ALIGNMENT
-   - How recommendations support business objectives
-   - Long-term competitive advantages
-   - Organizational capability improvements
-
-Format for 5-minute executive briefing with clear action items.";
-
-            var chatCompletion = _kernel.GetRequiredService<Microsoft.SemanticKernel.ChatCompletion.IChatCompletionService>();
+            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);
             return result.Content ?? "Executive summary generation failed";
         }

@@ -1,6 +1,9 @@
 ﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using PoC1_LegacyAnalyzer_Web.Models;
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 using System.Text.Json;
 
@@ -10,17 +13,22 @@ namespace PoC1_LegacyAnalyzer_Web.Services
     {
         private readonly Kernel _kernel;
         private readonly ILogger<ArchitecturalAnalystAgent> _logger;
+        private readonly AgentConfiguration _agentConfig;
 
-        public string AgentName => "ArchitecturalAnalyst-Gamma";
-        public string Specialty => "Software Architecture & Design Patterns Analysis";
-        public string AgentPersona => "Principal Software Architect with 20+ years experience in enterprise architecture, design patterns, SOLID principles, and system modernization strategies";
-        public int ConfidenceThreshold => 85;
+        public string AgentName => _agentConfig.AgentProfiles["architecture"].AgentName;
+        public string Specialty => _agentConfig.AgentProfiles["architecture"].Specialty;
+        public string AgentPersona => _agentConfig.AgentProfiles["architecture"].AgentPersona;
+        public int ConfidenceThreshold => _agentConfig.AgentProfiles["architecture"].ConfidenceThreshold;
 
-        public ArchitecturalAnalystAgent(Kernel kernel, ILogger<ArchitecturalAnalystAgent> logger)
+        public ArchitecturalAnalystAgent(Kernel kernel, ILogger<ArchitecturalAnalystAgent> logger, IConfiguration configuration)
         {
             _kernel = kernel;
             _logger = logger;
             _kernel.Plugins.AddFromObject(this, "ArchitecturalAnalyst");
+
+            _agentConfig = new AgentConfiguration();
+            configuration.GetSection("AgentConfiguration").Bind(_agentConfig);
+            var profile = _agentConfig.AgentProfiles["architecture"];
         }
 
         [KernelFunction, Description("Analyze software architecture and design patterns")]
@@ -29,46 +37,16 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             [Description("Target architecture style and patterns")] string targetArchitecture,
             [Description("Business domain and constraints")] string businessDomain)
         {
-            var prompt = $@"
-You are {AgentPersona}.
+            var template = _agentConfig.AgentPromptTemplates["architecture"].AnalysisPrompt;
+            var prompt = template
+                .Replace("{agentPersona}", AgentPersona)
+                .Replace("{code}", code)
+                .Replace("{targetArchitecture}", targetArchitecture)
+                .Replace("{businessDomain}", businessDomain);
 
-ARCHITECTURAL ANALYSIS TARGET:
-{code}
-
-TARGET ARCHITECTURE: {targetArchitecture}
-BUSINESS DOMAIN: {businessDomain}
-
-Conduct comprehensive architectural analysis:
-
-1. DESIGN PATTERN ASSESSMENT
-   - Current patterns used (or misused)
-   - SOLID principle adherence
-   - Dependency inversion opportunities
-   - Single responsibility violations
-
-2. ARCHITECTURAL QUALITY
-   - Separation of concerns
-   - Coupling and cohesion analysis
-   - Layer architecture evaluation
-   - Component boundaries assessment
-
-3. MODERNIZATION STRATEGY
-   - Refactoring priorities
-   - Pattern introduction roadmap
-   - Architecture evolution path
-   - Migration risk assessment
-
-4. ENTERPRISE INTEGRATION
-   - Service boundaries definition
-   - API design recommendations
-   - Data architecture improvements
-   - Cross-cutting concerns handling
-
-Provide architectural recommendations with implementation strategies.";
-
-            var chatCompletion = _kernel.GetRequiredService<Microsoft.SemanticKernel.ChatCompletion.IChatCompletionService>();
+            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);
-            return result.Content ?? "Architectural analysis unavailable";
+            return result.Content ?? _agentConfig.AgentPromptTemplates["architecture"].DefaultResponse;
         }
 
         public async Task<string> AnalyzeAsync(
@@ -85,7 +63,6 @@ Provide architectural recommendations with implementation strategies.";
                     "Clean Architecture, Domain-Driven Design, Microservices readiness",
                     businessContext);
 
-                // Create a structured result but return as JSON string to match interface
                 var result = new
                 {
                     AgentName = AgentName,
@@ -118,27 +95,19 @@ Provide architectural recommendations with implementation strategies.";
             string originalCode,
             CancellationToken cancellationToken = default)
         {
-            var prompt = $@"
-As {AgentPersona}, review this analysis from architectural perspective:
+            var template = _agentConfig.AgentPromptTemplates["architecture"].PeerReviewPrompt;
+            var prompt = template
+                .Replace("{agentPersona}", AgentPersona)
+                .Replace("{peerAnalysis}", peerAnalysis)
+                .Replace("{originalCode}", originalCode)
+                .Replace("{reviewFocus}", "Design pattern implications, maintainability, architectural principles, integration, technical debt");
 
-PEER ANALYSIS: {peerAnalysis}
-ORIGINAL CODE: {originalCode}
-
-Architectural review focus:
-1. Design pattern implications of suggested changes
-2. Long-term maintainability impact
-3. Architectural principle violations or improvements
-4. System integration and boundary considerations
-5. Technical debt implications
-
-Provide architecture-focused peer review with strategic recommendations.";
-
-            var chatCompletion = _kernel.GetRequiredService<Microsoft.SemanticKernel.ChatCompletion.IChatCompletionService>();
+            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);
-            return result.Content ?? "Architectural peer review unavailable";
+            return result.Content ?? _agentConfig.AgentPromptTemplates["architecture"].DefaultResponse;
         }
 
-        // Keep all your existing helper methods unchanged...
+        // Helper methods unchanged...
         private int CalculateArchitecturalConfidence(string analysis)
         {
             var architecturalIndicators = new[]
