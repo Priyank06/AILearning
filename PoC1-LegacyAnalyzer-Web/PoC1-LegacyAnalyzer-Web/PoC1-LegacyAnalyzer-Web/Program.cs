@@ -1,5 +1,6 @@
 using Microsoft.SemanticKernel;
 using PoC1_LegacyAnalyzer_Web.Services;
+using PoC1_LegacyAnalyzer_Web.Models;
 
 public static class ServiceCollectionExtensions
 {
@@ -76,8 +77,22 @@ public class Program
         builder.Services.AddMultiAgentOrchestration();
         builder.Services.AddSemanticKernel(builder.Configuration);
 
-        var app = builder.Build();
+        var promptConfig = builder.Configuration.GetSection("PromptConfiguration").Get<PromptConfiguration>();
 
+        if (promptConfig == null)
+        {
+            throw new InvalidOperationException("PromptConfiguration section is missing in appsettings.json.");
+        }
+        if (promptConfig.SystemPrompts == null || promptConfig.SystemPrompts.Count == 0)
+        {
+            throw new InvalidOperationException("PromptConfiguration.SystemPrompts is missing or empty in appsettings.json.");
+        }
+        if (promptConfig.AnalysisPromptTemplates == null || promptConfig.AnalysisPromptTemplates.Templates == null)
+        {
+            throw new InvalidOperationException("PromptConfiguration.AnalysisPromptTemplates.Templates is missing in appsettings.json.");
+        }
+                
+        var app = builder.Build();        
         // Configure the HTTP request pipeline.
         if (!app.Environment.IsDevelopment())
         {
