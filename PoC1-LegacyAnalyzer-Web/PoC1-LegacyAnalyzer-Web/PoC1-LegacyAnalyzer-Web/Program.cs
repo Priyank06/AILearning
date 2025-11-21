@@ -137,6 +137,59 @@ public class Program
             throw new InvalidOperationException("AgentConfiguration.OrchestrationPrompts is missing in appsettings.json.");
         }
 
+        // BusinessCalculationRules validation
+        var businessRules = builder.Configuration.GetSection("BusinessCalculationRules").Get<BusinessCalculationRules>();
+        if (businessRules == null)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules section is missing in appsettings.json.");
+        }
+        if (businessRules.CostCalculation == null)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.CostCalculation is missing.");
+        }
+        if (businessRules.CostCalculation.BaseValuePerLine <= 0)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.CostCalculation.BaseValuePerLine must be greater than 0.");
+        }
+        if (businessRules.CostCalculation.MaxEstimatedValue <= 0)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.CostCalculation.MaxEstimatedValue must be greater than 0.");
+        }
+        if (businessRules.CostCalculation.DefaultDeveloperHourlyRate <= 0)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.CostCalculation.DefaultDeveloperHourlyRate must be greater than 0.");
+        }
+        if (businessRules.ComplexityThresholds == null)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.ComplexityThresholds is missing.");
+        }
+        if (!(businessRules.ComplexityThresholds.VeryLow < businessRules.ComplexityThresholds.Low &&
+              businessRules.ComplexityThresholds.Low < businessRules.ComplexityThresholds.Medium &&
+              businessRules.ComplexityThresholds.Medium < businessRules.ComplexityThresholds.High &&
+              businessRules.ComplexityThresholds.High < businessRules.ComplexityThresholds.VeryHigh))
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.ComplexityThresholds must be ordered: VeryLow < Low < Medium < High < VeryHigh.");
+        }
+        if (businessRules.RiskThresholds == null)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.RiskThresholds is missing.");
+        }
+        if (!(businessRules.RiskThresholds.LowRiskMax < businessRules.RiskThresholds.MediumRiskMax &&
+              businessRules.RiskThresholds.MediumRiskMax <= businessRules.RiskThresholds.HighRiskMin))
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.RiskThresholds must be logical: LowRiskMax < MediumRiskMax <= HighRiskMin.");
+        }
+        if (businessRules.ProcessingLimits == null)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.ProcessingLimits is missing.");
+        }
+        if (businessRules.ProcessingLimits.MetadataSampleFileCount <= 0 ||
+            businessRules.ProcessingLimits.CodeContextSummaryMaxLength <= 0 ||
+            businessRules.ProcessingLimits.TokenEstimationCharsPerToken <= 0)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.ProcessingLimits values must be positive.");
+        }
+
         var app = builder.Build();
         // Configure the HTTP request pipeline.
         if (!app.Environment.IsDevelopment())

@@ -13,6 +13,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly ICodeAnalysisAgentService _singleAgent;
         private readonly ILogger<EnhancedProjectAnalysisService> _logger;
         private readonly AgentConfiguration _agentConfig;
+        private readonly BusinessCalculationRules _businessRules;
 
         public EnhancedProjectAnalysisService(
             IMultiFileAnalysisService multiFileAnalysis,
@@ -28,6 +29,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
             _agentConfig = new AgentConfiguration();
             configuration.GetSection("AgentConfiguration").Bind(_agentConfig);
+
+            _businessRules = new BusinessCalculationRules();
+            configuration.GetSection("BusinessCalculationRules").Bind(_businessRules);
         }
 
         public async Task<ProjectAnalysisResult> AnalyzeProjectAsync(ProjectAnalysisRequest request, IProgress<ProjectAnalysisProgress> progress = null, CancellationToken cancellationToken = default)
@@ -138,7 +142,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             var namespaces = new HashSet<string>();
             var dependencies = new HashSet<string>();
 
-            foreach (var file in csFiles.Take(20)) // Sample first 20 files for performance
+            foreach (var file in csFiles.Take(_businessRules.ProcessingLimits.MetadataSampleFileCount)) // Use config value
             {
                 try
                 {
@@ -477,9 +481,9 @@ This analysis provides executive-level insights for strategic technology investm
         private decimal CalculateProjectValue(ProjectMetadata projectInfo, int avgComplexity)
         {
             // Base value on lines of code and complexity
-            var baseValue = (decimal)projectInfo.TotalLines * 0.10m; // $0.10 per line base
-            var complexityMultiplier = (avgComplexity / 100m) + 0.5m;
-            return Math.Min(1000000m, baseValue * complexityMultiplier); // Cap at $1M
+            var baseValue = (decimal)projectInfo.TotalLines * _businessRules.CostCalculation.BaseValuePerLine;
+            var complexityMultiplier = (avgComplexity / 100m) + _businessRules.CostCalculation.ComplexityMultiplierBase;
+            return Math.Min(_businessRules.CostCalculation.MaxEstimatedValue, baseValue * complexityMultiplier);
         }
 
         private string DetermineBusinessRiskLevel(int avgComplexity, int architecturalDebt)
@@ -500,12 +504,49 @@ This analysis provides executive-level insights for strategic technology investm
             var riskScore = (avgComplexity + architecturalDebt) / 2;
             return riskScore switch
             {
-                < 30 => "LOW",
-                < 60 => "MEDIUM",
+                var low when low < _businessRules.RiskThresholds.LowRiskMax => "LOW",
+                var med when med < _businessRules.RiskThresholds.MediumRiskMax => "MEDIUM",
                 _ => "HIGH"
             };
         }
 
+        private string AssessMaintenanceOverhead(ProjectAnalysisResult result)
+        {
+            var overhead = result.Architecture.ArchitecturalDebtScore switch
+            {
+                var low when low < _businessRules.ComplexityThresholds.Low => "Low maintenance overhead with good architectural practices",
+                var high when high < _businessRules.ComplexityThresholds.High => "Moderate maintenance overhead requiring structured approach",
+                _ => "High maintenance overhead with significant refactoring needs"
+            };
+            return overhead;
+        }
+
+        private List<string> IdentifyBusinessCriticalAreas(Dictionary<string, FolderAnalysisResult> folderAnalysis)
+        {
+            return folderAnalysis.Values
+                .Where(f => f.ComplexityScore > _businessRules.ComplexityThresholds.High || f.ArchitecturalRole.Contains("Business"))
+                .Select(f => f.FolderName)
+                .Take(5)
+                .ToList();
+        }
+
+        private string DetermineRecommendedApproach(string riskLevel, int totalFiles)
+        {
+            return (riskLevel, totalFiles) switch
+            {
+                ("LOW", var veryLow) when veryLow < _businessRules.ComplexityThresholds.VeryLow => "Standard agile development with code review practices",
+                ("LOW", _) => "Structured development with architectural guidance",
+                ("MEDIUM", _) => "Phased modernization with risk mitigation strategies",
+                ("HIGH", _) => "Comprehensive modernization program with dedicated architecture team",
+                _ => throw new NotImplementedException()
+            };
+        }
+
+        /// <summary>
+        /// Determines the investment priority based on business impact assessment and configuration rules.
+        /// </summary>
+        /// <param name="assessment">The business impact assessment.</param>
+        /// <returns>Recommended investment priority string.</returns>
         private string DetermineInvestmentPriority(BusinessImpactAssessment assessment)
         {
             // Use configuration-based investment priority rules if available
@@ -513,18 +554,11 @@ This analysis provides executive-level insights for strategic technology investm
             {
                 foreach (var rule in _agentConfig.BusinessImpactRules.InvestmentPriorityRules)
                 {
-                    // Simple dynamic evaluation: replace variables in condition and evaluate
-                    var condition = rule.Condition
-                        .Replace("riskLevel", $"\"{assessment.RiskLevel}\"")
-                        .Replace("estimatedValue", assessment.EstimatedValue.ToString());
-
                     // Only support equality for now
-                    if (condition.Contains("=="))
+                    if (rule.Condition.Contains("riskLevel =="))
                     {
-                        var parts = condition.Split("==");
-                        if (parts.Length == 2 &&
-                            parts[0].Trim().Trim('"') == assessment.RiskLevel &&
-                            parts[1].Trim().Trim('\'', '"') == assessment.RiskLevel)
+                        var expected = rule.Condition.Split("==")[1].Trim(' ', '\'', '"');
+                        if (assessment.RiskLevel.Equals(expected, StringComparison.OrdinalIgnoreCase))
                         {
                             return rule.Action;
                         }
@@ -541,16 +575,15 @@ This analysis provides executive-level insights for strategic technology investm
             };
         }
 
+        /// <summary>
+        /// Gets the business goal string from the analysis type, using configuration if available.
+        /// </summary>
+        /// <param name="analysisType">The analysis type.</param>
+        /// <returns>Business goal string.</returns>
         private string GetBusinessGoalFromAnalysisType(string analysisType)
         {
-            // Use configuration-based analysis type goals if available
-            if (_agentConfig?.BusinessImpactRules?.EffortEstimationFactors != null &&
-                _agentConfig.BusinessImpactRules.EffortEstimationFactors.ContainsKey(analysisType))
-            {
-                return _agentConfig.BusinessImpactRules.EffortEstimationFactors[analysisType].ToString();
-            }
-
-            // Fallback logic
+            // If you want to use BusinessCalculationRules for effort estimation, you can add logic here.
+            // Otherwise, fallback to default mapping.
             return analysisType switch
             {
                 "security" => "Comprehensive security assessment and compliance validation",
@@ -560,18 +593,23 @@ This analysis provides executive-level insights for strategic technology investm
             };
         }
 
+        /// <summary>
+        /// Generates a list of actionable next steps based on business impact and architecture assessment.
+        /// </summary>
+        /// <param name="result">The project analysis result.</param>
+        /// <returns>List of recommended next steps.</returns>
         private List<string> GenerateActionableNextSteps(ProjectAnalysisResult result)
         {
             var nextSteps = new List<string>();
 
             // Priority based on business impact and risk
-            if (result.BusinessImpact.RiskLevel == "HIGH")
+            if (result.BusinessImpact?.RiskLevel == "HIGH")
             {
                 nextSteps.Add("URGENT: Schedule executive review meeting within 48 hours");
                 nextSteps.Add("Assemble dedicated modernization team with senior architect");
                 nextSteps.Add("Conduct detailed technical debt assessment");
             }
-            else if (result.BusinessImpact.RiskLevel == "MEDIUM")
+            else if (result.BusinessImpact?.RiskLevel == "MEDIUM")
             {
                 nextSteps.Add("Schedule architecture review meeting within 2 weeks");
                 nextSteps.Add("Assign experienced development team to project");
@@ -585,51 +623,20 @@ This analysis provides executive-level insights for strategic technology investm
             }
 
             // Architecture-specific recommendations
-            if (result.Architecture.ArchitecturalDebtScore > 60)
+            if (result.Architecture != null && result.Architecture.ArchitecturalDebtScore > _businessRules.ComplexityThresholds.High)
             {
                 nextSteps.Add("Implement architectural refactoring program");
                 nextSteps.Add("Establish coding standards and review processes");
             }
 
             // Testing recommendations
-            if (result.Architecture.TestCoverage.Contains("No test"))
+            if (result.Architecture != null && result.Architecture.TestCoverage != null && result.Architecture.TestCoverage.Contains("No test"))
             {
                 nextSteps.Add("Establish comprehensive testing strategy");
                 nextSteps.Add("Implement automated testing pipeline");
             }
 
             return nextSteps.Take(6).ToList(); // Limit to most important actions
-        }
-
-        private string AssessMaintenanceOverhead(ProjectAnalysisResult result)
-        {
-            var overhead = result.Architecture.ArchitecturalDebtScore switch
-            {
-                < 30 => "Low maintenance overhead with good architectural practices",
-                < 60 => "Moderate maintenance overhead requiring structured approach",
-                _ => "High maintenance overhead with significant refactoring needs"
-            };
-            return overhead;
-        }
-
-        private string DetermineRecommendedApproach(string riskLevel, int totalFiles)
-        {
-            return (riskLevel, totalFiles) switch
-            {
-                ("LOW", < 20) => "Standard agile development with code review practices",
-                ("LOW", _) => "Structured development with architectural guidance",
-                ("MEDIUM", _) => "Phased modernization with risk mitigation strategies",
-                ("HIGH", _) => "Comprehensive modernization program with dedicated architecture team"
-            };
-        }
-
-        private List<string> IdentifyBusinessCriticalAreas(Dictionary<string, FolderAnalysisResult> folderAnalysis)
-        {
-            return folderAnalysis.Values
-                .Where(f => f.ComplexityScore > 60 || f.ArchitecturalRole.Contains("Business"))
-                .Select(f => f.FolderName)
-                .Take(5)
-                .ToList();
         }
     }
 }

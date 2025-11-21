@@ -15,6 +15,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly Kernel _kernel;
         private readonly ILogger<AgentOrchestrationService> _logger;
         private readonly AgentConfiguration _agentConfig;
+        private readonly BusinessCalculationRules _businessRules;
 
         // Agent registry
         private readonly Dictionary<string, Type> _agentRegistry;
@@ -42,6 +43,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
             _agentConfig = new AgentConfiguration();
             configuration.GetSection("AgentConfiguration").Bind(_agentConfig);
+
+            _businessRules = new BusinessCalculationRules();
+            configuration.GetSection("BusinessCalculationRules").Bind(_businessRules);
         }
 
         [KernelFunction, Description("Create analysis plan and assign agents")]
@@ -600,13 +604,14 @@ Provide diplomatic but decisive conflict resolution.";
 
         private double GetAgentWeight(string agentName)
         {
-            // Assign weights based on agent expertise level
+            // Assign weights based on agent expertise level using configuration
+            var weights = _businessRules.AgentWeighting;
             return agentName.ToLower() switch
             {
-                var name when name.Contains("security") => 1.2,      // Security is critical
-                var name when name.Contains("performance") => 1.1,   // Performance is important
-                var name when name.Contains("architectural") => 1.3, // Architecture has long-term impact
-                _ => 1.0
+                var name when name.Contains("security") => weights.SecurityWeight,
+                var name when name.Contains("performance") => weights.PerformanceWeight,
+                var name when name.Contains("architectural") => weights.ArchitectureWeight,
+                _ => weights.DefaultWeight
             };
         }
 
@@ -615,8 +620,9 @@ Provide diplomatic but decisive conflict resolution.";
             return code.StartsWith("[Preprocessed Project Pattern", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string GetCodeContextSummary(string code)
+        private string GetCodeContextSummary(string code)
         {
+            var maxLength = _businessRules.ProcessingLimits.CodeContextSummaryMaxLength;
             if (!IsPreprocessedPattern(code))
             {
                 return $"Code length: {code.Length} characters";
@@ -627,14 +633,15 @@ Provide diplomatic but decisive conflict resolution.";
             var take = Math.Min(6, lines.Length);
             var header = string.Join(" ", lines.Take(take).Select(l => l.Trim()));
             // Keep it compact to save tokens for planning
-            return header.Length > 800 ? header.Substring(0, 800) + "..." : header;
+            return header.Length > maxLength ? header.Substring(0, maxLength) + "..." : header;
         }
 
-        private static int EstimateTokens(string? text)
+        private int EstimateTokens(string? text)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-            // Rough heuristic ~4 chars per token
-            return Math.Max(1, text.Length / 4);
+            // Use configuration for chars per token
+            var charsPerToken = _businessRules.ProcessingLimits.TokenEstimationCharsPerToken;
+            return Math.Max(1, text.Length / charsPerToken);
         }
     }
 }

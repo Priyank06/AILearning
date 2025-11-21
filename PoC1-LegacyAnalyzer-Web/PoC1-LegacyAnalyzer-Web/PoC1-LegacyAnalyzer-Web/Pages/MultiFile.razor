@@ -8,6 +8,7 @@
 @inject IFileDownloadService FileDownloadService
 @inject IJSRuntime JSRuntime
 @inject IReportService ReportService
+@inject IConfiguration Configuration
 @implements IAsyncDisposable
 
 <PageTitle>Enterprise Project Analysis</PageTitle>
@@ -900,6 +901,22 @@
     private MultiFileAnalysisResult? analysisResult;
     private BusinessMetrics? businessMetrics;
 
+    private int ComplexityLowThreshold;
+    private int ComplexityMediumThreshold;
+    private int ComplexityHighThreshold;
+    private int TokenCharEstimate;
+    private bool businessRulesLoaded = false;
+
+    protected override void OnInitialized()
+    {
+        // Load thresholds from configuration
+        ComplexityLowThreshold = int.TryParse(Configuration["BusinessCalculationRules:ComplexityLowThreshold"], out var low) ? low : 30;
+        ComplexityMediumThreshold = int.TryParse(Configuration["BusinessCalculationRules:ComplexityMediumThreshold"], out var med) ? med : 50;
+        ComplexityHighThreshold = int.TryParse(Configuration["BusinessCalculationRules:ComplexityHighThreshold"], out var high) ? high : 70;
+        TokenCharEstimate = int.TryParse(Configuration["BusinessCalculationRules:TokenCharEstimate"], out var token) ? token : 4;
+        businessRulesLoaded = true;
+    }
+
     private async Task HandleFileSelection(InputFileChangeEventArgs e)
     {
         var newFiles = e.GetMultipleFiles(50); // Allow more files for folder selection
@@ -1304,13 +1321,6 @@
 
     private string GetStatusAlertClass() => statusMessage.Contains("error") || statusMessage.Contains("failed") ? "alert-danger" : "alert-info";
 
-    private string GetComplexityColorClass(int score)
-    {
-        if (score < 30) return "bg-success";
-        if (score < 60) return "bg-warning";
-        return "bg-danger";
-    }
-
     private string GetRiskTextColorClass(string risk) => risk switch
     {
         "LOW" => "text-success",
@@ -1326,27 +1336,6 @@
         "HIGH" => "Complex migration requiring specialist expertise",
         _ => "Assessment in progress"
     };
-
-    private string GetComplexityTextColor(int score)
-    {
-        if (score < 40) return "text-success";
-        if (score < 70) return "text-warning";
-        return "text-danger";
-    }
-
-    private string GetComplexityBadgeClass(int score)
-    {
-        if (score < 40) return "bg-success";
-        if (score < 70) return "bg-warning text-dark";
-        return "bg-danger";
-    }
-
-    private string GetComplexityLabel(int score)
-    {
-        if (score < 40) return "Low Risk";
-        if (score < 70) return "Medium Risk";
-        return "High Risk";
-    }
 
     private async Task HandleIndividualFileSelection(InputFileChangeEventArgs e)
     {
@@ -1447,16 +1436,61 @@
         };
     }
 
-    private string GetComplexityTextClass()
+    // Helper methods for UI rendering using config thresholds
+    private string GetQualityColorClass(int complexity)
     {
-        if (analysisResult == null) return "secondary";
+        if (complexity > ComplexityMediumThreshold) return "bg-danger";
+        if (complexity > ComplexityLowThreshold) return "bg-warning";
+        return "bg-success";
+    }
 
-        if (analysisResult.OverallComplexityScore < 40)
-            return "success";
-        else if (analysisResult.OverallComplexityScore < 70)
-            return "warning";
-        else
-            return "danger";
+    private string GetStatusBadgeClass(int complexity)
+    {
+        if (complexity > ComplexityMediumThreshold) return "bg-danger";
+        if (complexity > ComplexityLowThreshold) return "bg-warning";
+        return "bg-success";
+    }
+
+    private string GetStatusText(int complexity)
+    {
+        if (complexity > ComplexityMediumThreshold) return "Needs Review";
+        if (complexity > ComplexityLowThreshold) return "Monitor";
+        return "Good";
+    }
+
+    private string GetMaintenanceLevel(int complexity)
+    {
+        if (complexity > ComplexityMediumThreshold) return "Immediate attention";
+        if (complexity > ComplexityLowThreshold) return "Scheduled review";
+        return "Standard maintenance";
+    }
+
+    private string GetComplexityColorClass(int score)
+    {
+        if (score < ComplexityLowThreshold) return "bg-success";
+        if (score < ComplexityMediumThreshold) return "bg-warning";
+        return "bg-danger";
+    }
+
+    private string GetComplexityTextColor(int score)
+    {
+        if (score < ComplexityMediumThreshold) return "text-success";
+        if (score < ComplexityHighThreshold) return "text-warning";
+        return "text-danger";
+    }
+
+    private string GetComplexityBadgeClass(int score)
+    {
+        if (score < ComplexityLowThreshold) return "bg-success";
+        if (score < ComplexityMediumThreshold) return "bg-warning text-dark";
+        return "bg-danger";
+    }
+
+    private string GetComplexityLabel(int score)
+    {
+        if (score < ComplexityLowThreshold) return "Low Risk";
+        if (score < ComplexityMediumThreshold) return "Medium Risk";
+        return "High Risk";
     }
 
     private string GetTimelineColorClass()
@@ -1474,12 +1508,11 @@
     private string GetExecutiveTimeline()
     {
         if (analysisResult == null) return "Assessment Pending";
-
-        if (analysisResult.OverallComplexityScore < 30)
+        if (analysisResult.OverallComplexityScore < ComplexityLowThreshold)
             return "2-4 weeks (Low complexity migration)";
-        else if (analysisResult.OverallComplexityScore < 50)
+        else if (analysisResult.OverallComplexityScore < ComplexityMediumThreshold)
             return "4-8 weeks (Standard migration process)";
-        else if (analysisResult.OverallComplexityScore < 70)
+        else if (analysisResult.OverallComplexityScore < ComplexityHighThreshold)
             return "8-12 weeks (Complex migration - phased approach)";
         else
             return "12+ weeks (High complexity - dedicated team required)";
@@ -1612,76 +1645,33 @@
 
     private string GetMigrationTimeline(int complexityScore)
     {
-        if (complexityScore < 30) return "2-4 weeks (Low complexity migration)";
-        if (complexityScore < 50) return "4-8 weeks (Standard migration process)";
-        if (complexityScore < 70) return "8-16 weeks (Complex migration - phased approach)";
+        if (complexityScore < ComplexityLowThreshold) return "2-4 weeks (Low complexity migration)";
+        if (complexityScore < ComplexityMediumThreshold) return "4-8 weeks (Standard migration process)";
+        if (complexityScore < ComplexityHighThreshold) return "8-16 weeks (Complex migration - phased approach)";
         return "16+ weeks (High complexity - dedicated team required)";
     }
 
     private string GetResourceRequirements(int complexityScore)
     {
-        if (complexityScore < 30) return "1-2 developers, standard skillset";
-        if (complexityScore < 50) return "2-3 developers, experienced team";
-        if (complexityScore < 70) return "3-5 developers, senior expertise required";
+        if (complexityScore < ComplexityLowThreshold) return "1-2 developers, standard skillset";
+        if (complexityScore < ComplexityMediumThreshold) return "2-3 developers, experienced team";
+        if (complexityScore < ComplexityHighThreshold) return "3-5 developers, senior expertise required";
         return "5+ developers, specialist migration team with architect oversight";
     }
 
     private string GetFinancialImpact(int complexityScore)
     {
-        if (complexityScore < 30) return "Low cost - standard development rates";
-        if (complexityScore < 50) return "Moderate cost - budget for quality assurance";
-        if (complexityScore < 70) return "High cost - include risk mitigation budget";
+        if (complexityScore < ComplexityLowThreshold) return "Low cost - standard development rates";
+        if (complexityScore < ComplexityMediumThreshold) return "Moderate cost - budget for quality assurance";
+        if (complexityScore < ComplexityHighThreshold) return "High cost - include risk mitigation budget";
         return "Very high cost - executive approval recommended";
     }
 
-    private string GetRowClass(int complexity) => complexity switch
+    // Replace token estimation usage
+    private int EstimateTokens(int charCount)
     {
-        > 70 => "table-danger",
-        > 40 => "table-warning",
-        _ => "table-success"
-    };
-
-    private string GetEffortEstimate(int complexity) => complexity switch
-    {
-        > 70 => "3-5 days",
-        > 40 => "1-2 days",
-        _ => "2-4 hours"
-    };
-
-    private string GetBusinessImpact(int complexity) => complexity switch
-    {
-        > 70 => "High - blocks deployment",
-        > 40 => "Medium - increases risk",
-        _ => "Low - maintenance only"
-    };
-
-    private string GetQualityColorClass(int complexity) => complexity switch
-    {
-        > 50 => "bg-danger",
-        > 30 => "bg-warning",
-        _ => "bg-success"
-    };
-
-    private string GetStatusBadgeClass(int complexity) => complexity switch
-    {
-        > 50 => "bg-danger",
-        > 30 => "bg-warning",
-        _ => "bg-success"
-    };
-
-    private string GetStatusText(int complexity) => complexity switch
-    {
-        > 50 => "Needs Review",
-        > 30 => "Monitor",
-        _ => "Good"
-    };
-
-    private string GetMaintenanceLevel(int complexity) => complexity switch
-    {
-        > 50 => "Immediate attention",
-        > 30 => "Scheduled review",
-        _ => "Standard maintenance"
-    };
+        return charCount / TokenCharEstimate;
+    }
 
     public async ValueTask DisposeAsync()
     {

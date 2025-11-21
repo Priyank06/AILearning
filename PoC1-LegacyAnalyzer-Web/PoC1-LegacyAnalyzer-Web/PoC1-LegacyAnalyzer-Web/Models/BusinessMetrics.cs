@@ -3,7 +3,7 @@
     public class BusinessMetrics
     {
         public decimal EstimatedDeveloperHoursSaved { get; set; }
-        public decimal AverageHourlyRate { get; set; } = 125m;
+        public decimal AverageHourlyRate { get; set; }
         
         public decimal ProjectCostSavings { get; set; }
 

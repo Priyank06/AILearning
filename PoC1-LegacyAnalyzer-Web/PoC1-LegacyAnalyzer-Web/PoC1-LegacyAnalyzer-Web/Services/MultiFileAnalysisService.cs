@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Components.Forms;
 using PoC1_LegacyAnalyzer_Web.Models;
+using Microsoft.Extensions.Configuration;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -8,15 +9,20 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly ICodeAnalysisService _codeAnalysisService;
         private readonly IAIAnalysisService _aiAnalysisService;
         private readonly ILogger<MultiFileAnalysisService> _logger;
+        private readonly BusinessCalculationRules _businessRules;
 
         public MultiFileAnalysisService(
             ICodeAnalysisService codeAnalysisService,
             IAIAnalysisService aiAnalysisService,
-            ILogger<MultiFileAnalysisService> logger)
+            ILogger<MultiFileAnalysisService> logger,
+            IConfiguration configuration)
         {
             _codeAnalysisService = codeAnalysisService;
             _aiAnalysisService = aiAnalysisService;
             _logger = logger;
+
+            _businessRules = new BusinessCalculationRules();
+            configuration.GetSection("BusinessCalculationRules").Bind(_businessRules);
         }
 
         public async Task<MultiFileAnalysisResult> AnalyzeMultipleFilesAsync(List<IBrowserFile> files, string analysisType)
@@ -344,15 +350,16 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 _ => 1000m
             };
 
+            var hourlyRate = _businessRules.CostCalculation.DefaultDeveloperHourlyRate;
             var metrics = new BusinessMetrics
             {
                 EstimatedDeveloperHoursSaved = savedHours,
-                AverageHourlyRate = 125m,
+                AverageHourlyRate = hourlyRate,
                 MigrationTimeline = GetMigrationTimeline(result.OverallComplexityScore),
                 RiskMitigation = $"{result.OverallRiskLevel} risk level - {GetRiskMitigationStrategy(result.OverallRiskLevel)}",
                 ComplianceCostAvoidance = complianceAvoidance,
-                ProjectCostSavings = savedHours * 125m,
-                TotalROI = (savedHours * 125m) + complianceAvoidance,
+                ProjectCostSavings = savedHours * hourlyRate,
+                TotalROI = (savedHours * hourlyRate) + complianceAvoidance,
                 ProjectSize = GetProjectSizeAssessment(result.TotalFiles, result.TotalClasses),
                 RecommendedApproach = GetRecommendedApproach(result.OverallComplexityScore)
             };
@@ -363,29 +370,57 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             return metrics;
         }
 
-        private string GetMigrationTimeline(int complexityScore) => complexityScore switch
+        private string GetMigrationTimeline(int complexityScore)
         {
-            < 30 => "2-4 weeks",
-            < 50 => "4-8 weeks",
-            < 70 => "8-12 weeks",
-            _ => "12+ weeks"
-        };
+            var thresholds = _businessRules.ComplexityThresholds;
+            var timeline = _businessRules.TimelineEstimation;
 
-        private string GetRiskMitigationStrategy(string riskLevel) => riskLevel switch
+            if (complexityScore < thresholds.Low)
+                return timeline.ContainsKey("VeryLow") ? timeline["VeryLow"] : "2-4 weeks";
+            if (complexityScore < thresholds.Medium)
+                return timeline.ContainsKey("Low") ? timeline["Low"] : "4-8 weeks";
+            if (complexityScore < thresholds.High)
+                return timeline.ContainsKey("Medium") ? timeline["Medium"] : "8-12 weeks";
+            return timeline.ContainsKey("High") ? timeline["High"] : "12+ weeks";
+        }
+
+        private string GetProjectSizeAssessment(int fileCount, int classCount)
         {
-            "HIGH" => "Dedicated migration team with senior architect oversight required",
-            "MEDIUM" => "Experienced development team with structured approach recommended",
-            "LOW" => "Standard development practices with code review sufficient",
-            _ => "Assessment in progress"
-        };
+            foreach (var kvp in _businessRules.ProjectSizeClassification)
+            {
+                var config = kvp.Value;
+                if (config.MaxFiles.HasValue && config.MaxClasses.HasValue)
+                {
+                    if (fileCount < config.MaxFiles.Value && classCount < config.MaxClasses.Value)
+                        return config.Label;
+                }
+                else if (!config.MaxFiles.HasValue && !config.MaxClasses.HasValue)
+                {
+                    // Enterprise fallback
+                    return config.Label;
+                }
+            }
+            // If no match, fallback to "Enterprise Project"
+            return _businessRules.ProjectSizeClassification.ContainsKey("Enterprise")
+                ? _businessRules.ProjectSizeClassification["Enterprise"].Label
+                : "Enterprise Project";
+        }
 
-        private string GetProjectSizeAssessment(int fileCount, int classCount) => (fileCount, classCount) switch
+        /// <summary>
+        /// Returns a risk mitigation strategy string based on the provided risk level.
+        /// Uses configuration if you wish, otherwise falls back to standard recommendations.
+        /// </summary>
+        /// <param name="riskLevel">The overall risk level ("HIGH", "MEDIUM", "LOW").</param>
+        /// <returns>Recommended risk mitigation strategy.</returns>
+        private string GetRiskMitigationStrategy(string riskLevel)
         {
-            ( < 5, < 10) => "Small Project",
-            ( < 15, < 25) => "Medium Project",
-            ( < 30, < 50) => "Large Project",
-            _ => "Enterprise Project"
-        };
-
+            return riskLevel switch
+            {
+                "HIGH" => "Dedicated migration team with senior architect oversight required",
+                "MEDIUM" => "Experienced development team with structured approach recommended",
+                "LOW" => "Standard development practices with code review sufficient",
+                _ => "Assessment in progress"
+            };
+        }
     }
 }
