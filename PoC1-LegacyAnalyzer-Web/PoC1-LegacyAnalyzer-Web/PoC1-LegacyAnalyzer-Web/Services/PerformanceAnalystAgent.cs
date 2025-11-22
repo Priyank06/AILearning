@@ -1,6 +1,7 @@
 ﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using PoC1_LegacyAnalyzer_Web.Models;
+using Microsoft.Extensions.Configuration;
 using System.ComponentModel;
 using System.Text.Json;
 
@@ -11,6 +12,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly Kernel _kernel;
         private readonly ILogger<PerformanceAnalystAgent> _logger;
         private readonly AgentConfiguration _agentConfig;
+        private readonly PerformanceAnalystConfig _analysisConfig;
 
         public string AgentName => _agentConfig.AgentProfiles["performance"].AgentName;
         public string Specialty => _agentConfig.AgentProfiles["performance"].Specialty;
@@ -26,6 +28,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             _agentConfig = new AgentConfiguration();
             configuration.GetSection("AgentConfiguration").Bind(_agentConfig);
             var profile = _agentConfig.AgentProfiles["performance"];
+
+            _analysisConfig = new PerformanceAnalystConfig();
+            configuration.GetSection("AgentAnalysisConfiguration:Performance").Bind(_analysisConfig);
         }
 
         [KernelFunction, Description("Analyze code for performance bottlenecks and optimization opportunities")]
@@ -114,10 +119,10 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 analysis.Contains("scalability", StringComparison.OrdinalIgnoreCase),
                 analysis.Contains("memory", StringComparison.OrdinalIgnoreCase),
                 analysis.Contains("database", StringComparison.OrdinalIgnoreCase),
-                analysis.Length > 600
+                analysis.Length > _analysisConfig.MinAnalysisLengthForConfidence
             };
 
-            return performanceIndicators.Count(indicator => indicator) * 16;
+            return performanceIndicators.Count(indicator => indicator) * _analysisConfig.ConfidenceScoreMultiplier;
         }
 
         private string ExtractPerformanceBusinessImpact(string analysis)
@@ -136,14 +141,13 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             var complexityCount = complexityIndicators.Count(indicator =>
                 analysis.Contains(indicator, StringComparison.OrdinalIgnoreCase));
 
-            return complexityCount switch
+            // Use configuration, with fallback to highest value if complexity exceeds configured values
+            if (_analysisConfig.EffortEstimationByComplexity.TryGetValue(complexityCount, out var effort))
             {
-                0 => 4m,
-                1 => 12m,
-                2 => 24m,
-                3 => 40m,
-                _ => 80m
-            };
+                return effort;
+            }
+            // If complexity count exceeds configured values, use the maximum configured value
+            return _analysisConfig.EffortEstimationByComplexity.Values.DefaultIfEmpty(80m).Max();
         }
 
         private string DeterminePerformancePriority(string analysis)

@@ -8,9 +8,17 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <None Remove="AZURE_KEY_VAULT_SETUP.md" />
+	  <None Remove="KEY_VAULT_SECRETS_REFERENCE.md" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
 		<PackageReference Include="Microsoft.SemanticKernel" Version="1.66.0" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8" />
-		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="6.0.0" />		
+		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="6.0.0" />
+		<PackageReference Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.3.2" />
+		<PackageReference Include="Azure.Identity" Version="1.13.1" />
+		<PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.6.0" />
 	</ItemGroup>
 </Project>

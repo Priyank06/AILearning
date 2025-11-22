@@ -14,6 +14,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly Kernel _kernel;
         private readonly ILogger<ArchitecturalAnalystAgent> _logger;
         private readonly AgentConfiguration _agentConfig;
+        private readonly ArchitecturalAnalystConfig _analysisConfig;
 
         public string AgentName => _agentConfig.AgentProfiles["architecture"].AgentName;
         public string Specialty => _agentConfig.AgentProfiles["architecture"].Specialty;
@@ -29,6 +30,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             _agentConfig = new AgentConfiguration();
             configuration.GetSection("AgentConfiguration").Bind(_agentConfig);
             var profile = _agentConfig.AgentProfiles["architecture"];
+
+            _analysisConfig = new ArchitecturalAnalystConfig();
+            configuration.GetSection("AgentAnalysisConfiguration:Architecture").Bind(_analysisConfig);
         }
 
         [KernelFunction, Description("Analyze software architecture and design patterns")]
@@ -118,10 +122,10 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 analysis.Contains("SOLID", StringComparison.OrdinalIgnoreCase),
                 analysis.Contains("separation", StringComparison.OrdinalIgnoreCase),
                 analysis.Contains("coupling", StringComparison.OrdinalIgnoreCase),
-                analysis.Length > 800
+                analysis.Length > _analysisConfig.MinAnalysisLengthForConfidence
             };
 
-            return Math.Min(100, architecturalIndicators.Count(indicator => indicator) * 14);
+            return Math.Min(100, architecturalIndicators.Count(indicator => indicator) * _analysisConfig.ConfidenceScoreMultiplier);
         }
 
         private string ExtractArchitecturalBusinessImpact(string analysis)
@@ -140,14 +144,17 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             var complexityCount = complexityIndicators.Count(indicator =>
                 analysis.Contains(indicator, StringComparison.OrdinalIgnoreCase));
 
-            return complexityCount switch
+            // Use configuration, with fallback logic for values <= 1
+            if (complexityCount <= 1)
             {
-                <= 1 => 16m,
-                2 => 40m,
-                3 => 80m,
-                4 => 160m,
-                _ => 320m
-            };
+                return _analysisConfig.EffortEstimationByComplexity.TryGetValue(1, out var effort) ? effort : 16m;
+            }
+            if (_analysisConfig.EffortEstimationByComplexity.TryGetValue(complexityCount, out var configuredEffort))
+            {
+                return configuredEffort;
+            }
+            // If complexity count exceeds configured values, use the maximum configured value
+            return _analysisConfig.EffortEstimationByComplexity.Values.DefaultIfEmpty(320m).Max();
         }
 
         private string DetermineArchitecturalPriority(string analysis)

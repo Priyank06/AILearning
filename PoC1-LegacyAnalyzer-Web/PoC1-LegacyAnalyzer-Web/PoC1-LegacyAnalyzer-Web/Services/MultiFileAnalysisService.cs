@@ -336,19 +336,18 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
         public BusinessMetrics CalculateBusinessMetrics(MultiFileAnalysisResult result)
         {
-            // Conservative estimate: 30 minutes per method for manual review
-            var baseHours = result.TotalMethods * 0.5m;
-            var complexityMultiplier = (result.OverallComplexityScore / 100m) + 0.5m;
+            // Use configuration for business metrics calculation
+            var metricsConfig = _businessRules.AnalysisLimits.BusinessMetrics;
+            var baseHours = result.TotalMethods * metricsConfig.BaseHoursPerMethod;
+            var complexityMultiplier = (result.OverallComplexityScore / 100m) + metricsConfig.ComplexityMultiplierBase;
             var savedHours = baseHours * complexityMultiplier;
 
-            // Compliance cost avoidance based on risk level
-            var complianceAvoidance = result.OverallRiskLevel switch
-            {
-                "HIGH" => 15000m,
-                "MEDIUM" => 8000m,
-                "LOW" => 3000m,
-                _ => 1000m
-            };
+            // Compliance cost avoidance based on risk level from configuration
+            var complianceConfig = _businessRules.ComplianceCost;
+            var riskLevel = result.OverallRiskLevel ?? "DEFAULT";
+            var complianceAvoidance = complianceConfig.CostAvoidanceByRiskLevel.TryGetValue(riskLevel, out var cost)
+                ? cost
+                : complianceConfig.CostAvoidanceByRiskLevel.GetValueOrDefault("DEFAULT", 1000m);
 
             var hourlyRate = _businessRules.CostCalculation.DefaultDeveloperHourlyRate;
             var metrics = new BusinessMetrics

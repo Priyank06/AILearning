@@ -39,5 +39,25 @@ namespace PoC1_LegacyAnalyzer_Web.Models
         /// Processing limits configuration.
         /// </summary>
         public ProcessingLimits ProcessingLimits { get; set; } = new ProcessingLimits();
+
+        /// <summary>
+        /// Architectural debt calculation configuration.
+        /// </summary>
+        public ArchitecturalDebtConfiguration ArchitecturalDebt { get; set; } = new ArchitecturalDebtConfiguration();
+
+        /// <summary>
+        /// Compliance cost avoidance configuration.
+        /// </summary>
+        public ComplianceCostConfiguration ComplianceCost { get; set; } = new ComplianceCostConfiguration();
+
+        /// <summary>
+        /// Manual analysis calculation configuration.
+        /// </summary>
+        public ManualAnalysisConfiguration ManualAnalysis { get; set; } = new ManualAnalysisConfiguration();
+
+        /// <summary>
+        /// Analysis limits and thresholds configuration.
+        /// </summary>
+        public AnalysisLimitsConfiguration AnalysisLimits { get; set; } = new AnalysisLimitsConfiguration();
     }
 }

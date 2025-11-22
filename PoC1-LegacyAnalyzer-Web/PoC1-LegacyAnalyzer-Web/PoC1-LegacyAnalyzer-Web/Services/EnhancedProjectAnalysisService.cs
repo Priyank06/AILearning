@@ -188,7 +188,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         {
             var folderAnalysis = new Dictionary<string, FolderAnalysisResult>();
 
-            foreach (var folder in projectStructure.Take(10)) // Limit for performance
+            foreach (var folder in projectStructure.Take(_businessRules.AnalysisLimits.ResultLimits.MaxFoldersToAnalyze))
             {
                 var csFiles = folder.Value.Where(f => f.Name.EndsWith(".cs")).ToList();
                 if (!csFiles.Any()) continue;
@@ -203,7 +203,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 };
 
                 // Extract key classes from folder
-                analysis.KeyClasses = csFiles.Take(5).Select(f => Path.GetFileNameWithoutExtension(f.Name)).ToList();
+                analysis.KeyClasses = csFiles.Take(_businessRules.AnalysisLimits.ResultLimits.MaxKeyClassesPerFolder).Select(f => Path.GetFileNameWithoutExtension(f.Name)).ToList();
 
                 folderAnalysis[folder.Key] = analysis;
             }
@@ -217,7 +217,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
             // Use existing multi-file analysis service
             var multiFileResult = await _multiFileAnalysis.AnalyzeMultipleFilesWithProgressAsync(
-                request.Files.Take(10).ToList(), // Limit for performance
+                request.Files.Take(_businessRules.AnalysisLimits.ResultLimits.MaxFilesForMultiAgentAnalysis).ToList(),
                 request.AnalysisType,
                 new Progress<Models.AnalysisProgress>(p =>
                 {
@@ -236,7 +236,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
             // Combine files for single agent analysis
             var combinedCode = new List<string>();
-            foreach (var file in request.Files.Take(10))
+            foreach (var file in request.Files.Take(_businessRules.AnalysisLimits.ResultLimits.MaxFilesForSingleAgentAnalysis))
             {
                 using var stream = file.OpenReadStream();
                 using var reader = new StreamReader(stream);
@@ -252,14 +252,14 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 cancellationToken);
 
             // Convert agent result to file analysis results (simplified)
-            foreach (var file in request.Files.Take(10))
+            foreach (var file in request.Files.Take(_businessRules.AnalysisLimits.ResultLimits.MaxFilesForSingleAgentAnalysis))
             {
                 results.Add(new FileAnalysisResult
                 {
                     FileName = file.Name,
                     FileSize = file.Size,
                     AIInsight = agentResult.BusinessImpact,
-                    ComplexityScore = 50, // Simplified - would normally analyze individually
+                    ComplexityScore = _businessRules.AnalysisLimits.ResultLimits.DefaultComplexityScore, // Simplified - would normally analyze individually
                     Status = "Analyzed by Single Agent",
                     StaticAnalysis = new Models.CodeAnalysisResult()
                 });
@@ -372,7 +372,13 @@ This analysis provides executive-level insights for strategic technology investm
 
         private int CalculateFolderComplexity(int fileCount)
         {
-            return Math.Min(100, fileCount * 5 + (fileCount > 10 ? 20 : 0));
+            var config = _businessRules.AnalysisLimits.FolderComplexity;
+            var complexity = fileCount * config.FileCountMultiplier;
+            if (fileCount > config.FileCountThreshold)
+            {
+                complexity += config.AdditionalComplexityWhenThresholdExceeded;
+            }
+            return Math.Min(config.MaxComplexityScore, complexity);
         }
 
         private string DetermineArchitecturalPattern(List<string> folderNames)
@@ -411,11 +417,12 @@ This analysis provides executive-level insights for strategic technology investm
         private string AssessSeparationOfConcerns(Dictionary<string, FolderAnalysisResult> folderAnalysis)
         {
             var layerCount = folderAnalysis.Values.Select(f => f.ArchitecturalRole).Distinct().Count();
+            var config = _businessRules.AnalysisLimits.ArchitecturalAssessment;
             return layerCount switch
             {
-                >= 4 => "Excellent separation of concerns with clear architectural layers",
-                3 => "Good separation with distinct business and data layers",
-                2 => "Basic separation between presentation and logic",
+                var count when count >= config.ExcellentSeparationLayerCount => "Excellent separation of concerns with clear architectural layers",
+                var count when count >= config.GoodSeparationLayerCount => "Good separation with distinct business and data layers",
+                var count when count >= config.BasicSeparationLayerCount => "Basic separation between presentation and logic",
                 _ => "Poor separation - mixed concerns across components"
             };
         }
@@ -444,10 +451,11 @@ This analysis provides executive-level insights for strategic technology investm
         {
             var hasTestFolders = folderNames.Any(f => f.ToLower().Contains("test"));
             var testFolderCount = folderNames.Count(f => f.ToLower().Contains("test"));
+            var config = _businessRules.AnalysisLimits.ArchitecturalAssessment;
 
             return hasTestFolders switch
             {
-                true when testFolderCount >= 2 => "Good test coverage with multiple test projects",
+                true when testFolderCount >= config.GoodTestCoverageFolderCount => "Good test coverage with multiple test projects",
                 true => "Basic test coverage detected",
                 false => "No test projects detected - testing strategy needed"
             };
@@ -455,27 +463,28 @@ This analysis provides executive-level insights for strategic technology investm
 
         private int CalculateArchitecturalDebt(ProjectAnalysisResult result)
         {
+            var debtConfig = _businessRules.ArchitecturalDebt;
             var debtFactors = 0;
 
             // Factor 1: Poor separation of concerns
             if (result.Architecture.SeparationOfConcerns.Contains("Poor"))
-                debtFactors += 30;
+                debtFactors += debtConfig.PoorSeparationOfConcernsDebt;
             else if (result.Architecture.SeparationOfConcerns.Contains("Basic"))
-                debtFactors += 15;
+                debtFactors += debtConfig.BasicSeparationOfConcernsDebt;
 
             // Factor 2: No clear architectural pattern
             if (result.Architecture.ArchitecturalPattern.Contains("Monolithic"))
-                debtFactors += 20;
+                debtFactors += debtConfig.MonolithicArchitectureDebt;
 
             // Factor 3: No design patterns
             if (result.Architecture.DesignPatterns.Any(p => p.Contains("No clear")))
-                debtFactors += 25;
+                debtFactors += debtConfig.NoDesignPatternsDebt;
 
             // Factor 4: No testing
             if (result.Architecture.TestCoverage.Contains("No test"))
-                debtFactors += 25;
+                debtFactors += debtConfig.NoTestingDebt;
 
-            return Math.Min(100, debtFactors);
+            return Math.Min(debtConfig.MaxDebtScore, debtFactors);
         }
 
         private decimal CalculateProjectValue(ProjectMetadata projectInfo, int avgComplexity)
@@ -566,11 +575,12 @@ This analysis provides executive-level insights for strategic technology investm
                 }
             }
             // Fallback logic
+            var fallbackConfig = _businessRules.AnalysisLimits.InvestmentPriorityFallback;
             return (assessment.RiskLevel, assessment.EstimatedValue) switch
             {
-                ("HIGH", > 100000) => "CRITICAL - Immediate executive attention required",
+                ("HIGH", var value) when value > fallbackConfig.HighRiskHighValueThreshold => "CRITICAL - Immediate executive attention required",
                 ("HIGH", _) => "HIGH - Significant business risk requiring prompt action",
-                ("MEDIUM", > 50000) => "MEDIUM - Strategic investment opportunity",
+                ("MEDIUM", var value) when value > fallbackConfig.MediumRiskHighValueThreshold => "MEDIUM - Strategic investment opportunity",
                 _ => "LOW - Include in regular development planning cycle"
             };
         }
@@ -636,7 +646,7 @@ This analysis provides executive-level insights for strategic technology investm
                 nextSteps.Add("Implement automated testing pipeline");
             }
 
-            return nextSteps.Take(6).ToList(); // Limit to most important actions
+            return nextSteps.Take(_businessRules.AnalysisLimits.ResultLimits.MaxNextSteps).ToList(); // Limit to most important actions
         }
     }
 }

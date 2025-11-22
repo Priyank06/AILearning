@@ -14,6 +14,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly Kernel _kernel;
         private readonly ILogger<SecurityAnalystAgent> _logger;
         private readonly AgentConfiguration _agentConfig;
+        private readonly SecurityAnalystConfig _analysisConfig;
 
         public string AgentName => _agentConfig.AgentProfiles["security"].AgentName;
         public string Specialty => _agentConfig.AgentProfiles["security"].Specialty;
@@ -29,6 +30,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             _agentConfig = new AgentConfiguration();
             configuration.GetSection("AgentConfiguration").Bind(_agentConfig);
             var profile = _agentConfig.AgentProfiles["security"];
+
+            _analysisConfig = new SecurityAnalystConfig();
+            configuration.GetSection("AgentAnalysisConfiguration:Security").Bind(_analysisConfig);
         }
 
         [KernelFunction, Description("Perform comprehensive security analysis of C# code")]
@@ -130,10 +134,10 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 analysis.Contains("security", StringComparison.OrdinalIgnoreCase),
                 analysis.Contains("risk", StringComparison.OrdinalIgnoreCase),
                 analysis.Contains("recommendation", StringComparison.OrdinalIgnoreCase),
-                analysis.Length > 500
+                analysis.Length > _analysisConfig.MinAnalysisLengthForConfidence
             };
 
-            var score = qualityIndicators.Count(indicator => indicator) * 20;
+            var score = qualityIndicators.Count(indicator => indicator) * _analysisConfig.ConfidenceScoreMultiplier;
             return Math.Min(100, Math.Max(0, score));
         }
 
@@ -154,13 +158,13 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             var complexityCount = complexityKeywords.Count(keyword =>
                 analysis.Contains(keyword, StringComparison.OrdinalIgnoreCase));
 
-            return complexityCount switch
+            // Use configuration, with fallback to highest value if complexity exceeds configured values
+            if (_analysisConfig.EffortEstimationByComplexity.TryGetValue(complexityCount, out var effort))
             {
-                0 => 8m,
-                1 => 16m,
-                2 => 40m,
-                >= 3 => 80m
-            };
+                return effort;
+            }
+            // If complexity count exceeds configured values, use the maximum configured value
+            return _analysisConfig.EffortEstimationByComplexity.Values.DefaultIfEmpty(80m).Max();
         }
 
         private string DeterminePriority(string analysis)
@@ -257,15 +261,19 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             if (analysis.Contains("encryption", StringComparison.OrdinalIgnoreCase))
                 riskFactors.Add("Inadequate encryption exposes sensitive data");
 
+            var riskLevel = "LOW";
+            if (_analysisConfig.RiskLevelByFactorCount.TryGetValue(riskFactors.Count, out var configuredLevel))
+            {
+                riskLevel = configuredLevel;
+            }
+            else if (riskFactors.Count > _analysisConfig.RiskLevelByFactorCount.Keys.DefaultIfEmpty(0).Max())
+            {
+                riskLevel = "CRITICAL";
+            }
+
             return new
             {
-                Level = riskFactors.Count switch
-                {
-                    0 => "LOW",
-                    1 => "MEDIUM",
-                    2 => "HIGH",
-                    _ => "CRITICAL"
-                },
+                Level = riskLevel,
                 RiskFactors = riskFactors,
                 MitigationStrategy = "Implement comprehensive security remediation plan with immediate focus on critical vulnerabilities"
             };
@@ -302,7 +310,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 }
             }
 
-            return evidence.Take(3).ToList();
+            return evidence.Take(_analysisConfig.MaxEvidenceItems).ToList();
         }
 
         private string ExtractPatternContext(string analysis, string pattern)

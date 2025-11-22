@@ -1,15 +1,19 @@
 ﻿using PoC1_LegacyAnalyzer_Web.Models;
 using System.Text;
+using Microsoft.Extensions.Configuration;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
     public class ReportService : IReportService
     {
         private readonly ILogger<ReportService> _logger;
+        private readonly BusinessCalculationRules _businessRules;
 
-        public ReportService(ILogger<ReportService> logger)
+        public ReportService(ILogger<ReportService> logger, IConfiguration configuration)
         {
             _logger = logger;
+            _businessRules = new BusinessCalculationRules();
+            configuration.GetSection("BusinessCalculationRules").Bind(_businessRules);
         }
 
         public async Task<string> GenerateReportAsync(CodeAnalysisResult analysis, string aiAnalysis, string fileName, string analysisType)
@@ -428,10 +432,11 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
         private int CalculateManualAnalysisHours(BusinessAnalysisContext context)
         {
-            // Real calculation based on actual code metrics
-            var baseHours = context.ActualClassCount * 2; // 2 hours per class
-            var methodHours = context.ActualMethodCount * 0.25; // 15 minutes per method
-            var dependencyHours = context.ActualUsingCount * 0.5; // 30 minutes per dependency analysis
+            // Real calculation based on actual code metrics using configuration
+            var manualConfig = _businessRules.ManualAnalysis;
+            var baseHours = context.ActualClassCount * manualConfig.HoursPerClass;
+            var methodHours = context.ActualMethodCount * manualConfig.HoursPerMethod;
+            var dependencyHours = context.ActualUsingCount * manualConfig.HoursPerDependency;
 
             return (int)(baseHours + methodHours + dependencyHours);
         }
@@ -439,13 +444,15 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private string CalculateTimeSavings(BusinessAnalysisContext context)
         {
             var manualHours = CalculateManualAnalysisHours(context);
-            return $"{manualHours} hours manual analysis vs. 3 minutes AI analysis = {manualHours * 60 - 3} minutes saved";
+            var aiTimeMinutes = _businessRules.ManualAnalysis.AIAnalysisTimeMinutes;
+            return $"{manualHours} hours manual analysis vs. {aiTimeMinutes} minutes AI analysis = {manualHours * 60 - aiTimeMinutes} minutes saved";
         }
 
         private string CalculateCostAvoidance(BusinessAnalysisContext context)
         {
             var manualHours = CalculateManualAnalysisHours(context);
-            var costSavings = manualHours * 125; // $125/hour senior developer rate
+            var hourlyRate = _businessRules.CostCalculation.DefaultDeveloperHourlyRate;
+            var costSavings = manualHours * hourlyRate;
             return $"${costSavings:N0} in developer time cost avoidance";
         }
 
@@ -453,20 +460,23 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private string GenerateCompetitiveAdvantageSection(BusinessAnalysisContext context)
         {
             var manualHours = CalculateManualAnalysisHours(context);
-            var costSavings = manualHours * 125;
-            var speedMultiplier = (manualHours * 60) / 3; // Convert hours to minutes, divide by 3 minutes
+            var hourlyRate = _businessRules.CostCalculation.DefaultDeveloperHourlyRate;
+            var costSavings = manualHours * hourlyRate;
+            var aiTimeMinutes = _businessRules.ManualAnalysis.AIAnalysisTimeMinutes;
+            var aiCost = _businessRules.ManualAnalysis.AIAnalysisCostPerAssessment;
+            var speedMultiplier = (manualHours * 60.0) / aiTimeMinutes; // Convert hours to minutes, divide by AI time
 
             return $@"## Competitive Advantage Analysis
 
 ### Speed Advantage
 - **Traditional Approach**: {manualHours} hours manual analysis
-- **AI-Enhanced Approach**: 3 minutes automated analysis  
+- **AI-Enhanced Approach**: {aiTimeMinutes} minutes automated analysis  
 - **Speed Multiplier**: {speedMultiplier:F0}x faster time-to-insight
 
 ### Cost Advantage  
-- **Traditional Manual Review**: ${costSavings:N0} (${manualHours} hours @ $125/hour)
-- **AI-Enhanced Analysis**: $5 per comprehensive assessment (cloud costs)
-- **Cost Reduction**: ${costSavings - 5:N0} savings per analysis
+- **Traditional Manual Review**: ${costSavings:N0} (${manualHours} hours @ ${hourlyRate}/hour)
+- **AI-Enhanced Analysis**: ${aiCost} per comprehensive assessment (cloud costs)
+- **Cost Reduction**: ${costSavings - aiCost:N0} savings per analysis
 
 ### Accuracy Advantage
 - **Manual Analysis**: {context.ActualClassCount} classes requiring individual review
