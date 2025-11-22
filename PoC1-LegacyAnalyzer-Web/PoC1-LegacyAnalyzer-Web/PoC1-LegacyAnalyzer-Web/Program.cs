@@ -1,5 +1,6 @@
 using Microsoft.SemanticKernel;
 using PoC1_LegacyAnalyzer_Web.Services;
+using PoC1_LegacyAnalyzer_Web.Models;
 
 public static class ServiceCollectionExtensions
 {
@@ -96,8 +97,100 @@ public class Program
         builder.Services.AddMultiAgentOrchestration(builder.Configuration);
         builder.Services.AddSemanticKernel(builder.Configuration);
 
-        var app = builder.Build();
+        var promptConfig = builder.Configuration.GetSection("PromptConfiguration").Get<PromptConfiguration>();
 
+        if (promptConfig == null)
+        {
+            throw new InvalidOperationException("PromptConfiguration section is missing in appsettings.json.");
+        }
+        if (promptConfig.SystemPrompts == null || promptConfig.SystemPrompts.Count == 0)
+        {
+            throw new InvalidOperationException("PromptConfiguration.SystemPrompts is missing or empty in appsettings.json.");
+        }
+        if (promptConfig.AnalysisPromptTemplates == null || promptConfig.AnalysisPromptTemplates.Templates == null)
+        {
+            throw new InvalidOperationException("PromptConfiguration.AnalysisPromptTemplates.Templates is missing in appsettings.json.");
+        }
+
+        // AgentConfiguration validation
+        var agentConfig = builder.Configuration.GetSection("AgentConfiguration").Get<AgentConfiguration>();
+        if (agentConfig == null)
+        {
+            throw new InvalidOperationException("AgentConfiguration section is missing in appsettings.json.");
+        }
+        if (agentConfig.AgentProfiles == null ||
+            !agentConfig.AgentProfiles.ContainsKey("security") ||
+            !agentConfig.AgentProfiles.ContainsKey("performance") ||
+            !agentConfig.AgentProfiles.ContainsKey("architecture"))
+        {
+            throw new InvalidOperationException("AgentConfiguration.AgentProfiles must contain 'security', 'performance', and 'architecture' profiles.");
+        }
+        if (agentConfig.AgentPromptTemplates == null ||
+            !agentConfig.AgentPromptTemplates.ContainsKey("security") ||
+            !agentConfig.AgentPromptTemplates.ContainsKey("performance") ||
+            !agentConfig.AgentPromptTemplates.ContainsKey("architecture"))
+        {
+            throw new InvalidOperationException("AgentConfiguration.AgentPromptTemplates must contain 'security', 'performance', and 'architecture' templates.");
+        }
+        if (agentConfig.OrchestrationPrompts == null)
+        {
+            throw new InvalidOperationException("AgentConfiguration.OrchestrationPrompts is missing in appsettings.json.");
+        }
+
+        // BusinessCalculationRules validation
+        var businessRules = builder.Configuration.GetSection("BusinessCalculationRules").Get<BusinessCalculationRules>();
+        if (businessRules == null)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules section is missing in appsettings.json.");
+        }
+        if (businessRules.CostCalculation == null)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.CostCalculation is missing.");
+        }
+        if (businessRules.CostCalculation.BaseValuePerLine <= 0)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.CostCalculation.BaseValuePerLine must be greater than 0.");
+        }
+        if (businessRules.CostCalculation.MaxEstimatedValue <= 0)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.CostCalculation.MaxEstimatedValue must be greater than 0.");
+        }
+        if (businessRules.CostCalculation.DefaultDeveloperHourlyRate <= 0)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.CostCalculation.DefaultDeveloperHourlyRate must be greater than 0.");
+        }
+        if (businessRules.ComplexityThresholds == null)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.ComplexityThresholds is missing.");
+        }
+        if (!(businessRules.ComplexityThresholds.VeryLow < businessRules.ComplexityThresholds.Low &&
+              businessRules.ComplexityThresholds.Low < businessRules.ComplexityThresholds.Medium &&
+              businessRules.ComplexityThresholds.Medium < businessRules.ComplexityThresholds.High &&
+              businessRules.ComplexityThresholds.High < businessRules.ComplexityThresholds.VeryHigh))
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.ComplexityThresholds must be ordered: VeryLow < Low < Medium < High < VeryHigh.");
+        }
+        if (businessRules.RiskThresholds == null)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.RiskThresholds is missing.");
+        }
+        if (!(businessRules.RiskThresholds.LowRiskMax < businessRules.RiskThresholds.MediumRiskMax &&
+              businessRules.RiskThresholds.MediumRiskMax <= businessRules.RiskThresholds.HighRiskMin))
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.RiskThresholds must be logical: LowRiskMax < MediumRiskMax <= HighRiskMin.");
+        }
+        if (businessRules.ProcessingLimits == null)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.ProcessingLimits is missing.");
+        }
+        if (businessRules.ProcessingLimits.MetadataSampleFileCount <= 0 ||
+            businessRules.ProcessingLimits.CodeContextSummaryMaxLength <= 0 ||
+            businessRules.ProcessingLimits.TokenEstimationCharsPerToken <= 0)
+        {
+            throw new InvalidOperationException("BusinessCalculationRules.ProcessingLimits values must be positive.");
+        }
+
+        var app = builder.Build();
         // Configure the HTTP request pipeline.
         if (!app.Environment.IsDevelopment())
         {
