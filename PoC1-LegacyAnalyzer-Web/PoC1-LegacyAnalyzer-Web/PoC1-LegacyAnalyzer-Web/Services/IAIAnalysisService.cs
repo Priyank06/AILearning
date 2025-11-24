@@ -22,5 +22,13 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// <param name="analysisType">The type of analysis for which to get the system prompt.</param>
         /// <returns>The system prompt as a string.</returns>
         string GetSystemPrompt(string analysisType);
+
+        /// <summary>
+        /// Performs batch AI analysis on multiple code files in a single API call.
+        /// </summary>
+        /// <param name="fileAnalyses">List of file content and static analysis results to analyze.</param>
+        /// <param name="analysisType">The type of analysis to perform.</param>
+        /// <returns>Dictionary mapping file names to their AI analysis results.</returns>
+        Task<Dictionary<string, string>> GetBatchAnalysisAsync(List<(string fileName, string code, CodeAnalysisResult staticAnalysis)> fileAnalyses, string analysisType);
     }
 }
