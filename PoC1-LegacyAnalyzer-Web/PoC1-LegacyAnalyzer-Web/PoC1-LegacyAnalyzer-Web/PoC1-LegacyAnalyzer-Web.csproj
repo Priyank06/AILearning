@@ -5,7 +5,8 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<RootNamespace>PoC1_LegacyAnalyzer_Web</RootNamespace>
-	</PropertyGroup>
+	  <UserSecretsId>7ecb9d4d-3890-4f5a-aa11-f6fdee347254</UserSecretsId>
+  </PropertyGroup>
 
 	<ItemGroup>
 	  <None Remove="AZURE_KEY_VAULT_SETUP.md" />
@@ -20,5 +21,6 @@
 		<PackageReference Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.3.2" />
 		<PackageReference Include="Azure.Identity" Version="1.13.1" />
 		<PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.6.0" />
+		<PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.22.0" />
 	</ItemGroup>
 </Project>

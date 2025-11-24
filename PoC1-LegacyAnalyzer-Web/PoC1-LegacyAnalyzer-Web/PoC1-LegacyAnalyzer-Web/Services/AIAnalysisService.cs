@@ -2,6 +2,8 @@
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
 using PoC1_LegacyAnalyzer_Web.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -19,34 +21,33 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// Sets up Azure OpenAI and loads prompt configuration from appsettings.json.
         /// </summary>
         /// <param name="configuration">The application configuration.</param>
+        /// <param name="keyVaultService">The Key Vault service for secure secret retrieval.</param>
+        /// <param name="logger">The logger instance.</param>
         /// <exception cref="InvalidOperationException">
         /// Thrown if Azure OpenAI or prompt configuration is missing or invalid.
         /// </exception>
-        public AIAnalysisService(IConfiguration configuration)
+        public AIAnalysisService(IConfiguration configuration, IKeyVaultService keyVaultService, ILogger<AIAnalysisService> logger)
         {
-            var endpoint = configuration["AzureOpenAI:Endpoint"]
-                ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
-
-            var apiKey = configuration["AzureOpenAI:ApiKey"]
-                ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_KEY");
-
-            var deployment = configuration["AzureOpenAI:Deployment"]
+            // Fetch secrets securely from Key Vault using correct prefix
+            var endpoint = keyVaultService.GetSecretAsync("App--AzureOpenAI--Endpoint").GetAwaiter().GetResult() ?? configuration["AzureOpenAI:Endpoint"];
+            var apiKey = keyVaultService.GetSecretAsync("App--AzureOpenAI--ApiKey").GetAwaiter().GetResult() ?? configuration["AzureOpenAI:ApiKey"];
+            var deployment = keyVaultService.GetSecretAsync("App--AzureOpenAI--Deployment").GetAwaiter().GetResult()
+                ?? configuration["AzureOpenAI:Deployment"]
                 ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
-                ?? "gpt-4"; // Update default to gpt-4
+                ?? "gpt-4";
 
             if (string.IsNullOrWhiteSpace(endpoint))
             {
+                logger.LogError("Azure OpenAI endpoint is not configured or not found in Key Vault.");
                 throw new InvalidOperationException(
-                    "Azure OpenAI endpoint is not configured. " +
-                    "Set 'AzureOpenAI:Endpoint' in appsettings.json or AZURE_OPENAI_ENDPOINT environment variable.");
+                    "Azure OpenAI endpoint is not configured. Set 'App--AzureOpenAI--Endpoint' in Key Vault.");
             }
 
             if (string.IsNullOrWhiteSpace(apiKey))
             {
+                logger.LogError("Azure OpenAI API key is not configured or not found in Key Vault.");
                 throw new InvalidOperationException(
-                    "Azure OpenAI API key is not configured. " +
-                    "Set 'AzureOpenAI:ApiKey' in appsettings.json or AZURE_OPENAI_KEY environment variable. " +
-                    "For development, use: dotnet user-secrets set 'AzureOpenAI:ApiKey' 'your-key'");
+                    "Azure OpenAI API key is not configured. Set 'App--AzureOpenAI--ApiKey' in Key Vault.");
             }
 
             _deploymentName = deployment;
