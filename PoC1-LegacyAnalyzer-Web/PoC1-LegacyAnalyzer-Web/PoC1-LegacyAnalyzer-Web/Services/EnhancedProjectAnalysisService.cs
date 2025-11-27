@@ -3,6 +3,7 @@ using PoC1_LegacyAnalyzer_Web.Models;
 using PoC1_LegacyAnalyzer_Web.Models.ProjectAnalysis;
 using Microsoft.Extensions.Configuration;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Options;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -20,18 +21,16 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             IAgentOrchestrationService agentOrchestration,
             ICodeAnalysisAgentService singleAgent,
             ILogger<EnhancedProjectAnalysisService> logger,
-            IConfiguration configuration)
+            IOptions<AgentConfiguration> agentOptions,
+            IOptions<BusinessCalculationRules> businessRulesOptions)
         {
             _multiFileAnalysis = multiFileAnalysis;
             _agentOrchestration = agentOrchestration;
             _singleAgent = singleAgent;
             _logger = logger;
 
-            _agentConfig = new AgentConfiguration();
-            configuration.GetSection("AgentConfiguration").Bind(_agentConfig);
-
-            _businessRules = new BusinessCalculationRules();
-            configuration.GetSection("BusinessCalculationRules").Bind(_businessRules);
+            _agentConfig = agentOptions.Value ?? new AgentConfiguration();
+            _businessRules = businessRulesOptions.Value ?? new BusinessCalculationRules();
         }
 
         public async Task<ProjectAnalysisResult> AnalyzeProjectAsync(ProjectAnalysisRequest request, IProgress<ProjectAnalysisProgress> progress = null, CancellationToken cancellationToken = default)

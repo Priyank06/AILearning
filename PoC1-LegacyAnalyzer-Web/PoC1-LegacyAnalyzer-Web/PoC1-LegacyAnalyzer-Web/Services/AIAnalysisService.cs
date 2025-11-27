@@ -4,6 +4,7 @@ using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
 using PoC1_LegacyAnalyzer_Web.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -27,15 +28,26 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// <exception cref="InvalidOperationException">
         /// Thrown if Azure OpenAI or prompt configuration is missing or invalid.
         /// </exception>
-        public AIAnalysisService(IConfiguration configuration, IKeyVaultService keyVaultService, ILogger<AIAnalysisService> logger)
+        public AIAnalysisService(
+            IConfiguration configuration,
+            IKeyVaultService keyVaultService,
+            ILogger<AIAnalysisService> logger,
+            IOptions<PromptConfiguration> promptOptions,
+            IOptions<FileAnalysisLimitsConfig> fileLimitOptions)
         {
             // Fetch secrets securely from Key Vault using correct prefix
             var endpoint = keyVaultService.GetSecretAsync("App--AzureOpenAI--Endpoint").GetAwaiter().GetResult() ?? configuration["AzureOpenAI:Endpoint"];
             var apiKey = keyVaultService.GetSecretAsync("App--AzureOpenAI--ApiKey").GetAwaiter().GetResult() ?? configuration["AzureOpenAI:ApiKey"];
             var deployment = keyVaultService.GetSecretAsync("App--AzureOpenAI--Deployment").GetAwaiter().GetResult()
                 ?? configuration["AzureOpenAI:Deployment"]
-                ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
-                ?? "gpt-4";
+                ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT");
+
+            if (string.IsNullOrWhiteSpace(deployment))
+            {
+                logger.LogError("Azure OpenAI deployment name is not configured or not found in Key Vault.");
+                throw new InvalidOperationException(
+                    "Azure OpenAI deployment is not configured. Set 'App--AzureOpenAI--Deployment' in Key Vault or 'AzureOpenAI:Deployment' in configuration.");
+            }
 
             if (string.IsNullOrWhiteSpace(endpoint))
             {
@@ -58,18 +70,16 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 apiKey: apiKey
             );
 
-            // Bind PromptConfiguration section
-            _promptConfig = new PromptConfiguration();
-            configuration.GetSection("PromptConfiguration").Bind(_promptConfig);
+            // Bind PromptConfiguration via options
+            _promptConfig = promptOptions.Value ?? new PromptConfiguration();
 
             if (_promptConfig.SystemPrompts == null || _promptConfig.SystemPrompts.Count == 0)
             {
                 throw new InvalidOperationException("PromptConfiguration is not properly configured in appsettings.json");
             }
 
-            // Load file analysis limits configuration
-            _fileLimits = new FileAnalysisLimitsConfig();
-            configuration.GetSection("FileAnalysisLimits").Bind(_fileLimits);
+            // Load file analysis limits configuration via options
+            _fileLimits = fileLimitOptions.Value ?? new FileAnalysisLimitsConfig();
         }
 
         /// <summary>
@@ -383,7 +393,9 @@ Requirements:
         private string BuildAnalysisPrompt(string code, string analysisType, CodeAnalysisResult analysis)
         {
             // Use configuration-based code preview length
-            int maxLength = _promptConfig.CodePreviewMaxLength > 0 ? _promptConfig.CodePreviewMaxLength : 1200;
+            int maxLength = _promptConfig.CodePreviewMaxLength > 0
+                ? _promptConfig.CodePreviewMaxLength
+                : _fileLimits.DefaultCodePreviewLength;
             var codePreview = code.Length > maxLength ? code.Substring(0, maxLength) + "..." : code;
 
             // Build base prompt from configuration template

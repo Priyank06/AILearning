@@ -4,6 +4,7 @@ using Azure.Identity;
 using PoC1_LegacyAnalyzer_Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.Extensions.Options;
 
 public class Program
 {
@@ -55,6 +56,18 @@ public class Program
             // But still configure with default settings for when configuration is available
             builder.Services.AddApplicationInsightsTelemetry();
         }
+
+        // Bind configuration sections to options for IOptions pattern
+        builder.Services.Configure<PromptConfiguration>(builder.Configuration.GetSection("PromptConfiguration"));
+        builder.Services.Configure<AgentConfiguration>(builder.Configuration.GetSection("AgentConfiguration"));
+        builder.Services.Configure<BusinessCalculationRules>(builder.Configuration.GetSection("BusinessCalculationRules"));
+        builder.Services.Configure<FileAnalysisLimitsConfig>(builder.Configuration.GetSection("FileAnalysisLimits"));
+        builder.Services.Configure<BatchProcessingConfig>(builder.Configuration.GetSection("AzureOpenAI:BatchProcessing"));
+        builder.Services.Configure<ComplexityThresholdsConfig>(builder.Configuration.GetSection("ComplexityThresholds"));
+        builder.Services.Configure<ScaleThresholdsConfig>(builder.Configuration.GetSection("ScaleThresholds"));
+        builder.Services.Configure<TokenEstimationConfig>(builder.Configuration.GetSection("TokenEstimation"));
+        builder.Services.Configure<KeyVaultConfiguration>(builder.Configuration.GetSection("KeyVault"));
+        builder.Services.Configure<KeyVaultClientOptions>(builder.Configuration.GetSection("KeyVault:Client"));
 
         // Add services to the container.
         builder.Services.AddRazorPages();

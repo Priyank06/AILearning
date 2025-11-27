@@ -2,6 +2,7 @@
 using PoC1_LegacyAnalyzer_Web.Models;
 using Microsoft.Extensions.Configuration;
 using System.Threading;
+using Microsoft.Extensions.Options;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -21,41 +22,33 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             ICodeAnalysisService codeAnalysisService,
             IAIAnalysisService aiAnalysisService,
             ILogger<MultiFileAnalysisService> logger,
-            IConfiguration configuration)
+            IOptions<BusinessCalculationRules> businessRulesOptions,
+            IOptions<BatchProcessingConfig> batchOptions,
+            IOptions<FileAnalysisLimitsConfig> fileLimitOptions,
+            IOptions<ComplexityThresholdsConfig> complexityOptions,
+            IOptions<ScaleThresholdsConfig> scaleThresholdOptions,
+            IOptions<TokenEstimationConfig> tokenEstimationOptions)
         {
             _codeAnalysisService = codeAnalysisService;
             _aiAnalysisService = aiAnalysisService;
             _logger = logger;
 
-            _businessRules = new BusinessCalculationRules();
-            configuration.GetSection("BusinessCalculationRules").Bind(_businessRules);
+            _businessRules = businessRulesOptions.Value ?? new BusinessCalculationRules();
 
-            // Load batch processing configuration
-            _batchConfig = new BatchProcessingConfig();
-            configuration.GetSection("AzureOpenAI:BatchProcessing").Bind(_batchConfig);
-            
-            // Set defaults if not configured
-            if (_batchConfig.MaxFilesPerBatch <= 0) _batchConfig.MaxFilesPerBatch = 3;
-            if (_batchConfig.MaxTokensPerBatch <= 0) _batchConfig.MaxTokensPerBatch = 8000;
-            if (_batchConfig.MaxConcurrentBatches <= 0) _batchConfig.MaxConcurrentBatches = 2;
-            if (_batchConfig.TokenEstimationCharsPerToken <= 0) _batchConfig.TokenEstimationCharsPerToken = 4;
-            if (_batchConfig.ReserveTokensForResponse <= 0) _batchConfig.ReserveTokensForResponse = 2000;
+            // Load batch processing configuration via options
+            _batchConfig = batchOptions.Value ?? new BatchProcessingConfig();
 
-            // Load file analysis limits configuration
-            _fileLimits = new FileAnalysisLimitsConfig();
-            configuration.GetSection("FileAnalysisLimits").Bind(_fileLimits);
+            // Load file analysis limits configuration via options
+            _fileLimits = fileLimitOptions.Value ?? new FileAnalysisLimitsConfig();
 
-            // Load complexity thresholds configuration
-            _complexityThresholds = new ComplexityThresholdsConfig();
-            configuration.GetSection("ComplexityThresholds").Bind(_complexityThresholds);
+            // Load complexity thresholds configuration via options
+            _complexityThresholds = complexityOptions.Value ?? new ComplexityThresholdsConfig();
 
-            // Load scale thresholds configuration
-            _scaleThresholds = new ScaleThresholdsConfig();
-            configuration.GetSection("ScaleThresholds").Bind(_scaleThresholds);
+            // Load scale thresholds configuration via options
+            _scaleThresholds = scaleThresholdOptions.Value ?? new ScaleThresholdsConfig();
 
-            // Load token estimation configuration
-            _tokenEstimation = new TokenEstimationConfig();
-            configuration.GetSection("TokenEstimation").Bind(_tokenEstimation);
+            // Load token estimation configuration via options
+            _tokenEstimation = tokenEstimationOptions.Value ?? new TokenEstimationConfig();
         }
 
         public async Task<MultiFileAnalysisResult> AnalyzeMultipleFilesAsync(List<IBrowserFile> files, string analysisType)
@@ -163,9 +156,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
         private async Task<FileAnalysisResult> AnalyzeIndividualFileAsync(IBrowserFile file, string analysisType)
         {
-            const int maxFileSize = 512000; // 500KB security limit
-
-            using var stream = file.OpenReadStream(maxFileSize);
+            using var stream = file.OpenReadStream(_fileLimits.MaxFileSizeBytes);
             using var reader = new StreamReader(stream);
             var content = await reader.ReadToEndAsync();
 
@@ -175,7 +166,10 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             string professionalAssessment;
             try
             {
-                var analysisContent = content.Length > 800 ? content.Substring(0, 800) + "..." : content;
+                var previewLength = _fileLimits.DefaultCodePreviewLength;
+                var analysisContent = content.Length > previewLength
+                    ? content.Substring(0, previewLength) + "..."
+                    : content;
                 professionalAssessment = await _aiAnalysisService.GetAnalysisAsync(analysisContent, analysisType, staticAnalysis);
             }
             catch (Exception ex)

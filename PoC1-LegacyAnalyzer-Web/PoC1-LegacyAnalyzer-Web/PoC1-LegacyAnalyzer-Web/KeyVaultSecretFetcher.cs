@@ -4,6 +4,8 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using Azure.Core;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using PoC1_LegacyAnalyzer_Web.Models;
 
 namespace PoC1_LegacyAnalyzer_Web
 {
@@ -20,16 +22,20 @@ namespace PoC1_LegacyAnalyzer_Web
         private readonly SecretClient _client;
         private readonly ILogger _logger;
 
-        public KeyVaultService(string vaultUri, ILogger<KeyVaultService> logger)
+        public KeyVaultService(string vaultUri, ILogger<KeyVaultService> logger, IOptions<KeyVaultClientOptions> clientOptions)
         {
+            var retryConfig = clientOptions?.Value ?? new KeyVaultClientOptions();
+
             var options = new SecretClientOptions(SecretClientOptions.ServiceVersion.V7_2)
             {
-                Retry = {
-                    MaxRetries = 5,
-                    Delay = TimeSpan.FromSeconds(2),
+                Retry =
+                {
+                    MaxRetries = retryConfig.MaxRetries,
+                    Delay = TimeSpan.FromSeconds(retryConfig.RetryDelaySeconds),
                     Mode = RetryMode.Exponential
                 }
             };
+
             _client = new SecretClient(new Uri(vaultUri), new DefaultAzureCredential(), options);
             _logger = logger;
         }

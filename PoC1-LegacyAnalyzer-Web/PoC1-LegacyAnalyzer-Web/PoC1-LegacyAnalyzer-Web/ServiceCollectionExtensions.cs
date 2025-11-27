@@ -3,6 +3,8 @@ using PoC1_LegacyAnalyzer_Web.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using PoC1_LegacyAnalyzer_Web.Models;
 
 namespace PoC1_LegacyAnalyzer_Web
 {
@@ -72,7 +74,9 @@ namespace PoC1_LegacyAnalyzer_Web
                     ?? throw new InvalidOperationException("Azure OpenAI endpoint not configured");
                 var apiKey = configuration["AzureOpenAI:ApiKey"]
                     ?? throw new InvalidOperationException("Azure OpenAI API key not configured");
-                var deployment = configuration["AzureOpenAI:Deployment"] ?? "gpt-4";
+                var deployment = configuration["AzureOpenAI:Deployment"]
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
+                    ?? throw new InvalidOperationException("Azure OpenAI deployment not configured");
 
                 var builder = Kernel.CreateBuilder();
                 builder.AddAzureOpenAIChatCompletion(deployment, endpoint, apiKey);
@@ -89,6 +93,7 @@ namespace PoC1_LegacyAnalyzer_Web
             services.AddSingleton<IKeyVaultService>(provider =>
             {
                 var config = provider.GetRequiredService<IConfiguration>();
+                var clientOptions = provider.GetRequiredService<IOptions<KeyVaultClientOptions>>();
                 var keyVaultEnabled = config.GetValue<bool>("KeyVault:Enabled");
 
                 if (!keyVaultEnabled)
@@ -99,7 +104,7 @@ namespace PoC1_LegacyAnalyzer_Web
 
                 var logger = provider.GetRequiredService<ILogger<KeyVaultService>>();
                 var vaultUri = config["KeyVault:VaultUri"];
-                return new KeyVaultService(vaultUri, logger);
+                return new KeyVaultService(vaultUri, logger, clientOptions);
             });
             return services;
         }
