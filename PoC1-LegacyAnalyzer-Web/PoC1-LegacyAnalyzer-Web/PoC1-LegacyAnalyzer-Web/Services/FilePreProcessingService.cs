@@ -953,6 +953,11 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             if (agentSpecialty.Equals("security", StringComparison.OrdinalIgnoreCase))
             {
                 var filtered = await FilterBySecurityRisks(allMetadata);
+                if (!filtered.Any())
+                {
+                    _logger?.LogWarning("Security agent: No security patterns detected. Sending all {count} files for thorough review.", allMetadata.Count);
+                    filtered = allMetadata;
+                }
                 var lines = filtered.Select(f =>
                     $"File: {f.FileName} | Risks: {string.Join(", ", f.Patterns?.SecurityFindings ?? new List<string>())} | Complexity: {f.Complexity?.CyclomaticComplexity ?? 0}");
                 result = string.Join("\n", lines);
@@ -960,6 +965,11 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             else if (agentSpecialty.Equals("performance", StringComparison.OrdinalIgnoreCase))
             {
                 var filtered = await FilterByComplexity(allMetadata, 15);
+                if (!filtered.Any())
+                {
+                    _logger?.LogWarning("Performance agent: No files met complexity threshold. Sending all {count} files.", allMetadata.Count);
+                    filtered = allMetadata;
+                }
                 var lines = filtered.Select(f =>
                     $"File: {f.FileName} | PerfIssues: {string.Join(", ", f.Patterns?.PerformanceFindings ?? new List<string>())} | Complexity: {f.Complexity?.CyclomaticComplexity ?? 0}");
                 result = string.Join("\n", lines);
@@ -967,7 +977,6 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             else if (agentSpecialty.Equals("architecture", StringComparison.OrdinalIgnoreCase))
             {
                 int totalClasses = allMetadata.Sum(f => f.Complexity?.ClassCount ?? 0);
-                // Dependencies property not present in FileMetadata, so skip
                 var patterns = allMetadata.SelectMany(f =>
                     (f.Patterns?.SecurityFindings ?? new List<string>())
                     .Concat(f.Patterns?.PerformanceFindings ?? new List<string>())

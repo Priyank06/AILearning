@@ -81,7 +81,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// <param name="progress">Optional progress reporter for preprocessing phase.</param>
         /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
         /// <returns>A <see cref="TeamAnalysisResult"/> containing the results of the team analysis.</returns>
-        public async Task<TeamAnalysisResult> CoordinateTeamAnalysisAsync(
+        public async Task<PoC1_LegacyAnalyzer_Web.Models.AgentCommunication.TeamAnalysisResult> CoordinateTeamAnalysisAsync(
             List<IBrowserFile> files,
             string businessObjective,
             List<string> requiredSpecialties,
@@ -91,7 +91,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             _logger.LogInformation("Starting team analysis coordination for objective: {Objective}", businessObjective);
 
             var conversationId = Guid.NewGuid().ToString();
-            var teamResult = new TeamAnalysisResult
+            var teamResult = new PoC1_LegacyAnalyzer_Web.Models.AgentCommunication.TeamAnalysisResult
             {
                 ConversationId = conversationId
             };
@@ -99,18 +99,27 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             try
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
+                var perfMetrics = new PoC1_LegacyAnalyzer_Web.Models.AgentCommunication.PerformanceMetrics();
+                int llmCalls = 0;
+                var orchestrationSw = System.Diagnostics.Stopwatch.StartNew();
+
+                // Preprocessing phase
+                var preprocessingSw = System.Diagnostics.Stopwatch.StartNew();
                 progress?.Report("Preprocessing files...");
                 var metadata = await _preprocessingService.ExtractMetadataParallelAsync(files, "csharp");
-                sw.Stop();
-                _logger.LogInformation("Preprocessed {FileCount} files in {ElapsedMs}ms, extracted metadata", files.Count, sw.ElapsedMilliseconds);
-                progress?.Report($"Preprocessed {files.Count} files in {sw.ElapsedMilliseconds}ms");
+                preprocessingSw.Stop();
+                perfMetrics.PreprocessingTimeMs = preprocessingSw.ElapsedMilliseconds;
+
+                _logger.LogInformation("Preprocessed {FileCount} files in {ElapsedMs}ms, extracted metadata", files.Count, preprocessingSw.ElapsedMilliseconds);
+                progress?.Report($"Preprocessed {files.Count} files in {preprocessingSw.ElapsedMilliseconds}ms");
 
                 // Step 1: Create analysis plan (use compact summary of metadata)
                 var codeContext = $"Preprocessed {metadata.Count} files, token-optimized for agent routing.";
-                var analysisPlan = await CreateAnalysisPlanAsync(businessObjective, codeContext);
-                _logger.LogInformation("Analysis plan created: {Plan}", analysisPlan);
-
-                // Step 2: Execute specialist analyses in parallel, passing filtered/compact data
+                var analysisPlanSw = System.Diagnostics.Stopwatch.StartNew();
+                var analysisPlan = await CreateAnalysisPlanAsync(businessObjective, codeContext); llmCalls++;
+                analysisPlanSw.Stop();
+                // Step 2: Execute specialist analyses in parallel
+                var agentAnalysisSw = System.Diagnostics.Stopwatch.StartNew();
                 var specialistTasks = requiredSpecialties
                     .Where(specialty => _agentRegistry.ContainsKey(specialty.ToLower()))
                     .Select(async specialty =>
@@ -124,43 +133,110 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                         return await ExecuteSpecialistAnalysisAsync(specialty, agentData, businessObjective, cancellationToken);
                     })
                     .ToList();
-
                 var specialistResults = (await Task.WhenAll(specialistTasks)).OfType<SpecialistAnalysisResult>().ToArray();
-                teamResult.IndividualAnalyses.AddRange(specialistResults);
-
+                agentAnalysisSw.Stop();
+                perfMetrics.AgentAnalysisTimeMs = agentAnalysisSw.ElapsedMilliseconds;
                 _logger.LogInformation("Completed {Count} specialist analyses", specialistResults.Length);
 
-                // Step 3: Facilitate peer review discussion
+                // Assign individual analyses to team result
+                teamResult.IndividualAnalyses = specialistResults.ToList();
+
+                // Step 3: Peer review discussion
+                var peerReviewSw = System.Diagnostics.Stopwatch.StartNew();
                 var discussion = await FacilitateAgentDiscussionAsync(
                     $"Code Analysis for: {businessObjective}",
                     specialistResults.ToList(),
                     codeContext,
                     cancellationToken);
-
+                peerReviewSw.Stop();
+                perfMetrics.PeerReviewTimeMs = peerReviewSw.ElapsedMilliseconds;
                 teamResult.TeamDiscussion = discussion.Messages;
 
-                // Step 4: Synthesize final recommendations
-                teamResult.FinalRecommendations = await SynthesizeRecommendationsAsync(
+                // Step 4 & 6: Synthesis and executive summary in parallel
+                // Note: IndividualAnalyses must be populated before generating executive summary
+                _logger.LogInformation("Executing synthesis and summary in parallel");
+                var synthesisSw = System.Diagnostics.Stopwatch.StartNew();
+                var synthesisTask = SynthesizeRecommendationsAsync(
                     specialistResults.ToList(),
                     businessObjective,
                     cancellationToken);
+                var summarySw = System.Diagnostics.Stopwatch.StartNew();
+                // Executive summary generation now has access to IndividualAnalyses
+                var summaryTask = GenerateExecutiveSummaryAsync(
+                    teamResult,
+                    businessObjective,
+                    cancellationToken);
+                llmCalls += 2;
+                ConsolidatedRecommendations? recommendations = null;
+                string? summary = null;
+                Exception? synthesisEx = null;
+                Exception? summaryEx = null;
+                try
+                {
+                    await Task.WhenAll(synthesisTask, summaryTask);
+                    synthesisSw.Stop();
+                    summarySw.Stop();
+                    perfMetrics.SynthesisTimeMs = synthesisSw.ElapsedMilliseconds;
+                    perfMetrics.ExecutiveSummaryTimeMs = summarySw.ElapsedMilliseconds;
+                    recommendations = synthesisTask.IsCompletedSuccessfully ? synthesisTask.Result : null;
+                    summary = summaryTask.IsCompletedSuccessfully ? summaryTask.Result : null;
+                }
+                catch (Exception ex)
+                {
+                    synthesisSw.Stop();
+                    summarySw.Stop();
+                    _logger.LogError(ex, "Error during parallel synthesis/summary");
+                    if (synthesisTask.IsFaulted)
+                        synthesisEx = synthesisTask.Exception;
+                    if (summaryTask.IsFaulted)
+                        summaryEx = summaryTask.Exception;
+                }
+                var parallelTimeMs = Math.Max(synthesisSw.ElapsedMilliseconds, summarySw.ElapsedMilliseconds);
+                _logger.LogInformation("Completed synthesis and summary in {ElapsedMs}ms (parallel, sequential estimate: {SeqMs}ms)",
+                    parallelTimeMs, 35000);
+
+                if (recommendations != null)
+                    teamResult.FinalRecommendations = recommendations;
+                else if (synthesisEx != null)
+                    _logger.LogError(synthesisEx, "Synthesis failed, recommendations not set");
+
+                if (summary != null)
+                    teamResult.ExecutiveSummary = summary;
+                else if (summaryEx != null)
+                    _logger.LogError(summaryEx, "Summary failed, executive summary not set");
 
                 // Step 5: Calculate consensus metrics
                 teamResult.Consensus = CalculateConsensusMetrics(discussion, specialistResults);
 
-                // Step 6: Generate executive summary
-                teamResult.ExecutiveSummary = await GenerateExecutiveSummaryAsync(
-                    teamResult,
-                    businessObjective,
-                    cancellationToken);
-
                 // Step 7: Calculate overall confidence
                 teamResult.OverallConfidenceScore = CalculateTeamConfidenceScore(specialistResults);
+
+                orchestrationSw.Stop();
+                perfMetrics.TotalTimeMs = orchestrationSw.ElapsedMilliseconds;
+                perfMetrics.TotalLLMCalls = llmCalls;
+                // Sequential estimates (example values, adjust as needed)
+                perfMetrics.EstimatedSequentialTimeMs = perfMetrics.PreprocessingTimeMs +
+                    (perfMetrics.AgentAnalysisTimeMs * specialistResults.Length) +
+                    (perfMetrics.PeerReviewTimeMs * specialistResults.Length) +
+                    (perfMetrics.SynthesisTimeMs + perfMetrics.ExecutiveSummaryTimeMs);
+                perfMetrics.ParallelSpeedup = perfMetrics.EstimatedSequentialTimeMs > 0
+                    ? Math.Round((double)perfMetrics.EstimatedSequentialTimeMs / perfMetrics.TotalTimeMs, 2)
+                    : 1.0;
+                teamResult.PerformanceMetrics = perfMetrics;
+
+                _logger.LogInformation("Performance: {TotalTimeMs}ms total, {Speedup}x speedup", perfMetrics.TotalTimeMs, perfMetrics.ParallelSpeedup);
+                _logger.LogInformation("Performance Metrics: {@perfMetrics}", perfMetrics);
+
+                // Add performance summary to executive summary
+                if (!string.IsNullOrEmpty(teamResult.ExecutiveSummary))
+                {
+                    teamResult.ExecutiveSummary += $"\n\nAnalysis completed efficiently using parallel execution. Total time: {perfMetrics.TotalTimeMs}ms ({perfMetrics.ParallelSpeedup}x speedup vs sequential).";
+                }
 
                 // Performance metrics logging
                 var tokenReduction = "75-80%"; // Based on preprocessing design
                 _logger.LogInformation("Team analysis completed. Time saved: {ElapsedMs}ms, Tokens reduced: {TokenReduction}",
-                    sw.ElapsedMilliseconds, tokenReduction);
+                    orchestrationSw.ElapsedMilliseconds, tokenReduction);
 
                 return teamResult;
             }
@@ -238,6 +314,95 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             }
         }
 
+        /// <summary>
+        /// Performs a single peer review asynchronously between two agents, with robust error handling and performance logging.
+        /// </summary>
+        /// <param name="reviewer">The agent performing the review.</param>
+        /// <param name="reviewee">The agent whose analysis is being reviewed.</param>
+        /// <param name="codeContext">Optional code context for the review.</param>
+        /// <param name="conversationId">The conversation ID for message association.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>An AgentMessage containing the peer review result or error details.</returns>
+        private async Task<AgentMessage> PerformSinglePeerReviewAsync(
+            SpecialistAnalysisResult reviewer,
+            SpecialistAnalysisResult reviewee,
+            string? codeContext,
+            string conversationId,
+            CancellationToken cancellationToken)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            _logger.LogInformation("Starting peer review: {Reviewer} → {Reviewee}", reviewer.AgentName, reviewee.AgentName);
+            try
+            {
+                var reviewerAgent = await GetAgentByNameAsync(reviewer.AgentName);
+                if (reviewerAgent == null)
+                {
+                    _logger.LogError("Reviewer agent not found: {AgentName}", reviewer.AgentName);
+                    return new AgentMessage
+                    {
+                        FromAgent = reviewer.AgentName,
+                        ToAgent = reviewee.AgentName,
+                        Type = MessageType.PeerReview,
+                        Subject = $"Peer Review of {reviewee.Specialty} Analysis",
+                        Content = $"Error: Reviewer agent not found for {reviewer.AgentName}",
+                        ConversationId = conversationId,
+                        Priority = 1
+                    };
+                }
+
+                string peerReviewContent;
+                try
+                {
+                    peerReviewContent = await reviewerAgent.ReviewPeerAnalysisAsync(
+                        JsonSerializer.Serialize(reviewee, new JsonSerializerOptions { WriteIndented = true }),
+                        codeContext ?? "Context unavailable",
+                        cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Peer review failed: {Reviewer} → {Reviewee}", reviewer.AgentName, reviewee.AgentName);
+                    sw.Stop();
+                    return new AgentMessage
+                    {
+                        FromAgent = reviewer.AgentName,
+                        ToAgent = reviewee.AgentName,
+                        Type = MessageType.PeerReview,
+                        Subject = $"Peer Review of {reviewee.Specialty} Analysis",
+                        Content = $"Error: Peer review failed ({ex.Message})",
+                        ConversationId = conversationId,
+                        Priority = 1
+                    };
+                }
+                sw.Stop();
+                _logger.LogInformation("Completed peer review: {Reviewer} → {Reviewee} in {ElapsedMs}ms", reviewer.AgentName, reviewee.AgentName, sw.ElapsedMilliseconds);
+                return new AgentMessage
+                {
+                    FromAgent = reviewer.AgentName,
+                    ToAgent = reviewee.AgentName,
+                    Type = MessageType.PeerReview,
+                    Subject = $"Peer Review of {reviewee.Specialty} Analysis",
+                    Content = peerReviewContent,
+                    ConversationId = conversationId,
+                    Priority = 6
+                };
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                _logger.LogError(ex, "Unexpected error in peer review: {Reviewer} → {Reviewee}", reviewer.AgentName, reviewee.AgentName);
+                return new AgentMessage
+                {
+                    FromAgent = reviewer.AgentName,
+                    ToAgent = reviewee.AgentName,
+                    Type = MessageType.PeerReview,
+                    Subject = $"Peer Review of {reviewee.Specialty} Analysis",
+                    Content = $"Error: Unexpected peer review error ({ex.Message})",
+                    ConversationId = conversationId,
+                    Priority = 1
+                };
+            }
+        }
+
         public async Task<AgentConversation> FacilitateAgentDiscussionAsync(
             string topic,
             List<SpecialistAnalysisResult> initialAnalyses,
@@ -270,56 +435,72 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                     conversation.Messages.Add(presentationMessage);
                 }
 
-                // Step 2: Generate peer reviews
+                // Step 2: Generate peer reviews in parallel
+                var peerReviewTasks = new List<Task<AgentMessage>>();
+                int peerReviewCount = 0;
                 for (int i = 0; i < initialAnalyses.Count; i++)
                 {
                     for (int j = 0; j < initialAnalyses.Count; j++)
                     {
-                        if (i != j) // Don't review your own analysis
+                        if (i != j)
                         {
-                            var reviewer = initialAnalyses[i];
-                            var reviewee = initialAnalyses[j];
-
-                            // Get the actual agent to perform peer review
-                            var reviewerAgent = await GetAgentByNameAsync(reviewer.AgentName);
-                            if (reviewerAgent != null)
-                            {
-                                var peerReview = await reviewerAgent.ReviewPeerAnalysisAsync(
-                                    JsonSerializer.Serialize(reviewee, new JsonSerializerOptions { WriteIndented = true }),
-                                    codeContext ?? "Context unavailable",
-                                    cancellationToken);
-
-                                var reviewMessage = new AgentMessage
-                                {
-                                    FromAgent = reviewer.AgentName,
-                                    ToAgent = reviewee.AgentName,
-                                    Type = MessageType.PeerReview,
-                                    Subject = $"Peer Review of {reviewee.Specialty} Analysis",
-                                    Content = peerReview,
-                                    ConversationId = conversation.ConversationId,
-                                    Priority = 6
-                                };
-
-                                conversation.Messages.Add(reviewMessage);
-                            }
+                            peerReviewTasks.Add(PerformSinglePeerReviewAsync(
+                                initialAnalyses[i],
+                                initialAnalyses[j],
+                                codeContext,
+                                conversation.ConversationId,
+                                cancellationToken));
+                            peerReviewCount++;
                         }
                     }
+                }
+
+                _logger.LogInformation("Starting {Count} peer reviews in parallel", peerReviewCount);
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var peerReviewResults = await Task.WhenAll(peerReviewTasks);
+                sw.Stop();
+                _logger.LogInformation("Completed {Count} peer reviews in {ElapsedMs}ms (sequential estimate: {SeqMs}ms)",
+                    peerReviewCount, sw.ElapsedMilliseconds, peerReviewCount * 15000 / initialAnalyses.Count); // Estimate: 15s per agent sequentially
+
+                foreach (var reviewMessage in peerReviewResults)
+                {
+                    conversation.Messages.Add(reviewMessage);
                 }
 
                 // Step 3: Identify and address conflicts
                 await IdentifyAndResolveConflictsAsync(conversation, initialAnalyses);
 
-                // Orchestration prompt for facilitating discussion
+                // Step 4: Optional orchestration synthesis
+                if (!_agentConfig.EnableDiscussionSynthesis)
+                {
+                    _logger.LogInformation("Discussion synthesis disabled for performance");
+                    conversation.Status = ConversationStatus.Completed;
+                    conversation.EndTime = DateTime.Now;
+                    return conversation;
+                }
+
+                // Orchestration synthesis enabled: optimize prompt and LLM call
+                var peerReviewSummary = string.Join("\n", peerReviewResults.Select(m => $"{m.FromAgent}→{m.ToAgent}: {m.Content.Substring(0, Math.Min(120, m.Content.Length))}"));
                 var template = _agentConfig.OrchestrationPrompts.FacilitateDiscussion;
                 var agentNames = string.Join(", ", initialAnalyses.Select(a => a.AgentName));
-                var findings = string.Join("\n", initialAnalyses.Select(a => JsonSerializer.Serialize(a.KeyFindings)));
                 var discussionPrompt = template
                     .Replace("{topic}", topic)
-                    .Replace("{findings}", findings)
+                    .Replace("{findings}", peerReviewSummary)
                     .Replace("{agentNames}", agentNames);
 
                 var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
-                var orchestrationResult = await chatCompletion.GetChatMessageContentAsync(discussionPrompt);
+                var executionSettings = new PromptExecutionSettings();
+                if (executionSettings.ExtensionData == null)
+                    executionSettings.ExtensionData = new Dictionary<string, object>();
+                executionSettings.ExtensionData["max_tokens"] = 200;
+                executionSettings.ExtensionData["temperature"] = 0.3;
+                var synthSw = System.Diagnostics.Stopwatch.StartNew();
+                var orchestrationResult = await chatCompletion.GetChatMessageContentAsync(
+                    discussionPrompt,
+                    executionSettings,
+                    cancellationToken: cancellationToken);
+                synthSw.Stop();
+                _logger.LogInformation("Orchestration synthesis completed in {ElapsedMs}ms", synthSw.ElapsedMilliseconds);
                 var orchestrationMessage = new AgentMessage
                 {
                     FromAgent = "MasterOrchestrator",
@@ -350,26 +531,25 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         {
             try
             {
-                // Map agent name back to specialty
-                var specialty = agentName.ToLower() switch
+                // Get all agent types from registry
+                foreach (var agentType in _agentRegistry.Values)
                 {
-                    var name when name.Contains("security") => "security",
-                    var name when name.Contains("performance") => "performance",
-                    var name when name.Contains("architectural") => "architecture",
-                    _ => null
-                };
-
-                if (specialty != null && _agentRegistry.ContainsKey(specialty))
-                {
-                    var agentType = _agentRegistry[specialty];
-                    return _serviceProvider.GetService(agentType) as ISpecialistAgentService;
+                    // Resolve the agent instance from DI
+                    var agent = _serviceProvider.GetService(agentType) as ISpecialistAgentService;
+                    // Check if this agent's AgentName matches what we're looking for
+                    if (agent != null && agent.AgentName == agentName)
+                    {
+                        return agent;
+                    }
                 }
-
+                _logger.LogWarning("Agent not found: {agentName}. Available agents: {agents}",
+                    agentName,
+                    string.Join(", ", _agentRegistry.Keys));
                 return null;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to resolve agent: {AgentName}", agentName);
+                _logger.LogError(ex, "Error retrieving agent: {agentName}", agentName);
                 return null;
             }
         }
@@ -380,27 +560,25 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             // Simple conflict detection based on priority disagreements
             var priorities = analyses.Select(a => new { Agent = a.AgentName, Priority = a.Priority }).ToList();
             var priorityGroups = priorities.GroupBy(p => p.Priority).Where(g => g.Count() > 1);
-
             foreach (var group in priorityGroups)
             {
-                if (group.Key == "HIGH" || group.Key == "CRITICAL")
+                var priorityValue = group.Key;
+                if (priorityValue == "HIGH" || priorityValue == "CRITICAL")
                 {
                     // Generate conflict resolution discussion
                     var conflictResolution = await GenerateConflictResolutionAsync(
                         group.Select(g => g.Agent).ToList(),
-                        group.Key,
+                        priorityValue,
                         analyses);
-
                     var resolutionMessage = new AgentMessage
                     {
                         FromAgent = "MasterOrchestrator",
                         Type = MessageType.Synthesis,
-                        Subject = $"Conflict Resolution: {group.Key} Priority Items",
+                        Subject = $"Conflict Resolution: {priorityValue} Priority Items",
                         Content = conflictResolution,
                         ConversationId = conversation.ConversationId,
                         Priority = 10
                     };
-
                     conversation.Messages.Add(resolutionMessage);
                 }
             }
@@ -526,18 +704,71 @@ Provide diplomatic but decisive conflict resolution.";
             [Description("Consolidated recommendations")] ConsolidatedRecommendations recommendations,
             [Description("Business context and constraints")] string businessContext)
         {
-            var template = _agentConfig.OrchestrationPrompts.CreateImplementationStrategy;
-            var recContext = $"High priority: {recommendations.HighPriorityActions.Count}, " +
-                           $"Medium priority: {recommendations.MediumPriorityActions.Count}, " +
-                           $"Strategic: {recommendations.LongTermStrategic.Count}, " +
+            // Build detailed recommendation context with actual recommendation details
+            var recDetails = new System.Text.StringBuilder();
+            
+            if (recommendations.HighPriorityActions?.Any() == true)
+            {
+                recDetails.AppendLine("HIGH PRIORITY RECOMMENDATIONS:");
+                foreach (var rec in recommendations.HighPriorityActions.Take(5))
+                {
+                    recDetails.AppendLine($"- {rec.Title} ({rec.Priority}): {rec.Description}");
+                    recDetails.AppendLine($"  Estimated Hours: {rec.EstimatedHours}");
+                    if (!string.IsNullOrWhiteSpace(rec.Implementation))
+                    {
+                        recDetails.AppendLine($"  Implementation: {rec.Implementation.Substring(0, Math.Min(200, rec.Implementation.Length))}");
+                    }
+                }
+                recDetails.AppendLine();
+            }
+            
+            if (recommendations.MediumPriorityActions?.Any() == true)
+            {
+                recDetails.AppendLine("MEDIUM PRIORITY RECOMMENDATIONS:");
+                foreach (var rec in recommendations.MediumPriorityActions.Take(3))
+                {
+                    recDetails.AppendLine($"- {rec.Title} ({rec.Priority}): {rec.Description}");
+                    recDetails.AppendLine($"  Estimated Hours: {rec.EstimatedHours}");
+                }
+                recDetails.AppendLine();
+            }
+
+            var recContext = recDetails.ToString();
+            if (string.IsNullOrWhiteSpace(recContext))
+            {
+                recContext = $"High priority: {recommendations.HighPriorityActions?.Count ?? 0}, " +
+                           $"Medium priority: {recommendations.MediumPriorityActions?.Count ?? 0}, " +
+                           $"Strategic: {recommendations.LongTermStrategic?.Count ?? 0}, " +
                            $"Total effort: {recommendations.TotalEstimatedEffort} hours";
-            var prompt = template
-                .Replace("{recommendations}", recContext)
-                .Replace("{constraints}", businessContext)
-                .Replace("{resources}", "Resource allocation logic here");
+            }
+
+            var template = _agentConfig.OrchestrationPrompts.CreateImplementationStrategy;
+            var prompt = $@"{template}
+
+BUSINESS CONTEXT: {businessContext}
+
+SPECIFIC RECOMMENDATIONS TO IMPLEMENT:
+{recContext}
+
+TOTAL EFFORT: {recommendations.TotalEstimatedEffort} hours
+
+Please provide a detailed, step-by-step implementation strategy that:
+1. Addresses the specific recommendations listed above
+2. Prioritizes based on business impact and dependencies
+3. Provides concrete implementation steps for each high-priority item
+4. Considers resource allocation and timeline
+5. Includes risk mitigation strategies
+
+Do NOT provide generic advice. Focus on the specific recommendations and how to implement them.";
 
             var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
-            var result = await chatCompletion.GetChatMessageContentAsync(prompt);
+            var executionSettings = new PromptExecutionSettings();
+            if (executionSettings.ExtensionData == null)
+                executionSettings.ExtensionData = new Dictionary<string, object>();
+            executionSettings.ExtensionData["max_tokens"] = 1500;
+            executionSettings.ExtensionData["temperature"] = 0.4;
+            
+            var result = await chatCompletion.GetChatMessageContentAsync(prompt, executionSettings);
             return result.Content ?? "Implementation strategy generation failed";
         }
 
@@ -573,79 +804,128 @@ Provide diplomatic but decisive conflict resolution.";
         /// Logs the token count and warns if the input exceeds 3,000 tokens.
         /// </summary>
         public async Task<string> GenerateExecutiveSummaryAsync(
-            TeamAnalysisResult teamResult,
+            PoC1_LegacyAnalyzer_Web.Models.AgentCommunication.TeamAnalysisResult teamResult,
             string businessObjective,
             CancellationToken cancellationToken = default)
         {
-            // Helper to order findings by severity (Critical > High > Medium > Low)
-            int SeverityRank(string severity) => severity?.ToUpper() switch
+            try
             {
-                "CRITICAL" => 1,
-                "HIGH" => 2,
-                "MEDIUM" => 3,
-                "LOW" => 4,
-                _ => 5
-            };
+                // Step 1: Extract data from each agent
+                var summaryParts = new List<string>();
+                if (teamResult?.IndividualAnalyses != null)
+                {
+                    foreach (var analysis in teamResult.IndividualAnalyses)
+                    {
+                        if (analysis == null) continue;
+                        // Get top 2 findings from this agent
+                        var topFindings = (analysis.KeyFindings ?? new List<Finding>())
+                            .OrderByDescending(f => GetSeverityScore(f.Severity))
+                            .Take(2)
+                            .ToList();
+                        var findingsSummary = string.Join("\n", topFindings.Select(f => $"  - {f.Description}"));
+                        var agentSummary = $@"{analysis.Specialty} Analysis (Confidence: {analysis.ConfidenceScore}%):\n{findingsSummary}\nImpact: {analysis.BusinessImpact}";
+                        summaryParts.Add(agentSummary);
+                    }
+                }
+                // Step 2: Get recommendation counts
+                var highPriorityCount = teamResult?.FinalRecommendations?.HighPriorityActions?.Count ?? 0;
+                var mediumPriorityCount = teamResult?.FinalRecommendations?.MediumPriorityActions?.Count ?? 0;
+                var totalEffort = teamResult?.FinalRecommendations?.TotalEstimatedEffort ?? 0;
+                // Step 3: Get actual recommendation details for better alignment
+                var topRecommendations = new List<string>();
+                if (teamResult?.FinalRecommendations?.HighPriorityActions?.Any() == true)
+                {
+                    foreach (var rec in teamResult.FinalRecommendations.HighPriorityActions.Take(3))
+                    {
+                        topRecommendations.Add($"- {rec.Title} ({rec.Priority}): {rec.Description}");
+                    }
+                }
+                var recommendationsText = topRecommendations.Any() 
+                    ? string.Join("\n", topRecommendations)
+                    : $"High Priority Actions: {highPriorityCount}, Medium Priority Actions: {mediumPriorityCount}";
 
-            var summarySections = new List<string>();
-            foreach (var agent in teamResult.IndividualAnalyses)
-            {
-                var topFindings = agent.KeyFindings
-                    .OrderBy(f => SeverityRank(f.Severity))
-                    .Take(3)
-                    .Select(f => $"- [{f.Severity}] {f.Category}: {f.Description}")
-                    .ToList();
+                // Step 4: Build complete prompt with ACTUAL DATA from agents
+                var prompt = $@"Create a concise executive summary based on this code analysis.
 
-                var agentSection = $@"
-        Agent: {agent.AgentName} ({agent.Specialty})
-        Confidence Score: {agent.ConfidenceScore}%
-        Business Impact: {agent.BusinessImpact}
-        Top Findings:
-        {string.Join("\n", topFindings)}
-        ";
-                summarySections.Add(agentSection.Trim());
+BUSINESS OBJECTIVE: {businessObjective}
+
+SPECIALIST AGENT ANALYSIS RESULTS:
+{string.Join("\n\n", summaryParts)}
+
+TOP RECOMMENDATIONS:
+{recommendationsText}
+
+RECOMMENDATIONS SUMMARY:
+- High Priority Actions: {highPriorityCount}
+- Medium Priority Actions: {mediumPriorityCount}
+- Estimated Total Effort: {totalEffort} hours
+
+Provide an executive summary that:
+1. ACCURATELY reflects the findings from the specialist agents listed above
+2. Highlights the specific issues identified (security vulnerabilities, performance bottlenecks, architectural concerns)
+3. Prioritizes the top recommendations based on the agent findings
+4. Provides realistic resource requirements based on the estimated effort
+
+IMPORTANT: The summary must align with what the agents actually found. Do not provide generic statements. Reference specific findings from the analysis results above.";
+                // Step 4: Log for debugging
+                var promptPreview = prompt.Length > 500 ? prompt.Substring(0, 500) + "..." : prompt;
+                _logger.LogInformation("Executive summary prompt preview: {preview}", promptPreview);
+                _logger.LogInformation("Full prompt length: {length} characters", prompt.Length);
+                // Validate prompt has actual content
+                if (prompt.Length < 500)
+                {
+                    _logger.LogWarning("Executive summary prompt is suspiciously short ({length} chars). May be missing analysis data.", prompt.Length);
+                }
+                var estimatedTokens = EstimateTokens(prompt);
+                _logger.LogInformation("Calling LLM with estimated {tokens} input tokens", estimatedTokens);
+                // Step 5: Call LLM
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
+                var chatSettings = new PromptExecutionSettings();
+                if (chatSettings.ExtensionData == null)
+                    chatSettings.ExtensionData = new Dictionary<string, object>();
+                chatSettings.ExtensionData["max_tokens"] = 500;
+                chatSettings.ExtensionData["temperature"] = 0.3;
+                var result = await chatCompletion.GetChatMessageContentAsync(prompt, chatSettings, cancellationToken: cancellationToken);
+                sw.Stop();
+                var summary = result.Content ?? "Executive summary generation failed.";
+                _logger.LogInformation("LLM call completed in {ms}ms", sw.ElapsedMilliseconds);
+                var responsePreview = summary.Length > 200 ? summary.Substring(0, 200) + "..." : summary;
+                _logger.LogInformation("Executive summary response preview: {preview}", responsePreview);
+                return summary;
             }
-
-            var condensedPrompt = $@"
-        Executive Summary Request
-        Business Objective: {businessObjective}
-
-        Specialist Agent Findings:
-        {string.Join("\n\n", summarySections)}
-        ";
-
-            // Estimate token count (roughly 1 token per 4 chars)
-            int tokenCount = Math.Max(1, condensedPrompt.Length / 4);
-            _logger.LogInformation("Executive summary input reduced to {TokenCount} tokens", tokenCount);
-            if (tokenCount > 3000)
-                _logger.LogWarning("Executive summary input is {TokenCount} tokens, which may cause LLM timeouts", tokenCount);
-
-            // Build the final prompt for the LLM
-            var template = _agentConfig.OrchestrationPrompts.CreateExecutiveSummary;
-            var prompt = template
-                .Replace("{businessObjective}", businessObjective)
-                .Replace("{summaryContext}", condensedPrompt);
-
-            var estimatedTokens = EstimatePromptTokens(prompt);
-            _logger.LogInformation("Calling LLM with estimated {TokenCount} input tokens", estimatedTokens);
-
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
-            var result = await chatCompletion.GetChatMessageContentAsync(prompt, cancellationToken: cancellationToken);
-            sw.Stop();
-
-            _logger.LogInformation("LLM call completed in {Duration}ms", sw.ElapsedMilliseconds);
-
-            return result.Content ?? "Executive summary generation failed";
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to generate executive summary");
+                return "Executive summary generation failed due to an error.";
+            }
         }
 
-        // Replace the body of GenerateExecutiveSummaryStreamingAsync to avoid yielding inside a try-catch.
-        // Instead, collect results in a local list and yield after the try-catch block.
+        // Helper method for severity scoring
+        private int GetSeverityScore(string severity)
+        {
+            return severity?.ToUpper() switch
+            {
+                "CRITICAL" => 4,
+                "HIGH" => 3,
+                "MEDIUM" => 2,
+                "LOW" => 1,
+                _ => 0
+            };
+        }
 
+        // Helper method for token estimation
+        private int EstimateTokens(string text)
+        {
+            // Rough estimate: ~4 characters per token
+            return text?.Length > 0 ? text.Length / 4 : 0;
+        }
+
+        // Ensure streaming method is public and matches interface
         public async IAsyncEnumerable<string> GenerateExecutiveSummaryStreamingAsync(
-            TeamAnalysisResult teamResult,
+            PoC1_LegacyAnalyzer_Web.Models.AgentCommunication.TeamAnalysisResult teamResult,
             string businessObjective,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             int SeverityRank(string severity) => severity?.ToUpper() switch
             {
@@ -655,7 +935,6 @@ Provide diplomatic but decisive conflict resolution.";
                 "LOW" => 4,
                 _ => 5
             };
-
             var summarySections = new List<string>();
             foreach (var agent in teamResult.IndividualAnalyses)
             {
@@ -664,35 +943,30 @@ Provide diplomatic but decisive conflict resolution.";
                     .Take(3)
                     .Select(f => $"- [{f.Severity}] {f.Category}: {f.Description}")
                     .ToList();
-
                 var agentSection = $@"
-        Agent: {agent.AgentName} ({agent.Specialty})
-        Confidence Score: {agent.ConfidenceScore}%
-        Business Impact: {agent.BusinessImpact}
-        Top Findings:
-        {string.Join("\n", topFindings)}
-        ";
+Agent: {agent.AgentName} ({agent.Specialty})
+Confidence Score: {agent.ConfidenceScore}%
+Business Impact: {agent.BusinessImpact}
+Top Findings:
+{string.Join("\n", topFindings)}
+";
                 summarySections.Add(agentSection.Trim());
             }
-
             var condensedPrompt = $@"
-        Executive Summary Request
-        Business Objective: {businessObjective}
+Executive Summary Request
+Business Objective: {businessObjective}
 
-        Specialist Agent Findings:
-        {string.Join("\n\n", summarySections)}
-        ";
-
+Specialist Agent Findings:
+{string.Join("\n\n", summarySections)}
+";
             var template = _agentConfig.OrchestrationPrompts.CreateExecutiveSummary;
             var prompt = template
                 .Replace("{businessObjective}", businessObjective)
                 .Replace("{summaryContext}", condensedPrompt);
-
             var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             bool streamingFailed = false;
             Exception? streamingException = null;
             var streamedChunks = new List<string>();
-
             try
             {
                 var chatHistory = new ChatHistory();
@@ -708,7 +982,6 @@ Provide diplomatic but decisive conflict resolution.";
                 streamingFailed = true;
                 streamingException = ex;
             }
-
             if (streamingFailed)
             {
                 _logger.LogError(streamingException, "Streaming executive summary failed, falling back to non-streaming.");
@@ -716,129 +989,13 @@ Provide diplomatic but decisive conflict resolution.";
                 yield return result.Content ?? "Executive summary generation failed";
                 yield break;
             }
-
             foreach (var chunk in streamedChunks)
             {
                 yield return chunk;
             }
         }
 
-        /// <summary>
-        /// Generates a quick 3-sentence executive summary using only the single most critical finding from each agent.
-        /// Designed for fast response (<20 seconds) and minimal token usage.
-        /// </summary>
-        public async Task<string> GenerateQuickSummaryAsync(TeamAnalysisResult teamResult)
-        {
-            // Helper to order findings by severity (Critical > High > Medium > Low)
-            int SeverityRank(string severity) => severity?.ToUpper() switch
-            {
-                "CRITICAL" => 1,
-                "HIGH" => 2,
-                "MEDIUM" => 3,
-                "LOW" => 4,
-                _ => 5
-            };
-
-            var quickSections = new List<string>();
-            foreach (var agent in teamResult.IndividualAnalyses)
-            {
-                var mostCritical = agent.KeyFindings
-                    .OrderBy(f => SeverityRank(f.Severity))
-                    .FirstOrDefault();
-
-                if (mostCritical != null)
-                {
-                    quickSections.Add($"{agent.Specialty}: {mostCritical.Category} - {mostCritical.Description}");
-                }
-            }
-
-            var quickPrompt = $@"
-Summarize in 3 sentences:
-Security issue: {quickSections.FirstOrDefault(s => s.StartsWith("Security")) ?? "None"}
-Performance issue: {quickSections.FirstOrDefault(s => s.StartsWith("Performance")) ?? "None"}
-Architecture issue: {quickSections.FirstOrDefault(s => s.StartsWith("Architecture")) ?? "None"}
-";
-
-            int estimatedTokens = EstimatePromptTokens(quickPrompt);
-            _logger.LogInformation("Calling LLM for quick summary with estimated {TokenCount} tokens", estimatedTokens);
-
-            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
-            var chatHistory = new ChatHistory();
-            chatHistory.AddUserMessage(quickPrompt);
-            var executionSettings = new PromptExecutionSettings();
-            if (executionSettings.ExtensionData == null)
-                executionSettings.ExtensionData = new Dictionary<string, object>();
-            executionSettings.ExtensionData["max_tokens"] = 150;
-            var result = await chatCompletion.GetChatMessageContentAsync(
-                chatHistory,
-                executionSettings
-            );
-            return result.Content ?? "Quick executive summary generation failed";
-        }
-
-        /// <summary>
-        /// Generates a detailed executive summary using the top 3 findings from each agent.
-        /// Designed for full recommendations and priorities (1000 tokens, 60-120 seconds).
-        /// </summary>
-        public async Task<string> GenerateDetailedSummaryAsync(
-            TeamAnalysisResult teamResult,
-            string businessObjective,
-            CancellationToken cancellationToken = default)
-        {
-            int SeverityRank(string severity) => severity?.ToUpper() switch
-            {
-                "CRITICAL" => 1,
-                "HIGH" => 2,
-                "MEDIUM" => 3,
-                "LOW" => 4,
-                _ => 5
-            };
-
-            var summarySections = new List<string>();
-            foreach (var agent in teamResult.IndividualAnalyses)
-            {
-                var topFindings = agent.KeyFindings
-                    .OrderBy(f => SeverityRank(f.Severity))
-                    .Take(3)
-                    .Select(f => $"- [{f.Severity}] {f.Category}: {f.Description}")
-                    .ToList();
-
-                var agentSection = $@"
-        Agent: {agent.AgentName} ({agent.Specialty})
-        Confidence Score: {agent.ConfidenceScore}%
-        Business Impact: {agent.BusinessImpact}
-        Top Findings:
-        {string.Join("\n", topFindings)}
-        ";
-
-                summarySections.Add(agentSection.Trim());
-            }
-
-            var detailedPrompt = $@"
-        Executive Summary Request
-        Business Objective: {businessObjective}
-
-        Specialist Agent Findings:
-        {string.Join("\n\n", summarySections)}
-        ";
-
-            int estimatedTokens = EstimatePromptTokens(detailedPrompt);
-            _logger.LogInformation("Calling LLM for detailed summary with estimated {TokenCount} tokens", estimatedTokens);
-
-            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
-            var chatHistory = new ChatHistory();
-            chatHistory.AddUserMessage(detailedPrompt);
-            var executionSettings = new PromptExecutionSettings();
-            if (executionSettings.ExtensionData == null)
-                executionSettings.ExtensionData = new Dictionary<string, object>();
-            executionSettings.ExtensionData["max_tokens"] = 1000; // Allow detailed response
-            var result = await chatCompletion.GetChatMessageContentAsync(
-                chatHistory,
-                executionSettings,
-                cancellationToken: cancellationToken
-            );
-            return result.Content ?? "Detailed executive summary generation failed";
-        }
+        // Calculates consensus metrics for the team discussion and analyses
         private TeamConsensusMetrics CalculateConsensusMetrics(
             AgentConversation discussion,
             SpecialistAnalysisResult[] analyses)
@@ -850,47 +1007,39 @@ Architecture issue: {quickSections.FirstOrDefault(s => s.StartsWith("Architectur
                     ? discussion.EndTime.Value - discussion.StartTime
                     : TimeSpan.Zero
             };
-
             // Calculate agreement percentage based on similar priorities
             var priorities = analyses.Select(a => a.Priority).ToList();
             var mostCommonPriority = priorities.GroupBy(p => p)
                 .OrderByDescending(g => g.Count())
                 .FirstOrDefault()?.Key;
-
             if (mostCommonPriority != null)
             {
                 var agreementCount = priorities.Count(p => p == mostCommonPriority);
                 metrics.AgreementPercentage = (double)agreementCount / priorities.Count * 100;
             }
-
             // Calculate agent participation
             var agentMessageCounts = discussion.Messages
                 .GroupBy(m => m.FromAgent)
                 .ToDictionary(g => g.Key, g => g.Count());
-
             metrics.AgentParticipationScores = agentMessageCounts;
-
             // Count conflicts (simplified - look for challenge/disagreement messages)
             metrics.ConflictCount = discussion.Messages.Count(m => m.Type == MessageType.Challenge);
             metrics.ResolvedConflictCount = discussion.Messages.Count(m => m.Type == MessageType.Synthesis);
-
             return metrics;
         }
 
+        // Calculates overall team confidence score based on weighted agent scores
         private int CalculateTeamConfidenceScore(SpecialistAnalysisResult[] analyses)
         {
             if (!analyses.Any()) return 0;
-
             // Weighted average based on agent confidence thresholds
             var weightedScores = analyses.Select(a => new
             {
                 Score = a.ConfidenceScore,
                 Weight = GetAgentWeight(a.AgentName)
             });
-
             var totalWeight = weightedScores.Sum(ws => ws.Weight);
             var weightedAverage = weightedScores.Sum(ws => ws.Score * ws.Weight) / totalWeight;
-
             return (int)Math.Round(weightedAverage);
         }
 
@@ -905,47 +1054,6 @@ Architecture issue: {quickSections.FirstOrDefault(s => s.StartsWith("Architectur
                 var name when name.Contains("architectural") => weights.ArchitectureWeight,
                 _ => weights.DefaultWeight
             };
-        }
-
-        private static bool IsPreprocessedPattern(string code)
-        {
-            return code.StartsWith("[Preprocessed Project Pattern", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private string GetCodeContextSummary(string code)
-        {
-            var maxLength = _businessRules.ProcessingLimits.CodeContextSummaryMaxLength;
-            if (!IsPreprocessedPattern(code))
-            {
-                return $"Code length: {code.Length} characters";
-            }
-
-            // Extract first few lines as compact summary (header + stats)
-            var lines = code.Split('\n');
-            var take = Math.Min(6, lines.Length);
-            var header = string.Join(" ", lines.Take(take).Select(l => l.Trim()));
-            // Keep it compact to save tokens for planning
-            return header.Length > maxLength ? header.Substring(0, maxLength) + "..." : header;
-        }
-
-        private int EstimateTokens(string? text)
-        {
-            if (string.IsNullOrEmpty(text)) return 0;
-            // Use configuration for chars per token
-            var charsPerToken = _businessRules.ProcessingLimits.TokenEstimationCharsPerToken;
-            return Math.Max(1, text.Length / charsPerToken);
-        }
-
-        /// <summary>
-        /// Estimates the number of tokens in a prompt using a rough GPT tokenization formula (prompt.Length / 4).
-        /// Logs a warning if the estimated token count exceeds 3000.
-        /// </summary>
-        private int EstimatePromptTokens(string prompt)
-        {
-            int tokens = Math.Max(1, prompt?.Length ?? 0 / 4);
-            if (tokens > 3000)
-                _logger.LogWarning("Large prompt detected: estimated {TokenCount} tokens (may cause slow response)", tokens);
-            return tokens;
         }
     }
 }

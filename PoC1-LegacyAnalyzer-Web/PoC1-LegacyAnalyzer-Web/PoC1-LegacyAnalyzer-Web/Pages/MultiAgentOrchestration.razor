@@ -143,12 +143,6 @@
 
                     <!-- Action Buttons -->
                     <div class="mb-3">
-                        @if (HostEnvironment.IsDevelopment())
-                        {
-                            <button class="btn btn-outline-secondary me-2" @onclick="LoadTeamSampleCode" disabled="@selectedFiles.Any()">
-                                <i class="bi bi-file-code"></i> Load Team Analysis Sample
-                            </button>
-                        }
                         <button class="btn btn-success btn-lg" @onclick="StartTeamAnalysis" disabled="@isAnalyzing">
                             @if (isAnalyzing)
                             {
@@ -243,7 +237,7 @@
         </div>
 
         <!-- Results Section -->
-        @if (teamResult != null)
+        @if (teamResult is not null)
         {
             <div class="col-lg-7">
                 <!-- Business Context -->
@@ -425,28 +419,28 @@
                         <div class="col-md-3 col-6">
                             <div class="metric-box">
                                 <div class="mb-2"></div>
-                                <h4>@teamResult.IndividualAnalyses.Count</h4>
+                                <h4>@(teamResult?.IndividualAnalyses?.Count ?? 0)</h4>
                                 <small>Specialist Agents</small>
                             </div>
                         </div>
                         <div class="col-md-3 col-6">
                             <div class="metric-box">
                                 <div class="mb-2"></div>
-                                <h4>@teamResult.TeamDiscussion.Count</h4>
+                                <h4>@(teamResult?.TeamDiscussion?.Count ?? 0)</h4>
                                 <small>Collaboration Messages</small>
                             </div>
                         </div>
                         <div class="col-md-3 col-6">
                             <div class="metric-box">
                                 <div class="mb-2"></div>
-                                <h4>@teamResult.FinalRecommendations.HighPriorityActions.Count</h4>
+                                <h4>@(teamResult?.FinalRecommendations?.HighPriorityActions?.Count ?? 0)</h4>
                                 <small>Priority Actions</small>
                             </div>
                         </div>
                         <div class="col-md-3 col-6">
                             <div class="metric-box">
                                 <div class="mb-2"></div>
-                                <h4>@(teamResult.Consensus.AgreementPercentage.ToString("F0"))%</h4>
+                                <h4>@(teamResult?.Consensus?.AgreementPercentage.ToString("F0") ?? "0")%</h4>
                                 <small>Team Consensus</small>
                             </div>
                         </div>
@@ -454,22 +448,33 @@
 
                     <div class="text-center mt-3">
                         <div class="badge bg-light text-success fs-5 px-3 py-2">
-                            Overall Confidence: @teamResult.OverallConfidenceScore%
+                            Overall Confidence: @(teamResult?.OverallConfidenceScore ?? 0)%
                         </div>
                     </div>
                 </div>
 
                 <!-- Executive Summary -->
-                <div class="card shadow mb-3 border-primary">
+                <div class="card">
                     <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="bi bi-file-text"></i> Executive Summary</h5>
+                        <h5>Executive Summary</h5>
                     </div>
                     <div class="card-body">
-                        @if (teamResult != null)
+                        @if (isAnalyzing)
                         {
-                            <button class="btn btn-primary" @onclick="StreamExecutiveSummaryAsync">Stream Executive Summary</button>
-                            <div class="executive-summary">
-                                @((MarkupString)executiveSummaryText)
+                            <p class="text-muted">
+                                <em>Analysis in progress... Executive summary will appear here.</em>
+                            </p>
+                        }
+                        else if (string.IsNullOrWhiteSpace(teamResult?.ExecutiveSummary))
+                        {
+                            <p class="text-muted">
+                                <em>Executive summary will be generated after analysis completes...</em>
+                            </p>
+                        }
+                        else
+                        {
+                            <div class="executive-summary-content">
+                                @((MarkupString)FormatExecutiveSummary(teamResult.ExecutiveSummary))
                             </div>
                         }
                     </div>
@@ -481,87 +486,140 @@
                         <h5 class="mb-0"><i class="bi bi-person-badge"></i> Individual Agent Analysis</h5>
                     </div>
                     <div class="card-body">
-                        @foreach (var analysis in teamResult.IndividualAnalyses.OrderByDescending(a => a.ConfidenceScore))
+                        @if (teamResult?.IndividualAnalyses?.Any() == true)
                         {
-                            <div class="agent-result-card mb-4">
-                                <div class="d-flex justify-content-between align-items-start mb-3">
-                                    <div>
-                                        <h6 class="text-primary mb-1">
-                                            @GetAgentIcon(analysis.AgentName) @analysis.AgentName
-                                        </h6>
-                                        <small class="text-muted">@analysis.Specialty</small>
+                            @foreach (var analysis in teamResult.IndividualAnalyses.OrderByDescending(a => a.ConfidenceScore))
+                            {
+                                <div class="agent-result-card mb-4">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <div>
+                                            <h6 class="text-primary mb-1">
+                                                @GetAgentIcon(analysis.AgentName) @analysis.AgentName
+                                            </h6>
+                                            <small class="text-muted">@analysis.Specialty</small>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="badge @GetConfidenceBadgeClass(analysis.ConfidenceScore) fs-6">
+                                                @analysis.ConfidenceScore% Confidence
+                                            </span>
+                                            <br>
+                                            <small class="text-muted">@analysis.Priority Priority</small>
+                                        </div>
                                     </div>
-                                    <div class="text-end">
-                                        <span class="badge @GetConfidenceBadgeClass(analysis.ConfidenceScore) fs-6">
-                                            @analysis.ConfidenceScore% Confidence
-                                        </span>
-                                        <br>
-                                        <small class="text-muted">@analysis.Priority Priority</small>
-                                    </div>
-                                </div>
 
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <strong>Key Findings (@analysis.KeyFindings.Count):</strong>
-                                        <ul class="list-unstyled mt-2">
-                                            @foreach (var finding in analysis.KeyFindings.Take(3))
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>Key Findings (@(analysis.KeyFindings?.Count ?? 0)):</strong>
+                                            @if (analysis.KeyFindings?.Any() == true)
                                             {
-                                                <li class="mb-1">
-                                                    <span class="badge @GetSeverityBadgeClass(finding.Severity) me-2">@finding.Severity</span>
-                                                    @finding.Category
-                                                </li>
+                                                <ul class="list-unstyled mt-2">
+                                                    @foreach (var finding in analysis.KeyFindings.Take(5))
+                                                    {
+                                                        <li class="mb-1">
+                                                            <span class="badge @GetSeverityBadgeClass(finding.Severity) me-2">@finding.Severity</span>
+                                                            <strong>@finding.Category:</strong> @finding.Description
+                                                        </li>
+                                                    }
+                                                </ul>
                                             }
-                                        </ul>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <strong>Recommendations (@analysis.Recommendations.Count):</strong>
-                                        <ul class="list-unstyled mt-2">
-                                            @foreach (var rec in analysis.Recommendations.Take(2))
+                                            else
                                             {
-                                                <li class="mb-1">
-                                                    <strong>@rec.Title</strong><br>
-                                                    <small class="text-muted">Effort: @rec.EstimatedHours hours</small>
-                                                </li>
+                                                <p class="text-muted mt-2"><small>No findings reported</small></p>
                                             }
-                                        </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Recommendations (@(analysis.Recommendations?.Count ?? 0)):</strong>
+                                            @if (analysis.Recommendations?.Any() == true)
+                                            {
+                                                <ul class="list-unstyled mt-2">
+                                                    @foreach (var rec in analysis.Recommendations.Take(3))
+                                                    {
+                                                        <li class="mb-2">
+                                                            <strong>@rec.Title</strong><br>
+                                                            <small class="text-muted">Priority: @rec.Priority | Effort: @rec.EstimatedHours hours</small>
+                                                            @if (!string.IsNullOrWhiteSpace(rec.Description))
+                                                            {
+                                                                <br><small class="text-muted">@rec.Description</small>
+                                                            }
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            }
+                                            else
+                                            {
+                                                <p class="text-muted mt-2"><small>No recommendations provided</small></p>
+                                            }
+                                        </div>
                                     </div>
-                                </div>
 
-                                @if (!string.IsNullOrEmpty(analysis.BusinessImpact))
-                                {
-                                    <div class="mt-3 p-3 bg-light rounded">
-                                        <strong>Business Impact:</strong><br>
-                                        <small>@analysis.BusinessImpact</small>
-                                    </div>
-                                }
+                                    @if (!string.IsNullOrEmpty(analysis.BusinessImpact))
+                                    {
+                                        <div class="mt-3 p-3 bg-light rounded">
+                                            <strong>Business Impact:</strong><br>
+                                            <small>@analysis.BusinessImpact</small>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle"></i> Individual agent analyses are not available. This may occur if the analysis is still in progress or if there was an error during agent execution.
                             </div>
                         }
                     </div>
                 </div>
 
                 <!-- Team Discussion -->
-                @if (teamResult.TeamDiscussion.Any())
+                @if (teamResult?.TeamDiscussion?.Any() == true)
                 {
                     <div class="card shadow mb-3">
                         <div class="card-header bg-info text-white">
                             <h5 class="mb-0"><i class="bi bi-chat-dots"></i> Agent Team Discussion</h5>
                         </div>
-                        <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                        <div class="card-body" style="max-height: 500px; overflow-y: auto;">
                             @foreach (var message in teamResult.TeamDiscussion.OrderBy(m => m.Timestamp))
                             {
+                                var messageId = $"msg-{message.GetHashCode()}";
+                                var isExpanded = expandedMessages.GetValueOrDefault(messageId, message.Type == MessageType.Analysis);
+                                var shouldTruncate = message.Content?.Length > 300;
+                                
                                 <div class="discussion-message mb-3">
                                     <div class="d-flex justify-content-between align-items-start">
-                                        <strong class="text-primary">@message.FromAgent</strong>
+                                        <div class="flex-grow-1">
+                                            <strong class="text-primary">@message.FromAgent</strong>
+                                            @if (!string.IsNullOrEmpty(message.ToAgent) && message.ToAgent != message.FromAgent)
+                                            {
+                                                <span class="text-muted"> → @message.ToAgent</span>
+                                            }
+                                        </div>
                                         <small class="text-muted">@message.Timestamp.ToString("HH:mm:ss")</small>
                                     </div>
                                     <div class="mt-1">
                                         <span class="badge @GetMessageTypeBadgeClass(message.Type) me-2">
                                             @message.Type
                                         </span>
-                                        @message.Subject
+                                        <strong>@message.Subject</strong>
                                     </div>
                                     <div class="mt-2 p-2 bg-light rounded">
-                                        <small>@TruncateMessage(message.Content, 200)</small>
+                                        @if (shouldTruncate && !isExpanded)
+                                        {
+                                            <small>@TruncateMessage(message.Content, 300)</small>
+                                            <button class="btn btn-sm btn-link p-0 ms-2" @onclick="@(() => ToggleMessage(messageId))">
+                                                <small>Show more...</small>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <small>@message.Content</small>
+                                            @if (shouldTruncate)
+                                            {
+                                                <button class="btn btn-sm btn-link p-0 ms-2" @onclick="@(() => ToggleMessage(messageId))">
+                                                    <small>Show less</small>
+                                                </button>
+                                            }
+                                        }
                                     </div>
                                 </div>
                             }
@@ -575,60 +633,312 @@
                         <h5 class="mb-0"><i class="bi bi-list-check"></i> Team Recommendations</h5>
                     </div>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h6 class="text-danger">🚨 High Priority (@teamResult.FinalRecommendations.HighPriorityActions.Count)</h6>
-                                <ul class="list-unstyled">
-                                    @foreach (var rec in teamResult.FinalRecommendations.HighPriorityActions.Take(5))
-                                    {
-                                        <li class="mb-2">
-                                            <strong>@rec.Title</strong><br>
-                                            <small class="text-muted">@rec.EstimatedHours hours - @rec.Priority priority</small>
-                                        </li>
-                                    }
-                                </ul>
-                            </div>
-                            <div class="col-md-6">
-                                <h6 class="text-warning">⚡ Medium Priority (@teamResult.FinalRecommendations.MediumPriorityActions.Count)</h6>
-                                <ul class="list-unstyled">
-                                    @foreach (var rec in teamResult.FinalRecommendations.MediumPriorityActions.Take(3))
-                                    {
-                                        <li class="mb-2">
-                                            <strong>@rec.Title</strong><br>
-                                            <small class="text-muted">@rec.EstimatedHours hours</small>
-                                        </li>
-                                    }
-                                </ul>
-                            </div>
-                        </div>
-
-                        <div class="mt-4 p-3 bg-primary text-white rounded">
+                        <!-- Implementation Summary -->
+                        <div class="mb-4 p-3 bg-primary text-white rounded">
                             <h6 class="mb-2"><i class="bi bi-clock"></i> Implementation Summary</h6>
                             <div class="row">
                                 <div class="col-md-4">
                                     <strong>Total Effort:</strong><br>
-                                    @teamResult.FinalRecommendations.TotalEstimatedEffort hours
+                                    @(teamResult?.FinalRecommendations?.TotalEstimatedEffort ?? 0) hours
                                 </div>
                                 <div class="col-md-4">
                                     <strong>Estimated Cost:</strong><br>
-                                    @((teamResult.FinalRecommendations.TotalEstimatedEffort * 125).ToString("C0"))
+                                    @(((teamResult?.FinalRecommendations?.TotalEstimatedEffort ?? 0) * 125).ToString("C0"))
                                 </div>
                                 <div class="col-md-4">
                                     <strong>Timeline:</strong><br>
-                                    @GetEstimatedTimeline(teamResult.FinalRecommendations.TotalEstimatedEffort)
+                                    @GetEstimatedTimeline(teamResult?.FinalRecommendations?.TotalEstimatedEffort ?? 0)
                                 </div>
                             </div>
                         </div>
 
-                        @if (!string.IsNullOrEmpty(teamResult.FinalRecommendations.ImplementationStrategy))
+                        <!-- Priority Tabs -->
+                        <ul class="nav nav-tabs mb-3" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link @(activeTab == "high" ? "active" : "")" 
+                                        @onclick="@(() => activeTab = "high")"
+                                        type="button" role="tab">
+                                    <i class="bi bi-exclamation-triangle-fill text-danger"></i> High Priority 
+                                    <span class="badge bg-danger ms-1">@(teamResult?.FinalRecommendations?.HighPriorityActions?.Count ?? 0)</span>
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link @(activeTab == "medium" ? "active" : "")" 
+                                        @onclick="@(() => activeTab = "medium")"
+                                        type="button" role="tab">
+                                    <i class="bi bi-exclamation-circle-fill text-warning"></i> Medium Priority 
+                                    <span class="badge bg-warning text-dark ms-1">@(teamResult?.FinalRecommendations?.MediumPriorityActions?.Count ?? 0)</span>
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link @(activeTab == "longterm" ? "active" : "")" 
+                                        @onclick="@(() => activeTab = "longterm")"
+                                        type="button" role="tab">
+                                    <i class="bi bi-calendar-check-fill text-info"></i> Long-Term Strategic 
+                                    <span class="badge bg-info ms-1">@(teamResult?.FinalRecommendations?.LongTermStrategic?.Count ?? 0)</span>
+                                </button>
+                            </li>
+                        </ul>
+
+                        <!-- Tab Content -->
+                        <div class="tab-content">
+                            <!-- High Priority Tab -->
+                            <div class="tab-pane @(activeTab == "high" ? "show active" : "")" role="tabpanel">
+                                @if (teamResult?.FinalRecommendations?.HighPriorityActions?.Any() == true)
+                                {
+                                    @foreach (var rec in teamResult.FinalRecommendations.HighPriorityActions)
+                                    {
+                                        var recId = $"high-{rec.GetHashCode()}";
+                                        var isExpanded = expandedRecommendations.GetValueOrDefault(recId, false);
+                                        <div class="card mb-2 border-start border-danger border-4">
+                                            <div class="card-header bg-light" style="cursor: pointer;" 
+                                                 @onclick="@(() => ToggleRecommendation(recId))">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div class="flex-grow-1">
+                                                        <span class="badge @GetPriorityBadgeClass(rec.Priority) me-2">
+                                                            @GetPriorityIcon(rec.Priority) @rec.Priority
+                                                        </span>
+                                                        <strong class="me-2">@rec.Title</strong>
+                                                        <small class="text-muted">
+                                                            <i class="bi bi-clock"></i> @rec.EstimatedHours hours
+                                                        </small>
+                                                    </div>
+                                                    <button class="btn btn-sm btn-outline-secondary">
+                                                        <i class="bi @(isExpanded ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            @if (isExpanded)
+                                            {
+                                                <div class="card-body">
+                                                    @if (!string.IsNullOrWhiteSpace(rec.Description))
+                                                    {
+                                                        <div class="mb-3">
+                                                            <h6 class="text-primary">
+                                                                <i class="bi bi-info-circle"></i> Description
+                                                            </h6>
+                                                            <p class="mb-0">@rec.Description</p>
+                                                        </div>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(rec.Implementation))
+                                                    {
+                                                        <div class="mb-3">
+                                                            <h6 class="text-success">
+                                                                <i class="bi bi-gear"></i> Implementation Steps
+                                                            </h6>
+                                                            <div class="p-2 bg-light rounded">
+                                                                @((MarkupString)rec.Implementation.Replace("\n", "<br>"))
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    @if (rec.Dependencies?.Any() == true)
+                                                    {
+                                                        <div class="mb-0">
+                                                            <h6 class="text-warning">
+                                                                <i class="bi bi-diagram-3"></i> Dependencies
+                                                            </h6>
+                                                            <ul class="mb-0">
+                                                                @foreach (var dep in rec.Dependencies)
+                                                                {
+                                                                    <li>@dep</li>
+                                                                }
+                                                            </ul>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> No high priority recommendations available.
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Medium Priority Tab -->
+                            <div class="tab-pane @(activeTab == "medium" ? "show active" : "")" role="tabpanel">
+                                @if (teamResult?.FinalRecommendations?.MediumPriorityActions?.Any() == true)
+                                {
+                                    @foreach (var rec in teamResult.FinalRecommendations.MediumPriorityActions)
+                                    {
+                                        var recId = $"medium-{rec.GetHashCode()}";
+                                        var isExpanded = expandedRecommendations.GetValueOrDefault(recId, false);
+                                        <div class="card mb-2 border-start border-warning border-4">
+                                            <div class="card-header bg-light" style="cursor: pointer;" 
+                                                 @onclick="@(() => ToggleRecommendation(recId))">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div class="flex-grow-1">
+                                                        <span class="badge @GetPriorityBadgeClass(rec.Priority) me-2">
+                                                            @GetPriorityIcon(rec.Priority) @rec.Priority
+                                                        </span>
+                                                        <strong class="me-2">@rec.Title</strong>
+                                                        <small class="text-muted">
+                                                            <i class="bi bi-clock"></i> @rec.EstimatedHours hours
+                                                        </small>
+                                                    </div>
+                                                    <button class="btn btn-sm btn-outline-secondary">
+                                                        <i class="bi @(isExpanded ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            @if (isExpanded)
+                                            {
+                                                <div class="card-body">
+                                                    @if (!string.IsNullOrWhiteSpace(rec.Description))
+                                                    {
+                                                        <div class="mb-3">
+                                                            <h6 class="text-primary">
+                                                                <i class="bi bi-info-circle"></i> Description
+                                                            </h6>
+                                                            <p class="mb-0">@rec.Description</p>
+                                                        </div>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(rec.Implementation))
+                                                    {
+                                                        <div class="mb-3">
+                                                            <h6 class="text-success">
+                                                                <i class="bi bi-gear"></i> Implementation Steps
+                                                            </h6>
+                                                            <div class="p-2 bg-light rounded">
+                                                                @((MarkupString)rec.Implementation.Replace("\n", "<br>"))
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    @if (rec.Dependencies?.Any() == true)
+                                                    {
+                                                        <div class="mb-0">
+                                                            <h6 class="text-warning">
+                                                                <i class="bi bi-diagram-3"></i> Dependencies
+                                                            </h6>
+                                                            <ul class="mb-0">
+                                                                @foreach (var dep in rec.Dependencies)
+                                                                {
+                                                                    <li>@dep</li>
+                                                                }
+                                                            </ul>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> No medium priority recommendations available.
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Long-Term Strategic Tab -->
+                            <div class="tab-pane @(activeTab == "longterm" ? "show active" : "")" role="tabpanel">
+                                @if (teamResult?.FinalRecommendations?.LongTermStrategic?.Any() == true)
+                                {
+                                    @foreach (var rec in teamResult.FinalRecommendations.LongTermStrategic)
+                                    {
+                                        var recId = $"longterm-{rec.GetHashCode()}";
+                                        var isExpanded = expandedRecommendations.GetValueOrDefault(recId, false);
+                                        <div class="card mb-2 border-start border-info border-4">
+                                            <div class="card-header bg-light" style="cursor: pointer;" 
+                                                 @onclick="@(() => ToggleRecommendation(recId))">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div class="flex-grow-1">
+                                                        <span class="badge @GetPriorityBadgeClass(rec.Priority) me-2">
+                                                            @GetPriorityIcon(rec.Priority) @rec.Priority
+                                                        </span>
+                                                        <strong class="me-2">@rec.Title</strong>
+                                                        <small class="text-muted">
+                                                            <i class="bi bi-clock"></i> @rec.EstimatedHours hours
+                                                        </small>
+                                                    </div>
+                                                    <button class="btn btn-sm btn-outline-secondary">
+                                                        <i class="bi @(isExpanded ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            @if (isExpanded)
+                                            {
+                                                <div class="card-body">
+                                                    @if (!string.IsNullOrWhiteSpace(rec.Description))
+                                                    {
+                                                        <div class="mb-3">
+                                                            <h6 class="text-primary">
+                                                                <i class="bi bi-info-circle"></i> Description
+                                                            </h6>
+                                                            <p class="mb-0">@rec.Description</p>
+                                                        </div>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(rec.Implementation))
+                                                    {
+                                                        <div class="mb-3">
+                                                            <h6 class="text-success">
+                                                                <i class="bi bi-gear"></i> Implementation Steps
+                                                            </h6>
+                                                            <div class="p-2 bg-light rounded">
+                                                                @((MarkupString)rec.Implementation.Replace("\n", "<br>"))
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    @if (rec.Dependencies?.Any() == true)
+                                                    {
+                                                        <div class="mb-0">
+                                                            <h6 class="text-warning">
+                                                                <i class="bi bi-diagram-3"></i> Dependencies
+                                                            </h6>
+                                                            <ul class="mb-0">
+                                                                @foreach (var dep in rec.Dependencies)
+                                                                {
+                                                                    <li>@dep</li>
+                                                                }
+                                                            </ul>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> No long-term strategic recommendations available.
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Implementation Strategy (Collapsible) -->
+                        @if (!string.IsNullOrEmpty(teamResult?.FinalRecommendations?.ImplementationStrategy))
                         {
-                            <div class="mt-3">
-                                <h6><i class="bi bi-map"></i> Implementation Strategy</h6>
-                                <div class="p-3 bg-light rounded">
-                                    @((MarkupString)FormatImplementationStrategy(teamResult.FinalRecommendations.ImplementationStrategy))
+                            <div class="mt-4">
+                                <div class="card">
+                                    <div class="card-header bg-light" style="cursor: pointer;" 
+                                         @onclick="@(() => isStrategyExpanded = !isStrategyExpanded)">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0">
+                                                <i class="bi bi-map"></i> Implementation Strategy
+                                            </h6>
+                                            <button class="btn btn-sm btn-outline-secondary">
+                                                <i class="bi @(isStrategyExpanded ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    @if (isStrategyExpanded)
+                                    {
+                                        <div class="card-body">
+                                            <div class="p-3 bg-light rounded">
+                                                @((MarkupString)FormatImplementationStrategy(teamResult?.FinalRecommendations?.ImplementationStrategy ?? ""))
+                                            </div>
+                                        </div>
+                                    }
                                 </div>
                             </div>
                         }
+                        
                         <div class="mt-3 d-flex justify-content-end">
                             <button class="btn btn-outline-primary" @onclick="DownloadTeamReport">
                                 <i class="bi bi-file-earmark-text"></i> Download Team Report (MD)
@@ -816,7 +1126,7 @@
     private string codeInput = "";
     private bool isAnalyzing = false;
     private string statusMessage = "";
-    private TeamAnalysisResult? teamResult;
+    private PoC1_LegacyAnalyzer_Web.Models.AgentCommunication.TeamAnalysisResult? teamResult;
     private List<IBrowserFile> selectedFiles = new();
     private PoC1_LegacyAnalyzer_Web.Services.ProjectSummary? projectSummary;
     private int lastAiInputCharCount = 0;
@@ -1050,60 +1360,29 @@ namespace LegacyFinancialSystem
             return;
         }
 
-        isAnalyzing = true;
-        currentAnalysisPhase = 0;
-
         try
         {
-            var businessObjective = selectedObjective == "custom" ? customObjective : GetObjectiveDescription(selectedObjective);
+            isAnalyzing = true;
+            statusMessage = "Starting team analysis...";
+            StateHasChanged();
 
-            // Note: File preprocessing happens inside AgentOrchestrationService.CoordinateTeamAnalysisAsync
-            // which uses ExtractMetadataParallelAsync and GetAgentSpecificData to send metadata (not full code) to agents.
-            // This ensures 75-80% token reduction by sending compact metadata summaries instead of full source code.
-            projectSummary = null;
-            if (selectedFiles.Any())
-            {
-                statusMessage = $"Starting team analysis for {selectedFiles.Count} files. Files will be preprocessed to metadata summaries (not full code) for token optimization...";
-                StateHasChanged();
-                lastAiInputCharCount = selectedFiles.Sum(f => (int)f.Size); // Estimate for display only
-            }
-            else
-            {
-                lastAiInputCharCount = string.IsNullOrEmpty(codeInput) ? 0 : codeInput.Length;
-            }
-
-            // Simulate progressive phases for demo
-            for (int i = 0; i < analysisPhases.Length; i++)
-            {
-                currentAnalysisPhase = i;
-                statusMessage = $"Phase {i + 1}: {analysisPhases[i]}...";
-                StateHasChanged();
-
-                // Realistic timing for each phase
-                await Task.Delay(i switch
-                {
-                    0 => 1000,  // Planning
-                    1 => 1500,  // Deployment
-                    2 => 3000,  // Analysis (longest phase)
-                    3 => 2000,  // Discussion
-                    4 => 1500,  // Synthesis
-                    5 => 1000   // Summary
-                });
-            }
-
-            // Execute the actual team analysis
             teamResult = await OrchestrationService.CoordinateTeamAnalysisAsync(
-                selectedFiles, // <-- This should be List<IBrowserFile>
-                businessObjective,
-                selectedAgents);
+                selectedFiles,
+                BusinessObjective,
+                selectedAgents,
+                new Progress<string>(msg => {
+                    statusMessage = msg;
+                    StateHasChanged();
+                }),
+                CancellationToken.None);
 
-            currentAnalysisPhase = analysisPhases.Length;
-            statusMessage = $"Team analysis complete! {teamResult.IndividualAnalyses.Count} agents collaborated with {teamResult.OverallConfidenceScore}% confidence.";
+            statusMessage = "Analysis complete!";
+            StateHasChanged(); // Ensures UI updates with new summary
         }
         catch (Exception ex)
         {
-            statusMessage = $"Team analysis failed: {ex.Message}";
-            teamResult = null;
+            statusMessage = $"Analysis failed: {ex.Message}";
+            StateHasChanged();
         }
         finally
         {
@@ -1111,6 +1390,11 @@ namespace LegacyFinancialSystem
             StateHasChanged();
         }
     }
+
+    private string BusinessObjective =>
+        selectedObjective == "custom" && !string.IsNullOrWhiteSpace(customObjective)
+            ? customObjective
+            : GetObjectiveDescription(selectedObjective);
 
     private string GetObjectiveDescription(string objective)
     {
@@ -1126,28 +1410,10 @@ namespace LegacyFinancialSystem
 
     private string FormatExecutiveSummary(string summary)
     {
-        if (string.IsNullOrEmpty(summary)) return "";
-
-        // Basic formatting for executive consumption
+        if (string.IsNullOrWhiteSpace(summary)) return "";
         summary = summary.Replace("\n\n", "</p><p>");
         summary = summary.Replace("\n", "<br>");
-
-        // Format headers
-        summary = System.Text.RegularExpressions.Regex.Replace(
-            summary,
-            @"^(\d+\.\s*)([A-Z][^<\n]*?)(<br>|</p>)",
-            "<h6 class='text-primary mb-2'>$1$2</h6>");
-
-        // Format bullet points
-        summary = summary.Replace("• ", "<i class='bi bi-arrow-right text-success me-2'></i>");
-        summary = summary.Replace("- ", "<i class='bi bi-chevron-right text-info me-2'></i>");
-
-        if (!summary.StartsWith("<p") && !summary.StartsWith("<h6"))
-        {
-            summary = $"<p>{summary}</p>";
-        }
-
-        return summary;
+        return $"<p>{summary}</p>";
     }
 
     private string FormatImplementationStrategy(string strategy)
@@ -1362,48 +1628,48 @@ namespace LegacyFinancialSystem
         if (teamResult != null)
         {
             sb.AppendLine("## Team Metrics");
-            sb.AppendLine($"- Specialist Agents: {teamResult.IndividualAnalyses.Count}");
-            sb.AppendLine($"- Collaboration Messages: {teamResult.TeamDiscussion.Count}");
-            sb.AppendLine($"- Team Consensus: {teamResult.Consensus.AgreementPercentage:F0}%");
-            sb.AppendLine($"- Overall Confidence: {teamResult.OverallConfidenceScore}%");
+            sb.AppendLine($"- Specialist Agents: {(teamResult?.IndividualAnalyses?.Count ?? 0)}");
+            sb.AppendLine($"- Collaboration Messages: {(teamResult?.TeamDiscussion?.Count ?? 0)}");
+            sb.AppendLine($"- Team Consensus: {(teamResult?.Consensus?.AgreementPercentage ?? 0):F0}%");
+            sb.AppendLine($"- Overall Confidence: {(teamResult?.OverallConfidenceScore ?? 0)}%");
             sb.AppendLine();
 
-            if (!string.IsNullOrWhiteSpace(teamResult.ExecutiveSummary))
+            if (!string.IsNullOrWhiteSpace(teamResult?.ExecutiveSummary))
             {
                 sb.AppendLine("## Executive Summary");
-                sb.AppendLine(teamResult.ExecutiveSummary.Replace("\r\n", "\n"));
+                sb.AppendLine(teamResult?.ExecutiveSummary?.Replace("\r\n", "\n") ?? "");
                 sb.AppendLine();
             }
 
             sb.AppendLine("## Priority Recommendations");
-            if (teamResult.FinalRecommendations.HighPriorityActions.Any())
+            if (teamResult?.FinalRecommendations?.HighPriorityActions?.Any() == true)
             {
                 sb.AppendLine("### High Priority");
-                foreach (var rec in teamResult.FinalRecommendations.HighPriorityActions.Take(10))
+                foreach (var rec in teamResult?.FinalRecommendations?.HighPriorityActions?.Take(10) ?? Enumerable.Empty<Recommendation>())
                 {
                     sb.AppendLine($"- {rec.Title} ({rec.EstimatedHours}h)");
                 }
             }
-            if (teamResult.FinalRecommendations.MediumPriorityActions.Any())
+            if (teamResult?.FinalRecommendations?.MediumPriorityActions?.Any() == true)
             {
                 sb.AppendLine("### Medium Priority");
-                foreach (var rec in teamResult.FinalRecommendations.MediumPriorityActions.Take(10))
+                foreach (var rec in teamResult?.FinalRecommendations?.MediumPriorityActions?.Take(10) ?? Enumerable.Empty<Recommendation>())
                 {
                     sb.AppendLine($"- {rec.Title} ({rec.EstimatedHours}h)");
                 }
             }
             sb.AppendLine();
 
-            if (!string.IsNullOrWhiteSpace(teamResult.FinalRecommendations.ImplementationStrategy))
+            if (!string.IsNullOrWhiteSpace(teamResult?.FinalRecommendations?.ImplementationStrategy))
             {
                 sb.AppendLine("## Implementation Strategy");
-                sb.AppendLine(teamResult.FinalRecommendations.ImplementationStrategy.Replace("\r\n", "\n"));
+                sb.AppendLine(teamResult?.FinalRecommendations?.ImplementationStrategy?.Replace("\r\n", "\n") ?? "");
                 sb.AppendLine();
             }
 
-            var usage = teamResult.TokenUsage;
+            var usage = teamResult?.TokenUsage;
             var estPrompt = Math.Max(1, lastAiInputCharCount / 4);
-            var estCompletion = Math.Max(1, (teamResult.ExecutiveSummary?.Length ?? 0) / 4);
+            var estCompletion = Math.Max(1, (teamResult?.ExecutiveSummary?.Length ?? 0) / 4);
             sb.AppendLine("## Token Usage");
             if (usage != null)
             {
@@ -1481,10 +1747,72 @@ namespace LegacyFinancialSystem
         executiveSummaryText = "";
         var cancellationToken = CancellationToken.None; // Or use a linked token
 
-        await foreach (var chunk in OrchestrationService.GenerateExecutiveSummaryStreamingAsync(teamResult, selectedObjective, cancellationToken))
+        await foreach (var chunk in OrchestrationService.GenerateExecutiveSummaryStreamingAsync(teamResult!, selectedObjective, cancellationToken))
         {
             executiveSummaryText += chunk;
             StateHasChanged(); // Forces UI update for each chunk
         }
+    }
+
+    // Recommendations section state management
+    private string activeTab = "high";
+    private Dictionary<string, bool> expandedRecommendations = new();
+    private Dictionary<string, bool> expandedMessages = new();
+    private bool isStrategyExpanded = false;
+
+    private void ToggleRecommendation(string recId)
+    {
+        if (expandedRecommendations.ContainsKey(recId))
+        {
+            expandedRecommendations[recId] = !expandedRecommendations[recId];
+        }
+        else
+        {
+            expandedRecommendations[recId] = true;
+        }
+        StateHasChanged();
+    }
+
+    private void ToggleMessage(string messageId)
+    {
+        if (expandedMessages.ContainsKey(messageId))
+        {
+            expandedMessages[messageId] = !expandedMessages[messageId];
+        }
+        else
+        {
+            expandedMessages[messageId] = true;
+        }
+        StateHasChanged();
+    }
+
+    private string GetPriorityBadgeClass(string priority)
+    {
+        if (string.IsNullOrWhiteSpace(priority))
+            return "bg-secondary";
+
+        return priority.ToUpper() switch
+        {
+            "CRITICAL" => "bg-danger",
+            "HIGH" => "bg-danger",
+            "MEDIUM" => "bg-warning text-dark",
+            "LOW" => "bg-info",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetPriorityIcon(string priority)
+    {
+        if (string.IsNullOrWhiteSpace(priority))
+            return "";
+
+        return priority.ToUpper() switch
+        {
+            "CRITICAL" => "🚨",
+            "HIGH" => "⚠️",
+            "MEDIUM" => "⚡",
+            "LOW" => "ℹ️",
+            _ => ""
+        };
     }
 }
