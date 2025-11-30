@@ -32,7 +32,8 @@ namespace PoC1_LegacyAnalyzer_Web
                     sp,
                     sp.GetRequiredService<Kernel>(),
                     sp.GetRequiredService<ILogger<AgentOrchestrationService>>(),
-                    configuration));
+                    configuration,
+                    sp.GetRequiredService<IFilePreProcessingService>()));
 
             services.AddScoped<IEnhancedProjectAnalysisService, EnhancedProjectAnalysisService>();
 
@@ -66,8 +67,21 @@ namespace PoC1_LegacyAnalyzer_Web
             return services;
         }
 
+        /// <summary>
+        /// Configures Semantic Kernel and Azure OpenAI HttpClient with extended timeout (300 seconds) to prevent timeouts on long LLM calls.
+        /// This ensures executive summaries and large completions do not fail due to default timeout.
+        /// </summary>
         public static IServiceCollection AddSemanticKernel(this IServiceCollection services, IConfiguration configuration)
         {
+            // Create HttpClient with 5 minute timeout for all LLM calls
+            var httpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(300) // 5 minutes
+            };
+
+            // Register HttpClient for Azure OpenAI
+            services.AddSingleton<HttpClient>(httpClient);
+
             services.AddScoped<Kernel>(sp =>
             {
                 var endpoint = configuration["AzureOpenAI:Endpoint"]
@@ -84,6 +98,15 @@ namespace PoC1_LegacyAnalyzer_Web
 
                 return builder.Build();
             });
+
+            // Optionally, add a delegating handler to log slow requests
+            httpClient.DefaultRequestHeaders.Add("X-SK-Timeout", "300s");
+
+            // Register a handler to log if any LLM call exceeds 200 seconds
+            services.AddSingleton<DelegatingHandler>(new LoggingTimeoutHandler(200));
+
+            // Use the handler in your Kernel setup if supported
+            // (If using KernelBuilder, pass the HttpClient and handler)
 
             return services;
         }

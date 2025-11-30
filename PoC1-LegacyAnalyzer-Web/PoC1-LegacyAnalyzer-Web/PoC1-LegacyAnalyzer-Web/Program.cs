@@ -68,8 +68,29 @@ public class Program
         builder.Services.Configure<TokenEstimationConfig>(builder.Configuration.GetSection("TokenEstimation"));
         builder.Services.Configure<KeyVaultConfiguration>(builder.Configuration.GetSection("KeyVault"));
         builder.Services.Configure<KeyVaultClientOptions>(builder.Configuration.GetSection("KeyVault:Client"));
+        builder.Services.Configure<FilePreProcessingOptions>(builder.Configuration.GetSection("FilePreProcessing"));
 
         // Add services to the container.
+        // Configure memory cache with size limits for FilePreProcessingService
+        var filePreProcessingOptions = builder.Configuration.GetSection("FilePreProcessing").Get<FilePreProcessingOptions>() ?? new FilePreProcessingOptions();
+        
+        // Validate FilePreProcessing configuration on startup
+        var (isValid, errorMessage) = FilePreProcessingOptions.Validate(filePreProcessingOptions);
+        if (!isValid)
+        {
+            var validationLoggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
+            var startupLogger = validationLoggerFactory.CreateLogger<Program>();
+            startupLogger.LogError("FilePreProcessing configuration validation failed: {ErrorMessage}", errorMessage);
+            throw new InvalidOperationException($"Invalid FilePreProcessing configuration: {errorMessage}");
+        }
+        
+        builder.Services.AddMemoryCache(options =>
+        {
+            if (filePreProcessingOptions.MaxCacheSize > 0)
+            {
+                options.SizeLimit = filePreProcessingOptions.MaxCacheSize;
+            }
+        });
         builder.Services.AddRazorPages();
         builder.Services.AddServerSideBlazor();
         
@@ -93,6 +114,19 @@ public class Program
             logging.AddApplicationInsights();
         });
         var logger = loggerFactory.CreateLogger<Program>();
+        
+        // Log FilePreProcessing configuration on startup
+        logger.LogInformation(
+            "FilePreProcessing configuration loaded: MaxConcurrentFiles={MaxConcurrentFiles}, CacheTTL={CacheTTL}min, " +
+            "MaxCacheSize={MaxCacheSize}, EnableCaching={EnableCaching}, EnablePatternDetection={EnablePatternDetection}, " +
+            "MaxFileSizeMB={MaxFileSizeMB}, LogDetailedMetrics={LogDetailedMetrics}",
+            filePreProcessingOptions.MaxConcurrentFiles,
+            filePreProcessingOptions.CacheTTLMinutes,
+            filePreProcessingOptions.MaxCacheSize,
+            filePreProcessingOptions.EnableCaching,
+            filePreProcessingOptions.EnablePatternDetection,
+            filePreProcessingOptions.MaxFileSizeMB,
+            filePreProcessingOptions.Performance?.LogDetailedMetrics ?? false);
 
         try
         {

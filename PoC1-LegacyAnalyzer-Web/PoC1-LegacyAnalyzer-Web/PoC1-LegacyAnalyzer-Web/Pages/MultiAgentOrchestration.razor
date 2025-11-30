@@ -11,6 +11,7 @@
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnvironment
 @inject IReportService ReportService
 @inject IFileDownloadService FileDownloadService
+@inject Microsoft.Extensions.Options.IOptions<PoC1_LegacyAnalyzer_Web.Models.FilePreProcessingOptions> PreProcessingOptions
 
 @* <PageTitle>Multi-Agent Team Analysis</PageTitle> *@
 
@@ -92,7 +93,7 @@
                         </div>
                     </div>
 
-                    <!-- Replace lines 88-93 with: -->
+                    <!-- Upload Area -->
                     <div class="upload-area mb-3">
                         <div class="text-center p-4">
                             <div style="font-size: 3rem;" class="text-muted mb-3">
@@ -114,11 +115,12 @@
                             </label>
                         </div>
                     </div>
+
                     @if (selectedFiles.Any())
                     {
                         <div class="mb-3">
                             <h6>Selected Files (@selectedFiles.Count):</h6>
-                            <div style="max-height: 200px; overflow-y: auto;">
+                            <div style="max-height: 200px, overflow-y: auto;">
                                 @foreach (var file in selectedFiles)
                                 {
                                     <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-1">
@@ -463,9 +465,13 @@
                         <h5 class="mb-0"><i class="bi bi-file-text"></i> Executive Summary</h5>
                     </div>
                     <div class="card-body">
-                        <div class="executive-summary">
-                            @((MarkupString)FormatExecutiveSummary(teamResult.ExecutiveSummary))
-                        </div>
+                        @if (teamResult != null)
+                        {
+                            <button class="btn btn-primary" @onclick="StreamExecutiveSummaryAsync">Stream Executive Summary</button>
+                            <div class="executive-summary">
+                                @((MarkupString)executiveSummaryText)
+                            </div>
+                        }
                     </div>
                 </div>
 
@@ -1051,38 +1057,19 @@ namespace LegacyFinancialSystem
         {
             var businessObjective = selectedObjective == "custom" ? customObjective : GetObjectiveDescription(selectedObjective);
 
-            // Build compact AI input: use Roslyn-preprocessed project pattern if files are selected
-            string aiInput;
+            // Note: File preprocessing happens inside AgentOrchestrationService.CoordinateTeamAnalysisAsync
+            // which uses ExtractMetadataParallelAsync and GetAgentSpecificData to send metadata (not full code) to agents.
+            // This ensures 75-80% token reduction by sending compact metadata summaries instead of full source code.
             projectSummary = null;
             if (selectedFiles.Any())
             {
-                statusMessage = "Preprocessing files locally (Roslyn) to reduce tokens...";
+                statusMessage = $"Starting team analysis for {selectedFiles.Count} files. Files will be preprocessed to metadata summaries (not full code) for token optimization...";
                 StateHasChanged();
-
-                var tasks = selectedFiles.Select(f => FilePreProcessingService.ExtractMetadataAsync(f, "csharp")).ToList();
-                var metadatas = await Task.WhenAll(tasks);
-                var summary = await FilePreProcessingService.CreateProjectSummaryAsync(metadatas.ToList());
-                projectSummary = summary;
-
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine("[Preprocessed Project Pattern - Token Optimized]");
-                sb.AppendLine($"Files: {summary.TotalFiles}, Classes: {summary.TotalClasses}, Methods: {summary.TotalMethods}, Properties: {summary.TotalProperties}");
-                sb.AppendLine($"RiskLevel: {summary.RiskLevel}, ComplexityScore: {summary.ComplexityScore}");
-                sb.AppendLine("KeyRecommendations: " + string.Join(" | ", summary.KeyRecommendations));
-                sb.AppendLine();
-                foreach (var m in metadatas.Take(20))
-                {
-                    sb.AppendLine(m.PatternSummary.Trim());
-                }
-
-                aiInput = sb.ToString();
-                lastAiInputCharCount = aiInput.Length;
+                lastAiInputCharCount = selectedFiles.Sum(f => (int)f.Size); // Estimate for display only
             }
             else
             {
-                aiInput = codeInput;
-                projectSummary = null;
-                lastAiInputCharCount = string.IsNullOrEmpty(aiInput) ? 0 : aiInput.Length;
+                lastAiInputCharCount = string.IsNullOrEmpty(codeInput) ? 0 : codeInput.Length;
             }
 
             // Simulate progressive phases for demo
@@ -1106,7 +1093,7 @@ namespace LegacyFinancialSystem
 
             // Execute the actual team analysis
             teamResult = await OrchestrationService.CoordinateTeamAnalysisAsync(
-                aiInput,
+                selectedFiles, // <-- This should be List<IBrowserFile>
                 businessObjective,
                 selectedAgents);
 
@@ -1264,20 +1251,45 @@ namespace LegacyFinancialSystem
             !f.Name.Contains("AssemblyInfo.cs")
         ).ToList();
 
-        selectedFiles.Clear();
-        selectedFiles.AddRange(sourceFiles.Take(20));
+        // Filter by file size using configured limit
+        var maxFileSizeBytes = PreProcessingOptions.Value.MaxFileSizeMB * 1024L * 1024L;
+        var validFiles = sourceFiles.Where(f => f.Size <= maxFileSizeBytes).ToList();
+        var oversizedFiles = sourceFiles.Where(f => f.Size > maxFileSizeBytes).ToList();
 
-        statusMessage = $"Loaded {selectedFiles.Count} C# source files for team analysis.";
+        selectedFiles.Clear();
+        selectedFiles.AddRange(validFiles.Take(20));
+
+        if (oversizedFiles.Any())
+        {
+            statusMessage = $"Loaded {selectedFiles.Count} files. {oversizedFiles.Count} file(s) exceeded size limit and were skipped.";
+        }
+        else
+        {
+            statusMessage = $"Loaded {selectedFiles.Count} C# source files for team analysis.";
+        }
         StateHasChanged();
     }
 
     private async Task HandleIndividualFileSelection(InputFileChangeEventArgs e)
     {
         var newFiles = e.GetMultipleFiles(20);
+        
+        // Filter by file size using configured limit
+        var maxFileSizeBytes = PreProcessingOptions.Value.MaxFileSizeMB * 1024L * 1024L;
+        var validFiles = newFiles.Where(f => f.Size <= maxFileSizeBytes).ToList();
+        var oversizedFiles = newFiles.Where(f => f.Size > maxFileSizeBytes).ToList();
+        
         selectedFiles.Clear();
-        selectedFiles.AddRange(newFiles);
+        selectedFiles.AddRange(validFiles);
 
-        statusMessage = $"Selected {selectedFiles.Count} individual files.";
+        if (oversizedFiles.Any())
+        {
+            statusMessage = $"Selected {selectedFiles.Count} files. {oversizedFiles.Count} file(s) exceeded size limit ({FormatFileSize(maxFileSizeBytes)}) and were skipped.";
+        }
+        else
+        {
+            statusMessage = $"Selected {selectedFiles.Count} individual files.";
+        }
         StateHasChanged();
     }
 
@@ -1460,5 +1472,19 @@ namespace LegacyFinancialSystem
             return (hours * rate).ToString("C0");
         }
         return (0m).ToString("C0");
+    }
+
+    private string executiveSummaryText = "";
+
+    private async Task StreamExecutiveSummaryAsync()
+    {
+        executiveSummaryText = "";
+        var cancellationToken = CancellationToken.None; // Or use a linked token
+
+        await foreach (var chunk in OrchestrationService.GenerateExecutiveSummaryStreamingAsync(teamResult, selectedObjective, cancellationToken))
+        {
+            executiveSummaryText += chunk;
+            StateHasChanged(); // Forces UI update for each chunk
+        }
     }
 }

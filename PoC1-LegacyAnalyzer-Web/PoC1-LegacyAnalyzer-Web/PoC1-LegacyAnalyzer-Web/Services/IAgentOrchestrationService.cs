@@ -1,5 +1,7 @@
 ﻿using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication;
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
+using Microsoft.AspNetCore.Components.Forms;
+using System.Runtime.CompilerServices;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -9,14 +11,16 @@ namespace PoC1_LegacyAnalyzer_Web.Services
     public interface IAgentOrchestrationService
     {
         /// <summary>
-        /// Coordinates a team of agents to analyze the provided code according to the specified business objective and required specialties.
+        /// Coordinates a team of agents to analyze the provided code files according to the specified business objective and required specialties.
+        /// Preprocessing is performed first to extract and filter metadata, ensuring only relevant, token-optimized data is routed to each agent.
         /// </summary>
-        /// <param name="code">The source code to be analyzed.</param>
+        /// <param name="files">The list of code files to be analyzed.</param>
         /// <param name="businessObjective">The business objective guiding the analysis.</param>
         /// <param name="requiredSpecialties">A list of specialties required for the analysis.</param>
+        /// <param name="progress">Optional progress reporter for preprocessing phase.</param>
         /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
         /// <returns>A <see cref="TeamAnalysisResult"/> containing the results of the team analysis.</returns>
-        Task<TeamAnalysisResult> CoordinateTeamAnalysisAsync(string code, string businessObjective, List<string> requiredSpecialties, CancellationToken cancellationToken = default);
+        Task<TeamAnalysisResult> CoordinateTeamAnalysisAsync(List<IBrowserFile> files, string businessObjective, List<string> requiredSpecialties, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Facilitates a discussion among agents on a given topic, using initial analyses as input.
@@ -44,5 +48,6 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
         /// <returns>A string containing the executive summary.</returns>
         Task<string> GenerateExecutiveSummaryAsync(TeamAnalysisResult teamResult, string businessObjective, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<string> GenerateExecutiveSummaryStreamingAsync(TeamAnalysisResult teamResult, string businessObjective, [EnumeratorCancellation] CancellationToken cancellationToken = default);
     }
 }
