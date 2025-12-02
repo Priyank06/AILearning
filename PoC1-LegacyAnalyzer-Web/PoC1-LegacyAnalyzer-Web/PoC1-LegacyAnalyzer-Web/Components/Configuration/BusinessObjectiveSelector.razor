@@ -1,0 +1,55 @@
+@using PoC1_LegacyAnalyzer_Web.Helpers
+
+@* Business objective selector component *@
+<div class="mb-3">
+    <label class="form-label fw-bold">Business Objective:</label>
+    <select class="form-select" @bind="selectedObjective" @bind:after="OnObjectiveChanged">
+        <option value="security-compliance">Security Compliance Assessment</option>
+        <option value="performance-optimization">Performance Optimization Analysis</option>
+        <option value="architecture-modernization">Architecture Modernization Planning</option>
+        <option value="comprehensive-audit">Comprehensive Code Audit</option>
+        <option value="custom">Custom Objective</option>
+    </select>
+</div>
+
+@if (selectedObjective == "custom")
+{
+    <div class="mb-3">
+        <label class="form-label">Custom Business Objective:</label>
+        <textarea class="form-control" rows="2" @bind="customObjective" @bind:after="OnCustomObjectiveChanged"
+                  placeholder="Describe your specific business objective..."></textarea>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(selectedObjective) && selectedObjective != "custom")
+{
+    <div class="mb-3">
+        <small class="text-muted">@FormattingHelpers.GetObjectiveDescription(selectedObjective)</small>
+    </div>
+}
+
+@code {
+    private string selectedObjective = "comprehensive-audit";
+    private string customObjective = "";
+
+    [Parameter] public string SelectedObjective { get; set; } = "comprehensive-audit";
+    [Parameter] public string CustomObjective { get; set; } = "";
+    [Parameter] public EventCallback<string> OnObjectiveChange { get; set; }
+    [Parameter] public EventCallback<string> OnCustomObjectiveChange { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        selectedObjective = SelectedObjective;
+        customObjective = CustomObjective;
+    }
+
+    private async Task OnObjectiveChanged()
+    {
+        await OnObjectiveChange.InvokeAsync(selectedObjective);
+    }
+
+    private async Task OnCustomObjectiveChanged()
+    {
+        await OnCustomObjectiveChange.InvokeAsync(customObjective);
+    }
+}

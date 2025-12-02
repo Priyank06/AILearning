@@ -1,0 +1,77 @@
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
+@using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
+
+@* Team performance metrics dashboard *@
+<div class="metrics-dashboard">
+    <div class="text-center mb-4">
+        <h4 class="mb-2">?? Multi-Agent Analysis Complete</h4>
+        <p class="mb-0">AI specialist team collaboration results</p>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3 col-6">
+            <MetricBox 
+                Value="@agentCount" 
+                Label="Specialist Agents"
+                Icon="bi-people-fill" />
+        </div>
+        <div class="col-md-3 col-6">
+            <MetricBox 
+                Value="@messageCount" 
+                Label="Collaboration Messages"
+                Icon="bi-chat-dots" />
+        </div>
+        <div class="col-md-3 col-6">
+            <MetricBox 
+                Value="@priorityActionCount" 
+                Label="Priority Actions"
+                Icon="bi-exclamation-triangle-fill" />
+        </div>
+        <div class="col-md-3 col-6">
+            <MetricBox 
+                Value="@consensusPercentage"
+                Label="Team Consensus"
+                Icon="bi-check2-circle" />
+        </div>
+    </div>
+
+    <div class="text-center mt-3">
+        <div class="badge bg-light text-success fs-5 px-3 py-2">
+            Overall Confidence: @(TeamResult?.OverallConfidenceScore ?? 0)%
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public TeamAnalysisResult? TeamResult { get; set; }
+
+    private string agentCount => (TeamResult?.IndividualAnalyses?.Count ?? 0).ToString();
+    private string messageCount => (TeamResult?.TeamDiscussion?.Count ?? 0).ToString();
+    private string priorityActionCount => (TeamResult?.FinalRecommendations?.HighPriorityActions?.Count ?? 0).ToString();
+    private string consensusPercentage => $"{TeamResult?.Consensus?.AgreementPercentage ?? 0:F0}%";
+}
+
+<style>
+    .metrics-dashboard {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border-radius: 12px;
+        padding: 2rem;
+        color: white;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    }
+
+    .metrics-dashboard .metric-box {
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .metrics-dashboard .metric-box h4 {
+        color: white;
+    }
+
+    .metrics-dashboard .metric-box small {
+        color: rgba(255,255,255,0.9);
+    }
+</style>

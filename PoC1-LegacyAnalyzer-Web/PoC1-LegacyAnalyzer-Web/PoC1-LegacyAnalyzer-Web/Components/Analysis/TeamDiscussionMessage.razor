@@ -1,0 +1,78 @@
+@using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
+@using PoC1_LegacyAnalyzer_Web.Helpers
+
+@* Team discussion message component *@
+<div class="discussion-message mb-3">
+    <div class="d-flex justify-content-between align-items-start">
+        <div class="flex-grow-1">
+            <strong class="text-primary">@Message.FromAgent</strong>
+            @if (!string.IsNullOrEmpty(Message.ToAgent) && Message.ToAgent != Message.FromAgent)
+            {
+                <span class="text-muted"> ? @Message.ToAgent</span>
+            }
+        </div>
+        <small class="text-muted">@Message.Timestamp.ToString("HH:mm:ss")</small>
+    </div>
+    <div class="mt-1">
+        <span class="badge @GetMessageTypeBadgeClass(Message.Type) me-2">
+            @Message.Type
+        </span>
+        <strong>@Message.Subject</strong>
+    </div>
+    <div class="mt-2 p-2 bg-light rounded">
+        @if (ShouldTruncate && !IsExpanded)
+        {
+            <small>@FormattingHelpers.TruncateMessage(Message.Content ?? "", MaxLength)</small>
+            <button class="btn btn-sm btn-link p-0 ms-2" @onclick="OnToggleExpanded">
+                <small>Show more...</small>
+            </button>
+        }
+        else
+        {
+            <small>@Message.Content</small>
+            @if (ShouldTruncate)
+            {
+                <button class="btn btn-sm btn-link p-0 ms-2" @onclick="OnToggleExpanded">
+                    <small>Show less</small>
+                </button>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public AgentMessage Message { get; set; } = null!;
+    [Parameter] public bool IsExpanded { get; set; }
+    [Parameter] public int MaxLength { get; set; } = 300;
+    [Parameter] public EventCallback OnToggleExpanded { get; set; }
+
+    private bool ShouldTruncate => (Message.Content?.Length ?? 0) > MaxLength;
+
+    private string GetMessageTypeBadgeClass(MessageType messageType)
+    {
+        return messageType switch
+        {
+            MessageType.Analysis => "bg-primary",
+            MessageType.PeerReview => "bg-info",
+            MessageType.Challenge => "bg-warning text-dark",
+            MessageType.Agreement => "bg-success",
+            MessageType.Synthesis => "bg-dark",
+            _ => "bg-secondary"
+        };
+    }
+}
+
+<style>
+    .discussion-message {
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 1rem;
+        border-left: 4px solid #007bff;
+        transition: all 0.3s ease;
+    }
+
+    .discussion-message:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+</style>

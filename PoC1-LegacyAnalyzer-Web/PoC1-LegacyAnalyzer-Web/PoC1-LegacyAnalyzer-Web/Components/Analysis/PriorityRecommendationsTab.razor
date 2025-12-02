@@ -1,0 +1,33 @@
+@using PoC1_LegacyAnalyzer_Web.Components.Analysis
+@using PoC1_LegacyAnalyzer_Web.Models.MultiAgent
+
+@* Priority recommendations tab component *@
+<div class="tab-pane @(IsActive ? "show active" : "")" role="tabpanel">
+    @if (Recommendations?.Any() == true)
+    {
+        @foreach (var rec in Recommendations)
+        {
+            var recId = $"{Priority}-{rec.GetHashCode()}";
+            var isExpanded = ExpandedStates.GetValueOrDefault(recId, false);
+            
+            <RecommendationCard 
+                Recommendation="@rec"
+                IsExpanded="@isExpanded"
+                OnToggle="@(() => OnToggle.InvokeAsync(recId))" />
+        }
+    }
+    else
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No @Priority.ToLower() priority recommendations available.
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<Recommendation>? Recommendations { get; set; }
+    [Parameter] public string Priority { get; set; } = string.Empty;
+    [Parameter] public bool IsActive { get; set; }
+    [Parameter] public Dictionary<string, bool> ExpandedStates { get; set; } = new();
+    [Parameter] public EventCallback<string> OnToggle { get; set; }
+}

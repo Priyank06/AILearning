@@ -1,0 +1,31 @@
+@* Reusable badge with icon component *@
+<span class="badge @GetBadgeClass() @Size">
+    @if (!string.IsNullOrEmpty(Icon))
+    {
+        <span class="me-1">@Icon</span>
+    }
+    @Text
+</span>
+
+@code {
+    [Parameter] public string Text { get; set; } = string.Empty;
+    [Parameter] public string Icon { get; set; } = string.Empty;
+    [Parameter] public string Color { get; set; } = "primary";
+    [Parameter] public string? Size { get; set; }
+
+    private string GetBadgeClass()
+    {
+        return Color switch
+        {
+            "primary" => "bg-primary",
+            "secondary" => "bg-secondary",
+            "success" => "bg-success",
+            "danger" => "bg-danger",
+            "warning" => "bg-warning text-dark",
+            "info" => "bg-info",
+            "light" => "bg-light text-dark",
+            "dark" => "bg-dark",
+            _ => "bg-primary"
+        };
+    }
+}

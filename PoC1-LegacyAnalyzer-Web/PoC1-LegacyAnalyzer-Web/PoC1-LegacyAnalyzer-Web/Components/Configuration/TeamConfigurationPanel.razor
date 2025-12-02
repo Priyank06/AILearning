@@ -1,0 +1,215 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using PoC1_LegacyAnalyzer_Web.Components.Configuration
+@using PoC1_LegacyAnalyzer_Web.Models
+
+@* Team configuration panel - composite component *@
+<div class="card shadow border-primary">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-people-fill"></i> Team Configuration</h5>
+    </div>
+    <div class="card-body">
+        <BusinessObjectiveSelector 
+            SelectedObjective="@selectedObjective"
+            CustomObjective="@customObjective"
+            OnObjectiveChange="@OnObjectiveChanged"
+            OnCustomObjectiveChange="@OnCustomObjectiveChanged" />
+
+        <AgentTeamSelector @ref="agentSelector"
+            IncludeSecurityAgent="@includeSecurityAgent"
+            IncludePerformanceAgent="@includePerformanceAgent"
+            IncludeArchitectureAgent="@includeArchitectureAgent"
+            OnSelectionChange="@OnAgentSelectionChanged" />
+
+        <FileUploadManager 
+            SelectedFiles="@selectedFiles"
+            MaxFiles="@MaxFiles"
+            MaxFileSizeMB="@MaxFileSizeMB"
+            OnFilesChanged="@OnFilesChanged"
+            OnStatusChanged="@OnStatusChanged" />
+
+        <!-- Action Buttons -->
+        <div class="mb-3">
+            <button class="btn btn-success btn-lg" @onclick="StartAnalysis" disabled="@(isAnalyzing || !IsConfigurationValid())">
+                @if (isAnalyzing)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    <text>Team Analyzing...</text>
+                }
+                else
+                {
+                    <text><i class="bi bi-people"></i> Start Team Analysis</text>
+                }
+            </button>
+        </div>
+
+        <AnalysisProgressTracker 
+            IsAnalyzing="@isAnalyzing"
+            CurrentPhase="@currentPhase"
+            TotalPhases="6" />
+
+        @if (!string.IsNullOrEmpty(statusMessage) && !isAnalyzing)
+        {
+            <div class="alert alert-info">
+                <small><i class="bi bi-info-circle"></i> @statusMessage</small>
+            </div>
+        }
+
+        @if (validationErrors.Any())
+        {
+            <div class="alert alert-warning">
+                <small>
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <ul class="mb-0 mt-2">
+                        @foreach (var error in validationErrors)
+                        {
+                            <li>@error</li>
+                        }
+                    </ul>
+                </small>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private AgentTeamSelector? agentSelector;
+    private string selectedObjective = "comprehensive-audit";
+    private string customObjective = "";
+    private bool includeSecurityAgent = true;
+    private bool includePerformanceAgent = true;
+    private bool includeArchitectureAgent = true;
+    private List<IBrowserFile> selectedFiles = new();
+    private bool isAnalyzing = false;
+    private int currentPhase = 0;
+    private string statusMessage = "Multi-agent team ready! Select agents and provide code for comprehensive analysis.";
+    private List<string> validationErrors = new();
+    private List<string> selectedAgents = new();
+
+    [Parameter] public int MaxFiles { get; set; } = 50;
+    [Parameter] public int MaxFileSizeMB { get; set; } = 10;
+    [Parameter] public EventCallback<AnalysisConfiguration> OnAnalysisStarted { get; set; }
+    [Parameter] public EventCallback<int> OnPhaseChanged { get; set; }
+
+    protected override void OnInitialized()
+    {
+        statusMessage = "Multi-agent team ready! Select agents and provide code for comprehensive analysis.";
+        ValidateConfiguration();
+    }
+
+    private async Task OnObjectiveChanged(string objective)
+    {
+        selectedObjective = objective;
+        
+        // Auto-configure agents based on objective
+        agentSelector?.ConfigureForObjective(objective);
+        
+        ValidateConfiguration();
+        StateHasChanged();
+    }
+
+    private async Task OnCustomObjectiveChanged(string customObj)
+    {
+        customObjective = customObj;
+        ValidateConfiguration();
+        StateHasChanged();
+    }
+
+    private async Task OnAgentSelectionChanged(List<string> agents)
+    {
+        selectedAgents = agents;
+        ValidateConfiguration();
+        StateHasChanged();
+    }
+
+    private async Task OnFilesChanged(List<IBrowserFile> files)
+    {
+        selectedFiles = files;
+        ValidateConfiguration();
+        StateHasChanged();
+    }
+
+    private async Task OnStatusChanged(string status)
+    {
+        statusMessage = status;
+        StateHasChanged();
+    }
+
+    private async Task StartAnalysis()
+    {
+        if (!IsConfigurationValid()) return;
+
+        isAnalyzing = true;
+        currentPhase = 0;
+
+        var config = new AnalysisConfiguration
+        {
+            BusinessObjective = selectedObjective,
+            CustomObjective = customObjective,
+            SelectedAgents = selectedAgents,
+            Files = selectedFiles
+        };
+
+        try
+        {
+            await OnAnalysisStarted.InvokeAsync(config);
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Analysis failed: {ex.Message}";
+            isAnalyzing = false;
+        }
+
+        StateHasChanged();
+    }
+
+    private bool IsConfigurationValid()
+    {
+        ValidateConfiguration();
+        return !validationErrors.Any();
+    }
+
+    private void ValidateConfiguration()
+    {
+        validationErrors.Clear();
+
+        var config = new AnalysisConfiguration
+        {
+            BusinessObjective = selectedObjective,
+            CustomObjective = customObjective,
+            SelectedAgents = selectedAgents,
+            Files = selectedFiles
+        };
+
+        validationErrors.AddRange(config.GetValidationErrors());
+    }
+
+    /// <summary>
+    /// Updates analysis phase from parent component.
+    /// </summary>
+    public void UpdatePhase(int phase)
+    {
+        currentPhase = phase;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Completes analysis and resets state.
+    /// </summary>
+    public void CompleteAnalysis()
+    {
+        isAnalyzing = false;
+        currentPhase = 0;
+        statusMessage = "Analysis complete!";
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Sets error state.
+    /// </summary>
+    public void SetError(string error)
+    {
+        isAnalyzing = false;
+        statusMessage = error;
+        StateHasChanged();
+    }
+}

@@ -1,0 +1,104 @@
+@using PoC1_LegacyAnalyzer_Web.Components.Analysis
+@using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
+@using PoC1_LegacyAnalyzer_Web.Helpers
+
+@* Consolidated recommendations card - composite component *@
+<div class="card shadow">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="bi bi-list-check"></i> Team Recommendations</h5>
+    </div>
+    <div class="card-body">
+        <!-- Implementation Summary -->
+        <div class="mb-4 p-3 bg-primary text-white rounded">
+            <h6 class="mb-2"><i class="bi bi-clock"></i> Implementation Summary</h6>
+            <div class="row">
+                <div class="col-md-4">
+                    <strong>Total Effort:</strong><br>
+                    @(Recommendations?.TotalEstimatedEffort ?? 0) hours
+                </div>
+                <div class="col-md-4">
+                    <strong>Estimated Cost:</strong><br>
+                    @(((Recommendations?.TotalEstimatedEffort ?? 0) * 125).ToString("C0"))
+                </div>
+                <div class="col-md-4">
+                    <strong>Timeline:</strong><br>
+                    @FormattingHelpers.GetEstimatedTimeline(Recommendations?.TotalEstimatedEffort ?? 0)
+                </div>
+            </div>
+        </div>
+
+        <!-- Priority Tabs -->
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(ActiveTab == "high" ? "active" : "")" 
+                        @onclick="@(() => OnTabChange.InvokeAsync("high"))"
+                        type="button" role="tab">
+                    <i class="bi bi-exclamation-triangle-fill text-danger"></i> High Priority 
+                    <span class="badge bg-danger ms-1">@(Recommendations?.HighPriorityActions?.Count ?? 0)</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(ActiveTab == "medium" ? "active" : "")" 
+                        @onclick="@(() => OnTabChange.InvokeAsync("medium"))"
+                        type="button" role="tab">
+                    <i class="bi bi-exclamation-circle-fill text-warning"></i> Medium Priority 
+                    <span class="badge bg-warning text-dark ms-1">@(Recommendations?.MediumPriorityActions?.Count ?? 0)</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(ActiveTab == "longterm" ? "active" : "")" 
+                        @onclick="@(() => OnTabChange.InvokeAsync("longterm"))"
+                        type="button" role="tab">
+                    <i class="bi bi-calendar-check-fill text-info"></i> Long-Term Strategic 
+                    <span class="badge bg-info ms-1">@(Recommendations?.LongTermStrategic?.Count ?? 0)</span>
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <PriorityRecommendationsTab 
+                Recommendations="@Recommendations?.HighPriorityActions"
+                Priority="High"
+                IsActive="@(ActiveTab == "high")"
+                ExpandedStates="@ExpandedStates"
+                OnToggle="@OnToggleRecommendation" />
+
+            <PriorityRecommendationsTab 
+                Recommendations="@Recommendations?.MediumPriorityActions"
+                Priority="Medium"
+                IsActive="@(ActiveTab == "medium")"
+                ExpandedStates="@ExpandedStates"
+                OnToggle="@OnToggleRecommendation" />
+
+            <PriorityRecommendationsTab 
+                Recommendations="@Recommendations?.LongTermStrategic"
+                Priority="Long-term strategic"
+                IsActive="@(ActiveTab == "longterm")"
+                ExpandedStates="@ExpandedStates"
+                OnToggle="@OnToggleRecommendation" />
+        </div>
+
+        <ImplementationStrategySection 
+            Strategy="@Recommendations?.ImplementationStrategy"
+            IsExpanded="@IsStrategyExpanded"
+            OnToggle="@OnToggleStrategy" />
+        
+        <div class="mt-3 d-flex justify-content-end">
+            <button class="btn btn-outline-primary" @onclick="OnDownloadReport">
+                <i class="bi bi-file-earmark-text"></i> Download Team Report (MD)
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public ConsolidatedRecommendations? Recommendations { get; set; }
+    [Parameter] public string ActiveTab { get; set; } = "high";
+    [Parameter] public Dictionary<string, bool> ExpandedStates { get; set; } = new();
+    [Parameter] public bool IsStrategyExpanded { get; set; }
+    [Parameter] public EventCallback<string> OnTabChange { get; set; }
+    [Parameter] public EventCallback<string> OnToggleRecommendation { get; set; }
+    [Parameter] public EventCallback OnToggleStrategy { get; set; }
+    [Parameter] public EventCallback OnDownloadReport { get; set; }
+}

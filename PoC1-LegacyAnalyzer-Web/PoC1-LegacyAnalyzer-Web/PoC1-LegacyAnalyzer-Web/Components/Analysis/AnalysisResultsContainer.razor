@@ -1,0 +1,119 @@
+@using PoC1_LegacyAnalyzer_Web.Components.Analysis
+@using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
+@using PoC1_LegacyAnalyzer_Web.Services
+
+@* Analysis results container - master composite component *@
+<div class="col-lg-7">
+    <BusinessContextCard 
+        BusinessObjective="@BusinessObjective"
+        CustomObjective="@CustomObjective"
+        SelectedAgents="@SelectedAgents"
+        ProjectSummary="@ProjectSummary"
+        CodeInputLength="@EstimatedInputTokens" />
+        
+    @if (ProjectSummary != null)
+    {
+        <ProjectOverviewCard ProjectSummary="@ProjectSummary" />
+    }
+    
+    <TokenUsageCard 
+        TokenUsage="@TeamResult?.TokenUsage"
+        EstimatedInputTokens="@EstimatedInputTokens"
+        EstimatedCompletionTokens="@(TeamResult?.ExecutiveSummary?.Length / 4 ?? 1000)" />
+        
+    <TeamPerformanceDashboard TeamResult="@TeamResult" />
+    
+    <ExecutiveSummaryCard 
+        ExecutiveSummary="@TeamResult?.ExecutiveSummary"
+        IsAnalyzing="@IsAnalyzing" />
+        
+    @if (TeamResult?.IndividualAnalyses?.Any() == true)
+    {
+        <div class="card shadow mb-3">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="bi bi-person-badge"></i> Individual Agent Analysis</h5>
+            </div>
+            <div class="card-body">
+                @foreach (var analysis in TeamResult.IndividualAnalyses.OrderByDescending(a => a.ConfidenceScore))
+                {
+                    <AgentAnalysisCard Analysis="@analysis" />
+                }
+            </div>
+        </div>
+    }
+    
+    @if (TeamResult?.TeamDiscussion?.Any() == true)
+    {
+        <TeamDiscussionCard 
+            Discussion="@TeamResult.TeamDiscussion"
+            ExpandedMessages="@expandedMessages"
+            OnToggleMessage="@ToggleMessage" />
+    }
+    
+    @if (TeamResult?.FinalRecommendations != null)
+    {
+        <ConsolidatedRecommendationsCard 
+            Recommendations="@TeamResult.FinalRecommendations"
+            ActiveTab="@activeTab"
+            ExpandedStates="@expandedRecommendations"
+            IsStrategyExpanded="@isStrategyExpanded"
+            OnTabChange="@OnTabChanged"
+            OnToggleRecommendation="@ToggleRecommendation"
+            OnToggleStrategy="@ToggleStrategy"
+            OnDownloadReport="@OnDownloadReport" />
+    }
+</div>
+
+@code {
+    private string activeTab = "high";
+    private Dictionary<string, bool> expandedRecommendations = new();
+    private Dictionary<string, bool> expandedMessages = new();
+    private bool isStrategyExpanded = false;
+
+    [Parameter] public TeamAnalysisResult? TeamResult { get; set; }
+    [Parameter] public string BusinessObjective { get; set; } = string.Empty;
+    [Parameter] public string? CustomObjective { get; set; }
+    [Parameter] public List<string> SelectedAgents { get; set; } = new();
+    [Parameter] public PoC1_LegacyAnalyzer_Web.Services.ProjectSummary? ProjectSummary { get; set; }
+    [Parameter] public int EstimatedInputTokens { get; set; }
+    [Parameter] public bool IsAnalyzing { get; set; }
+    [Parameter] public EventCallback OnDownloadReport { get; set; }
+
+    private async Task OnTabChanged(string tab)
+    {
+        activeTab = tab;
+        StateHasChanged();
+    }
+
+    private async Task ToggleRecommendation(string recId)
+    {
+        if (expandedRecommendations.ContainsKey(recId))
+        {
+            expandedRecommendations[recId] = !expandedRecommendations[recId];
+        }
+        else
+        {
+            expandedRecommendations[recId] = true;
+        }
+        StateHasChanged();
+    }
+
+    private async Task ToggleMessage(string messageId)
+    {
+        if (expandedMessages.ContainsKey(messageId))
+        {
+            expandedMessages[messageId] = !expandedMessages[messageId];
+        }
+        else
+        {
+            expandedMessages[messageId] = true;
+        }
+        StateHasChanged();
+    }
+
+    private async Task ToggleStrategy()
+    {
+        isStrategyExpanded = !isStrategyExpanded;
+        StateHasChanged();
+    }
+}

@@ -1,0 +1,78 @@
+@using PoC1_LegacyAnalyzer_Web.Models.MultiAgent
+@using PoC1_LegacyAnalyzer_Web.Helpers
+
+@* Individual recommendation card component *@
+<div class="card mb-2 border-start @GetBorderClass() border-4">
+    <div class="card-header bg-light" style="cursor: pointer;" @onclick="OnToggle">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="flex-grow-1">
+                <span class="badge @FormattingHelpers.GetPriorityBadgeClass(Recommendation.Priority) me-2">
+                    @FormattingHelpers.GetPriorityIcon(Recommendation.Priority) @Recommendation.Priority
+                </span>
+                <strong class="me-2">@Recommendation.Title</strong>
+                <small class="text-muted">
+                    <i class="bi bi-clock"></i> @Recommendation.EstimatedHours hours
+                </small>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary">
+                <i class="bi @(IsExpanded ? "bi-chevron-up" : "bi-chevron-down")"></i>
+            </button>
+        </div>
+    </div>
+    @if (IsExpanded)
+    {
+        <div class="card-body">
+            @if (!string.IsNullOrWhiteSpace(Recommendation.Description))
+            {
+                <div class="mb-3">
+                    <h6 class="text-primary">
+                        <i class="bi bi-info-circle"></i> Description
+                    </h6>
+                    <p class="mb-0">@Recommendation.Description</p>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(Recommendation.Implementation))
+            {
+                <div class="mb-3">
+                    <h6 class="text-success">
+                        <i class="bi bi-gear"></i> Implementation Steps
+                    </h6>
+                    <div class="p-2 bg-light rounded">
+                        @((MarkupString)Recommendation.Implementation.Replace("\n", "<br>"))
+                    </div>
+                </div>
+            }
+            @if (Recommendation.Dependencies?.Any() == true)
+            {
+                <div class="mb-0">
+                    <h6 class="text-warning">
+                        <i class="bi bi-diagram-3"></i> Dependencies
+                    </h6>
+                    <ul class="mb-0">
+                        @foreach (var dep in Recommendation.Dependencies)
+                        {
+                            <li>@dep</li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Recommendation Recommendation { get; set; } = null!;
+    [Parameter] public bool IsExpanded { get; set; }
+    [Parameter] public EventCallback OnToggle { get; set; }
+
+    private string GetBorderClass()
+    {
+        return Recommendation.Priority?.ToUpper() switch
+        {
+            "HIGH" or "CRITICAL" => "border-danger",
+            "MEDIUM" => "border-warning",
+            "LOW" => "border-info",
+            _ => "border-secondary"
+        };
+    }
+}

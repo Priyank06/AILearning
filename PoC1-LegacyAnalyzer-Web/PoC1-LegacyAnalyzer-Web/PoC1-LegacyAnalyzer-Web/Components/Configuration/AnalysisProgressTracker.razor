@@ -1,0 +1,89 @@
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
+
+@* Analysis progress tracker component *@
+@if (IsAnalyzing)
+{
+    <div class="analysis-progress">
+        <div class="text-center mb-3">
+            <h5 class="text-primary mb-2">
+                <div class="spinner-border spinner-border-sm me-2"></div>
+                Multi-Agent Collaboration in Progress
+            </h5>
+            <p class="text-muted mb-3">AI specialists working together on your code</p>
+        </div>
+
+        <div class="progress mb-3" style="height: 12px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                 style="width: @GetAnalysisProgress()%"></div>
+        </div>
+
+        <div class="row text-center">
+            @for (int i = 0; i < Math.Min(phases.Length, 3); i++)
+            {
+                var phaseIndex = i * 2; // Show every other phase for display
+                if (phaseIndex < phases.Length)
+                {
+                    <ProgressPhaseIndicator 
+                        PhaseName="@GetPhaseDisplayName(phaseIndex)"
+                        IsCompleted="@(CurrentPhase > phaseIndex + 1)"
+                        IsCurrent="@(CurrentPhase == phaseIndex || CurrentPhase == phaseIndex + 1)"
+                        Description="@phases[phaseIndex]" />
+                }
+            }
+        </div>
+
+        <div class="text-center mt-3">
+            <strong class="text-primary">Current: @GetCurrentAnalysisPhase()</strong>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly string[] phases = {
+        "Planning team analysis approach",
+        "Deploying specialist agents", 
+        "Executing parallel analysis",
+        "Facilitating peer review discussions",
+        "Synthesizing team recommendations",
+        "Generating executive summary"
+    };
+
+    [Parameter] public bool IsAnalyzing { get; set; }
+    [Parameter] public int CurrentPhase { get; set; }
+    [Parameter] public int TotalPhases { get; set; } = 6;
+
+    private int GetAnalysisProgress()
+    {
+        if (TotalPhases == 0) return 0;
+        return (int)((double)CurrentPhase / TotalPhases * 100);
+    }
+
+    private string GetCurrentAnalysisPhase()
+    {
+        if (CurrentPhase < phases.Length)
+            return phases[CurrentPhase];
+        return "Analysis Complete";
+    }
+
+    private string GetPhaseDisplayName(int phaseIndex)
+    {
+        return phaseIndex switch
+        {
+            0 => "Analysis Phase",
+            2 => "Collaboration Phase", 
+            4 => "Synthesis Phase",
+            _ => "Phase " + (phaseIndex + 1)
+        };
+    }
+}
+
+<style>
+    .analysis-progress {
+        background: rgba(255,255,255,0.95);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(0,123,255,0.3);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+    }
+</style>

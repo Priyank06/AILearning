@@ -1,0 +1,81 @@
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
+@using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
+
+@* Token usage display card *@
+<div class="card shadow mb-3 border-secondary">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0"><i class="bi bi-ticket-detailed"></i> Token Usage</h5>
+    </div>
+    <div class="card-body">
+        @if (TokenUsage != null)
+        {
+            <div class="row text-center">
+                <div class="col-6 col-md-3">
+                    <MetricBox Value="@TokenUsage.PromptTokens.ToString()" Label="Prompt" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <MetricBox Value="@TokenUsage.CompletionTokens.ToString()" Label="Completion" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <MetricBox Value="@TokenUsage.TotalTokens.ToString()" Label="Total" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <MetricBox Value="@TokenUsage.Model" Label="@TokenUsage.Provider" />
+                </div>
+            </div>
+        }
+        else
+        {
+            var estPrompt = Math.Max(1, EstimatedInputTokens / 4);
+            var estCompletion = Math.Max(1, EstimatedCompletionTokens);
+            <div class="alert alert-light mb-2">
+                <small><strong>Estimated</strong> (provider usage not available)</small>
+            </div>
+            <div class="row text-center">
+                <div class="col-6 col-md-3">
+                    <MetricBox Value="@estPrompt.ToString()" Label="Prompt" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <MetricBox Value="@estCompletion.ToString()" Label="Completion" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <MetricBox Value="@GetEstimatedTotal(estPrompt, estCompletion)" Label="Total" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <MetricBox Value="unknown" Label="semantic-kernel" />
+                </div>
+            </div>
+        }
+
+        @if (ShowCostEstimate && TokenUsage != null)
+        {
+            <div class="mt-3 text-center">
+                <small class="text-muted">
+                    Estimated Cost: <strong>@GetCostEstimate()</strong>
+                </small>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public TokenUsage? TokenUsage { get; set; }
+    [Parameter] public int EstimatedInputTokens { get; set; }
+    [Parameter] public int EstimatedCompletionTokens { get; set; } = 1000;
+    [Parameter] public bool ShowCostEstimate { get; set; } = true;
+
+    private string GetEstimatedTotal(int prompt, int completion)
+    {
+        return (prompt + completion).ToString();
+    }
+
+    private string GetCostEstimate()
+    {
+        if (TokenUsage == null) return "$0.00";
+        
+        // Rough estimate based on GPT-4 pricing
+        var promptCost = TokenUsage.PromptTokens * 0.00003m;
+        var completionCost = TokenUsage.CompletionTokens * 0.00006m;
+        return (promptCost + completionCost).ToString("C3");
+    }
+}

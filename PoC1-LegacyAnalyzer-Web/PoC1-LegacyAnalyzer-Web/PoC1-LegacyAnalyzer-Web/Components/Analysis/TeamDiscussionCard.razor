@@ -1,0 +1,39 @@
+@using PoC1_LegacyAnalyzer_Web.Components.Analysis
+@using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
+
+@* Team discussion card - composite component *@
+<div class="card shadow mb-3">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="bi bi-chat-dots"></i> Agent Team Discussion</h5>
+    </div>
+    <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+        @if (Discussion?.Any() == true)
+        {
+            @foreach (var message in Discussion.OrderBy(m => m.Timestamp))
+            {
+                var messageId = $"msg-{message.GetHashCode()}";
+                var isExpanded = ExpandedMessages.GetValueOrDefault(messageId, message.Type == MessageType.Analysis);
+                
+                <TeamDiscussionMessage 
+                    Message="@message"
+                    IsExpanded="@isExpanded"
+                    OnToggleExpanded="@(() => OnToggleMessage.InvokeAsync(messageId))" />
+            }
+        }
+        else
+        {
+            <div class="text-center py-4">
+                <i class="bi bi-chat text-muted" style="font-size: 2rem;"></i>
+                <p class="text-muted mt-2 mb-0">
+                    <em>Team discussion will appear here during analysis...</em>
+                </p>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<AgentMessage>? Discussion { get; set; }
+    [Parameter] public Dictionary<string, bool> ExpandedMessages { get; set; } = new();
+    [Parameter] public EventCallback<string> OnToggleMessage { get; set; }
+}

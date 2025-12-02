@@ -1,0 +1,81 @@
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
+@using PoC1_LegacyAnalyzer_Web.Helpers
+@using PoC1_LegacyAnalyzer_Web.Services
+
+@* Project overview card with metrics and file statistics *@
+<div class="card shadow mb-3 border-success">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Project Overview</h5>
+    </div>
+    <div class="card-body">
+        <div class="row text-center mb-3">
+            <div class="col-6 col-md-3">
+                <MetricBox Value="@ProjectSummary.TotalFiles.ToString()" Label="Files" />
+            </div>
+            <div class="col-6 col-md-3">
+                <MetricBox Value="@ProjectSummary.TotalClasses.ToString()" Label="Classes" />
+            </div>
+            <div class="col-6 col-md-3">
+                <MetricBox Value="@ProjectSummary.TotalMethods.ToString()" Label="Methods" />
+            </div>
+            <div class="col-6 col-md-3">
+                <MetricBox Value="@ProjectSummary.TotalProperties.ToString()" Label="Properties" />
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="badge bg-light text-dark">Risk: <strong>@ProjectSummary.RiskLevel</strong></span>
+            <small class="text-muted">Complexity: @ProjectSummary.ComplexityScore | @ProjectSummary.OverallAssessment</small>
+        </div>
+
+        @if (ProjectSummary.KeyRecommendations?.Any() == true)
+        {
+            <div class="mb-3">
+                <strong>Key Preprocessing Recommendations:</strong>
+                <ul class="mb-0 mt-2">
+                    @foreach (var tip in ProjectSummary.KeyRecommendations.Take(3))
+                    {
+                        <li><small>@tip</small></li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @if (ProjectSummary.FileResults?.Any() == true)
+        {
+            <div style="max-height: 220px; overflow:auto;">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th class="text-end">Classes</th>
+                            <th class="text-end">Methods</th>
+                            <th class="text-end">Props</th>
+                            <th class="text-end">Size</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var file in ProjectSummary.FileResults
+                            .OrderByDescending(fr => fr.ComplexityScore)
+                            .Take(10))
+                        {
+                            <tr>
+                                <td class="text-truncate" style="max-width: 260px;" title="@file.FileName">
+                                    <i class="bi bi-file-earmark-code"></i> @file.FileName
+                                </td>
+                                <td class="text-end">@file.StaticAnalysis.ClassCount</td>
+                                <td class="text-end">@file.StaticAnalysis.MethodCount</td>
+                                <td class="text-end">@file.StaticAnalysis.PropertyCount</td>
+                                <td class="text-end"><small>@FormattingHelpers.FormatFileSize(file.FileSize)</small></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public PoC1_LegacyAnalyzer_Web.Services.ProjectSummary ProjectSummary { get; set; } = null!;
+}

@@ -1,0 +1,159 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using PoC1_LegacyAnalyzer_Web.Helpers
+
+@* File upload manager component *@
+<div class="upload-area mb-3">
+    <div class="text-center p-4">
+        <div style="font-size: 3rem;" class="text-muted mb-3">
+            <i class="bi bi-folder2-open"></i>
+        </div>
+        <h6>Upload Legacy Code Files</h6>
+        <p class="text-muted mb-3">Select C# files for multi-agent analysis</p>
+
+        <InputFile id="folderInput" OnChange="HandleFolderSelection"
+                   multiple accept="@AcceptedTypes" class="d-none" webkitdirectory />
+        <label for="folderInput" class="btn btn-primary me-2">
+            <i class="bi bi-folder-plus"></i> Select Project Folder
+        </label>
+
+        <InputFile id="individualFiles" OnChange="HandleIndividualFileSelection"
+                   multiple accept="@AcceptedTypes" class="d-none" />
+        <label for="individualFiles" class="btn btn-outline-secondary">
+            <i class="bi bi-file-plus"></i> Select Individual Files
+        </label>
+    </div>
+</div>
+
+@if (selectedFiles.Any())
+{
+    <div class="mb-3">
+        <h6>Selected Files (@selectedFiles.Count):</h6>
+        <div style="max-height: 200px; overflow-y: auto;">
+            @foreach (var file in selectedFiles)
+            {
+                <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-1">
+                    <span><i class="bi bi-file-earmark-code"></i> @file.Name</span>
+                    <div>
+                        <small class="text-muted me-2">@FormattingHelpers.FormatFileSize(file.Size)</small>
+                        <button class="btn btn-sm btn-outline-danger"
+                                @onclick="@(() => RemoveFile(file))">
+                            <i class="bi bi-x-circle"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+        <button class="btn btn-sm btn-outline-secondary mt-2" @onclick="ClearAllFiles">
+            <i class="bi bi-trash"></i> Clear All Files
+        </button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(statusMessage))
+{
+    <div class="alert @(hasError ? "alert-warning" : "alert-info")">
+        <small><i class="bi @(hasError ? "bi-exclamation-triangle" : "bi-info-circle")"></i> @statusMessage</small>
+    </div>
+}
+
+@code {
+    private List<IBrowserFile> selectedFiles = new();
+    private string statusMessage = "";
+    private bool hasError = false;
+
+    [Parameter] public List<IBrowserFile> SelectedFiles { get; set; } = new();
+    [Parameter] public int MaxFiles { get; set; } = 50;
+    [Parameter] public int MaxFileSizeMB { get; set; } = 10;
+    [Parameter] public string AcceptedTypes { get; set; } = ".cs";
+    [Parameter] public EventCallback<List<IBrowserFile>> OnFilesChanged { get; set; }
+    [Parameter] public EventCallback<string> OnStatusChanged { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        selectedFiles = new List<IBrowserFile>(SelectedFiles);
+    }
+
+    private async Task HandleFolderSelection(InputFileChangeEventArgs e)
+    {
+        await ProcessFileSelection(e.GetMultipleFiles(MaxFiles), true);
+    }
+
+    private async Task HandleIndividualFileSelection(InputFileChangeEventArgs e)
+    {
+        await ProcessFileSelection(e.GetMultipleFiles(MaxFiles), false);
+    }
+
+    private async Task ProcessFileSelection(IEnumerable<IBrowserFile> newFiles, bool isFolder)
+    {
+        var csFiles = newFiles.Where(f =>
+            f.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        // Filter out generated files
+        var sourceFiles = csFiles.Where(f =>
+            !f.Name.Contains(".Designer.") &&
+            !f.Name.Contains(".g.cs") &&
+            !f.Name.Contains("AssemblyInfo.cs")
+        ).ToList();
+
+        // Filter by file size
+        var maxFileSizeBytes = MaxFileSizeMB * 1024L * 1024L;
+        var validFiles = sourceFiles.Where(f => f.Size <= maxFileSizeBytes).ToList();
+        var oversizedFiles = sourceFiles.Where(f => f.Size > maxFileSizeBytes).ToList();
+
+        selectedFiles.Clear();
+        selectedFiles.AddRange(validFiles.Take(MaxFiles));
+
+        if (oversizedFiles.Any())
+        {
+            statusMessage = $"Loaded {selectedFiles.Count} files. {oversizedFiles.Count} file(s) exceeded size limit and were skipped.";
+            hasError = true;
+        }
+        else
+        {
+            statusMessage = isFolder 
+                ? $"Loaded {selectedFiles.Count} C# source files from project folder."
+                : $"Selected {selectedFiles.Count} individual files.";
+            hasError = false;
+        }
+
+        await OnFilesChanged.InvokeAsync(new List<IBrowserFile>(selectedFiles));
+        await OnStatusChanged.InvokeAsync(statusMessage);
+        StateHasChanged();
+    }
+
+    private async Task RemoveFile(IBrowserFile file)
+    {
+        selectedFiles.Remove(file);
+        statusMessage = $"Removed {file.Name}. {selectedFiles.Count} files remaining.";
+        hasError = false;
+
+        await OnFilesChanged.InvokeAsync(new List<IBrowserFile>(selectedFiles));
+        await OnStatusChanged.InvokeAsync(statusMessage);
+        StateHasChanged();
+    }
+
+    private async Task ClearAllFiles()
+    {
+        selectedFiles.Clear();
+        statusMessage = "All files cleared. Ready for new selection.";
+        hasError = false;
+
+        await OnFilesChanged.InvokeAsync(new List<IBrowserFile>(selectedFiles));
+        await OnStatusChanged.InvokeAsync(statusMessage);
+        StateHasChanged();
+    }
+}
+
+<style>
+    .upload-area {
+        border: 2px dashed #dee2e6;
+        border-radius: 12px;
+        background: #f8f9fa;
+        transition: all 0.3s ease;
+    }
+
+    .upload-area:hover {
+        border-color: #007bff;
+        background: #e7f3ff;
+    }
+</style>

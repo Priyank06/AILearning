@@ -1,0 +1,39 @@
+@* Progress phase indicator component *@
+<div class="col-md-4 text-center phase-indicator">
+    <div class="mb-2">
+        @if (IsCompleted)
+        {
+            <span class="text-success">?</span>
+        }
+        else if (IsCurrent)
+        {
+            <div class="spinner-border spinner-border-sm text-primary"></div>
+        }
+        else
+        {
+            <span class="text-muted">?</span>
+        }
+        <strong class="ms-2">@PhaseName</strong>
+    </div>
+    @if (!string.IsNullOrEmpty(Description))
+    {
+        <small class="text-muted">@Description</small>
+    }
+</div>
+
+@code {
+    [Parameter] public string PhaseName { get; set; } = string.Empty;
+    [Parameter] public bool IsCompleted { get; set; }
+    [Parameter] public bool IsCurrent { get; set; }
+    [Parameter] public string? Description { get; set; }
+}
+
+<style>
+    .phase-indicator {
+        transition: all 0.3s ease;
+    }
+    
+    .phase-indicator:hover {
+        transform: translateY(-2px);
+    }
+</style>

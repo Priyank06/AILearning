@@ -20,6 +20,9 @@ namespace PoC1_LegacyAnalyzer_Web
             services.AddScoped<IFileDownloadService, FileDownloadService>();
             services.AddScoped<ICodeAnalysisAgentService, CodeAnalysisAgentService>();
             services.AddScoped<IFilePreProcessingService, FilePreProcessingService>();
+            
+            // Helper services
+            services.AddScoped<TokenEstimationService>();
 
             return services;
         }
