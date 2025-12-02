@@ -1,0 +1,122 @@
+/* Compact Configuration Components Styles */
+
+/* Compact badges */
+.badge .btn-close {
+    padding: 0;
+    width: 0.75rem;
+    height: 0.75rem;
+    opacity: 0.6;
+}
+
+.badge .btn-close:hover {
+    opacity: 1;
+}
+
+/* Compact form controls */
+.form-select-sm,
+.form-control-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* Inline form checks */
+.form-check-inline {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 0;
+    margin-right: 1rem;
+}
+
+.form-check-inline .form-check-input {
+    margin-right: 0.5rem;
+}
+
+/* File badge styling */
+.file-badge {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #495057;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.file-badge .btn-close {
+    font-size: 0.75rem;
+    padding: 0;
+    width: 0.875rem;
+    height: 0.875rem;
+    opacity: 0.6;
+    background: none;
+    border: none;
+}
+
+.file-badge .btn-close:hover {
+    opacity: 1;
+}
+
+/* Agent selection styling */
+.agent-selector-inline .form-check {
+    margin-bottom: 0.5rem;
+}
+
+.agent-selector-inline .form-check-label {
+    font-size: 0.875rem;
+}
+
+.agent-selector-inline .form-check-label strong {
+    font-size: 0.9rem;
+}
+
+/* Compact upload buttons */
+.upload-buttons-compact {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Configuration grid spacing */
+.configuration-row {
+    margin-bottom: 1rem;
+}
+
+/* Responsive: stack on mobile */
+@media (max-width: 768px) {
+    .configuration-row .col-md-6 {
+        margin-bottom: 1rem;
+    }
+    
+    .form-check-inline {
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+    
+    .upload-buttons-compact {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .upload-buttons-compact .btn {
+        width: 100%;
+    }
+}
+
+/* Small badge count indicator */
+.file-count-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Compact card header */
+.card-header-compact {
+    padding: 0.75rem 1rem;
+}
+
+.card-header-compact h5 {
+    font-size: 1.1rem;
+    margin-bottom: 0;
+}

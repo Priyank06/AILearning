@@ -2,31 +2,31 @@
 
 @* Business objective selector component *@
 <div class="mb-3">
-    <label class="form-label fw-bold">Business Objective:</label>
-    <select class="form-select" @bind="selectedObjective" @bind:after="OnObjectiveChanged">
+    @if (ShowLabel)
+    {
+        <label class="form-label fw-bold small">Business Objective</label>
+    }
+    <select class="form-select form-select-sm" @bind="selectedObjective" @bind:after="OnObjectiveChanged">
         <option value="security-compliance">Security Compliance Assessment</option>
         <option value="performance-optimization">Performance Optimization Analysis</option>
         <option value="architecture-modernization">Architecture Modernization Planning</option>
         <option value="comprehensive-audit">Comprehensive Code Audit</option>
         <option value="custom">Custom Objective</option>
     </select>
-</div>
-
-@if (selectedObjective == "custom")
-{
-    <div class="mb-3">
-        <label class="form-label">Custom Business Objective:</label>
-        <textarea class="form-control" rows="2" @bind="customObjective" @bind:after="OnCustomObjectiveChanged"
+    
+    @if (selectedObjective == "custom")
+    {
+        <textarea class="form-control form-control-sm mt-2" rows="2" @bind="customObjective" @bind:after="OnCustomObjectiveChanged"
                   placeholder="Describe your specific business objective..."></textarea>
-    </div>
-}
+    }
 
-@if (!string.IsNullOrEmpty(selectedObjective) && selectedObjective != "custom")
-{
-    <div class="mb-3">
-        <small class="text-muted">@FormattingHelpers.GetObjectiveDescription(selectedObjective)</small>
-    </div>
-}
+    @if (!string.IsNullOrEmpty(selectedObjective) && selectedObjective != "custom" && ShowDescription)
+    {
+        <div class="mt-2">
+            <small class="text-muted">@FormattingHelpers.GetObjectiveDescription(selectedObjective)</small>
+        </div>
+    }
+</div>
 
 @code {
     private string selectedObjective = "comprehensive-audit";
@@ -34,6 +34,8 @@
 
     [Parameter] public string SelectedObjective { get; set; } = "comprehensive-audit";
     [Parameter] public string CustomObjective { get; set; } = "";
+    [Parameter] public bool ShowLabel { get; set; } = true;
+    [Parameter] public bool ShowDescription { get; set; } = true;
     [Parameter] public EventCallback<string> OnObjectiveChange { get; set; }
     [Parameter] public EventCallback<string> OnCustomObjectiveChange { get; set; }
 

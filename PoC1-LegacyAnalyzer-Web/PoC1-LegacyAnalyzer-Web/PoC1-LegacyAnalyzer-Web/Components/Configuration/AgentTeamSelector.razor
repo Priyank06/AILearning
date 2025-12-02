@@ -1,38 +1,70 @@
 @* Agent team selector component *@
 <div class="mb-3">
-    <label class="form-label fw-bold">AI Agent Team:</label>
-    <div class="row">
-        <div class="col-12">
-            <div class="form-check">
+    <label class="form-label fw-bold small">AI Agent Team</label>
+    
+    @if (DisplayMode == "inline")
+    {
+        <!-- Horizontal checkboxes -->
+        <div class="d-flex gap-3 flex-wrap agent-selector-inline">
+            <div class="form-check form-check-inline">
                 <input class="form-check-input" type="checkbox" @bind="includeSecurityAgent" 
-                       @bind:after="OnSelectionChanged" id="securityAgent">
-                <label class="form-check-label" for="securityAgent">
-                    <strong>??? Security Analyst</strong><br>
-                    <small class="text-muted">Vulnerability assessment, compliance analysis</small>
+                       @bind:after="OnSelectionChanged" id="securityAgentInline">
+                <label class="form-check-label" for="securityAgentInline">
+                    <strong>??? Security</strong>
                 </label>
             </div>
-        </div>
-        <div class="col-12 mt-2">
-            <div class="form-check">
+            <div class="form-check form-check-inline">
                 <input class="form-check-input" type="checkbox" @bind="includePerformanceAgent" 
-                       @bind:after="OnSelectionChanged" id="performanceAgent">
-                <label class="form-check-label" for="performanceAgent">
-                    <strong>? Performance Analyst</strong><br>
-                    <small class="text-muted">Bottleneck identification, scalability assessment</small>
+                       @bind:after="OnSelectionChanged" id="performanceAgentInline">
+                <label class="form-check-label" for="performanceAgentInline">
+                    <strong>? Performance</strong>
                 </label>
             </div>
-        </div>
-        <div class="col-12 mt-2">
-            <div class="form-check">
+            <div class="form-check form-check-inline">
                 <input class="form-check-input" type="checkbox" @bind="includeArchitectureAgent" 
-                       @bind:after="OnSelectionChanged" id="architectureAgent">
-                <label class="form-check-label" for="architectureAgent">
-                    <strong>??? Architecture Analyst</strong><br>
-                    <small class="text-muted">Design patterns, SOLID principles, code structure</small>
+                       @bind:after="OnSelectionChanged" id="architectureAgentInline">
+                <label class="form-check-label" for="architectureAgentInline">
+                    <strong>??? Architecture</strong>
                 </label>
             </div>
         </div>
-    </div>
+    }
+    else
+    {
+        <!-- Original vertical layout -->
+        <div class="row">
+            <div class="col-12">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" @bind="includeSecurityAgent" 
+                           @bind:after="OnSelectionChanged" id="securityAgent">
+                    <label class="form-check-label" for="securityAgent">
+                        <strong>??? Security Analyst</strong><br>
+                        <small class="text-muted">Vulnerability assessment, compliance analysis</small>
+                    </label>
+                </div>
+            </div>
+            <div class="col-12 mt-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" @bind="includePerformanceAgent" 
+                           @bind:after="OnSelectionChanged" id="performanceAgent">
+                    <label class="form-check-label" for="performanceAgent">
+                        <strong>? Performance Analyst</strong><br>
+                        <small class="text-muted">Bottleneck identification, scalability assessment</small>
+                    </label>
+                </div>
+            </div>
+            <div class="col-12 mt-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" @bind="includeArchitectureAgent" 
+                           @bind:after="OnSelectionChanged" id="architectureAgent">
+                    <label class="form-check-label" for="architectureAgent">
+                        <strong>??? Architecture Analyst</strong><br>
+                        <small class="text-muted">Design patterns, SOLID principles, code structure</small>
+                    </label>
+                </div>
+            </div>
+        </div>
+    }
     
     @if (!GetSelectedAgents().Any())
     {
@@ -50,6 +82,7 @@
     [Parameter] public bool IncludeSecurityAgent { get; set; } = true;
     [Parameter] public bool IncludePerformanceAgent { get; set; } = true;
     [Parameter] public bool IncludeArchitectureAgent { get; set; } = true;
+    [Parameter] public string DisplayMode { get; set; } = "vertical"; // "vertical" or "inline"
     [Parameter] public EventCallback<List<string>> OnSelectionChange { get; set; }
 
     protected override void OnParametersSet()

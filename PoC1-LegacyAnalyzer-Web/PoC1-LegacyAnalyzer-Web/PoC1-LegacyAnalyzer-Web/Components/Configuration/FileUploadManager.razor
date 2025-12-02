@@ -2,51 +2,101 @@
 @using PoC1_LegacyAnalyzer_Web.Helpers
 
 @* File upload manager component *@
-<div class="upload-area mb-3">
-    <div class="text-center p-4">
-        <div style="font-size: 3rem;" class="text-muted mb-3">
-            <i class="bi bi-folder2-open"></i>
-        </div>
-        <h6>Upload Legacy Code Files</h6>
-        <p class="text-muted mb-3">Select C# files for multi-agent analysis</p>
 
-        <InputFile id="folderInput" OnChange="HandleFolderSelection"
-                   multiple accept="@AcceptedTypes" class="d-none" webkitdirectory />
-        <label for="folderInput" class="btn btn-primary me-2">
-            <i class="bi bi-folder-plus"></i> Select Project Folder
-        </label>
-
-        <InputFile id="individualFiles" OnChange="HandleIndividualFileSelection"
-                   multiple accept="@AcceptedTypes" class="d-none" />
-        <label for="individualFiles" class="btn btn-outline-secondary">
-            <i class="bi bi-file-plus"></i> Select Individual Files
-        </label>
-    </div>
-</div>
-
-@if (selectedFiles.Any())
+@if (DisplayMode == "compact")
 {
     <div class="mb-3">
-        <h6>Selected Files (@selectedFiles.Count):</h6>
-        <div style="max-height: 200px; overflow-y: auto;">
-            @foreach (var file in selectedFiles)
+        <label class="form-label fw-bold small">Upload Files</label>
+        
+        <!-- Inline buttons -->
+        <div class="upload-buttons-compact mb-2">
+            <InputFile id="folderInputCompact" OnChange="HandleFolderSelection"
+                       multiple accept="@AcceptedTypes" class="d-none" webkitdirectory />
+            <label for="folderInputCompact" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-folder2-open"></i> Folder
+            </label>
+            
+            <InputFile id="individualFilesCompact" OnChange="HandleIndividualFileSelection"
+                       multiple accept="@AcceptedTypes" class="d-none" />
+            <label for="individualFilesCompact" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-file-earmark-code"></i> Files
+            </label>
+
+            @if (selectedFiles.Any())
             {
-                <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-1">
-                    <span><i class="bi bi-file-earmark-code"></i> @file.Name</span>
-                    <div>
-                        <small class="text-muted me-2">@FormattingHelpers.FormatFileSize(file.Size)</small>
-                        <button class="btn btn-sm btn-outline-danger"
-                                @onclick="@(() => RemoveFile(file))">
-                            <i class="bi bi-x-circle"></i>
-                        </button>
-                    </div>
-                </div>
+                <span class="badge bg-secondary file-count-badge ms-auto">
+                    <i class="bi bi-files"></i> @selectedFiles.Count selected
+                </span>
+                <button type="button" class="btn btn-outline-danger btn-sm" @onclick="ClearAllFiles">
+                    <i class="bi bi-x"></i>
+                </button>
             }
         </div>
-        <button class="btn btn-sm btn-outline-secondary mt-2" @onclick="ClearAllFiles">
-            <i class="bi bi-trash"></i> Clear All Files
-        </button>
+        
+        <!-- Compact horizontal summary (no per-file name list) -->
+        @if (selectedFiles.Any())
+        {
+            <div class="compact-file-summary d-flex flex-wrap align-items-center gap-2">
+                <span class="file-badge">
+                    <i class="bi bi-files"></i>
+                    <span>@selectedFiles.Count files selected</span>
+                </span>
+                <span class="text-muted small">
+                    Total size: @FormattingHelpers.FormatFileSize(selectedFiles.Sum(f => f.Size))
+                </span>
+            </div>
+        }
     </div>
+}
+else
+{
+    <!-- Original standard layout -->
+    <div class="upload-area mb-3">
+        <div class="text-center p-4">
+            <div style="font-size: 3rem;" class="text-muted mb-3">
+                <i class="bi bi-folder2-open"></i>
+            </div>
+            <h6>Upload Legacy Code Files</h6>
+            <p class="text-muted mb-3">Select C# files for multi-agent analysis</p>
+
+            <InputFile id="folderInput" OnChange="HandleFolderSelection"
+                       multiple accept="@AcceptedTypes" class="d-none" webkitdirectory />
+            <label for="folderInput" class="btn btn-primary me-2">
+                <i class="bi bi-folder-plus"></i> Select Project Folder
+            </label>
+
+            <InputFile id="individualFiles" OnChange="HandleIndividualFileSelection"
+                       multiple accept="@AcceptedTypes" class="d-none" />
+            <label for="individualFiles" class="btn btn-outline-secondary">
+                <i class="bi bi-file-plus"></i> Select Individual Files
+            </label>
+        </div>
+    </div>
+
+    @if (selectedFiles.Any())
+    {
+        <div class="mb-3">
+            <h6>Selected Files (@selectedFiles.Count):</h6>
+            <div style="max-height: 200px; overflow-y: auto;">
+                @foreach (var file in selectedFiles)
+                {
+                    <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-1">
+                        <span><i class="bi bi-file-earmark-code"></i> @file.Name</span>
+                        <div>
+                            <small class="text-muted me-2">@FormattingHelpers.FormatFileSize(file.Size)</small>
+                            <button class="btn btn-sm btn-outline-danger"
+                                    @onclick="@(() => RemoveFile(file))">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+            <button class="btn btn-sm btn-outline-secondary mt-2" @onclick="ClearAllFiles">
+                <i class="bi bi-trash"></i> Clear All Files
+            </button>
+        </div>
+    }
 }
 
 @if (!string.IsNullOrEmpty(statusMessage))
@@ -65,6 +115,7 @@
     [Parameter] public int MaxFiles { get; set; } = 50;
     [Parameter] public int MaxFileSizeMB { get; set; } = 10;
     [Parameter] public string AcceptedTypes { get; set; } = ".cs";
+    [Parameter] public string DisplayMode { get; set; } = "standard"; // "standard" or "compact"
     [Parameter] public EventCallback<List<IBrowserFile>> OnFilesChanged { get; set; }
     [Parameter] public EventCallback<string> OnStatusChanged { get; set; }
 
@@ -155,5 +206,39 @@
     .upload-area:hover {
         border-color: #007bff;
         background: #e7f3ff;
+    }
+
+    .upload-buttons-compact {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .compact-file-summary {
+        max-width: 100%;
+    }
+
+    .file-count-badge {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+
+    .file-badge {
+        display: flex;
+        align-items: center;
+        background: #e9ecef;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+    }
+
+    .file-badge i {
+        font-size: 1.2rem;
+        margin-right: 0.2rem;
+    }
+
+    .btn-close {
+        padding: 0.2rem 0.4rem;
+        margin-left: 0.2rem;
     }
 </style>

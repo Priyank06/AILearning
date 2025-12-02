@@ -18,7 +18,7 @@
 
 <PageTitle>Multi-Agent Team Analysis</PageTitle>
 
-<div class="container-fluid">
+<div class="container-fluid multiagent-single-column">
     <!-- Header Section -->
     <div class="row mb-4">
         <div class="col-12 text-center">
@@ -34,9 +34,10 @@
         </div>
     </div>
 
-    <div class="row">
-        <!-- Configuration Section -->
-        <div class="col-lg-5">
+    <!-- Single-column content layout -->
+    <div class="row gy-4">
+        <!-- Configuration Section (full width) -->
+        <div class="col-12">
             <TeamConfigurationPanel @ref="configPanel"
                 MaxFiles="50"
                 MaxFileSizeMB="@(PreProcessingOptions.Value.MaxFileSizeMB)"
@@ -44,22 +45,24 @@
                 OnPhaseChanged="@HandlePhaseChanged" />
         </div>
 
-        <!-- Results Section -->
+        <!-- Results Section (full width under configuration) -->
         @if (teamResult is not null)
         {
-            <AnalysisResultsContainer 
-                TeamResult="@teamResult"
-                BusinessObjective="@lastBusinessObjective"
-                CustomObjective="@lastCustomObjective"
-                SelectedAgents="@lastSelectedAgents"
-                ProjectSummary="@projectSummary"
-                EstimatedInputTokens="@lastAiInputCharCount"
-                IsAnalyzing="@isAnalyzing"
-                OnDownloadReport="@DownloadTeamReport" />
+            <div class="col-12">
+                <AnalysisResultsContainer 
+                    TeamResult="@teamResult"
+                    BusinessObjective="@lastBusinessObjective"
+                    CustomObjective="@lastCustomObjective"
+                    SelectedAgents="@lastSelectedAgents"
+                    ProjectSummary="@projectSummary"
+                    EstimatedInputTokens="@lastAiInputCharCount"
+                    IsAnalyzing="@isAnalyzing"
+                    OnDownloadReport="@DownloadTeamReport" />
+            </div>
         }
         else if (!isAnalyzing)
         {
-            <div class="col-lg-7">
+            <div class="col-12">
                 <div class="card border-0 text-center py-5">
                     <div class="card-body">
                         <i class="bi bi-robot" style="font-size: 4rem; color: #6c757d;"></i>
@@ -209,5 +212,11 @@
 <style>
     .bg-gradient-primary {
         background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    }
+
+    /* Constrain page content and ensure a clean single-column layout */
+    .multiagent-single-column {
+        max-width: 1200px;
+        margin: 0 auto;
     }
 </style>
