@@ -1,9 +1,7 @@
 ﻿using Azure;
 using Microsoft.SemanticKernel.ChatCompletion;
-using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
 using PoC1_LegacyAnalyzer_Web.Models;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
@@ -13,73 +11,28 @@ namespace PoC1_LegacyAnalyzer_Web.Services
     /// </summary>
     public class AIAnalysisService : IAIAnalysisService
     {
-        private readonly AzureOpenAIChatCompletionService _chatService;
-        private readonly string _deploymentName;
+        private readonly IChatCompletionService _chatCompletion;
+        private readonly IPromptBuilderService _promptBuilder;
         private readonly PromptConfiguration _promptConfig;
-        private readonly FileAnalysisLimitsConfig _fileLimits;
+        private readonly ILogger<AIAnalysisService> _logger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AIAnalysisService"/> class.
-        /// Sets up Azure OpenAI and loads prompt configuration from appsettings.json.
         /// </summary>
-        /// <param name="configuration">The application configuration.</param>
-        /// <param name="keyVaultService">The Key Vault service for secure secret retrieval.</param>
+        /// <param name="chatCompletion">The chat completion service for AI interactions.</param>
+        /// <param name="promptBuilder">The prompt builder service for constructing prompts.</param>
         /// <param name="logger">The logger instance.</param>
-        /// <exception cref="InvalidOperationException">
-        /// Thrown if Azure OpenAI or prompt configuration is missing or invalid.
-        /// </exception>
+        /// <param name="promptOptions">The prompt configuration options.</param>
         public AIAnalysisService(
-            IConfiguration configuration,
-            IKeyVaultService keyVaultService,
+            IChatCompletionService chatCompletion,
+            IPromptBuilderService promptBuilder,
             ILogger<AIAnalysisService> logger,
-            IOptions<PromptConfiguration> promptOptions,
-            IOptions<FileAnalysisLimitsConfig> fileLimitOptions)
+            IOptions<PromptConfiguration> promptOptions)
         {
-            // Fetch secrets securely from Key Vault using correct prefix
-            var endpoint = keyVaultService.GetSecretAsync("App--AzureOpenAI--Endpoint").GetAwaiter().GetResult() ?? configuration["AzureOpenAI:Endpoint"];
-            var apiKey = keyVaultService.GetSecretAsync("App--AzureOpenAI--ApiKey").GetAwaiter().GetResult() ?? configuration["AzureOpenAI:ApiKey"];
-            var deployment = keyVaultService.GetSecretAsync("App--AzureOpenAI--Deployment").GetAwaiter().GetResult()
-                ?? configuration["AzureOpenAI:Deployment"]
-                ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT");
-
-            if (string.IsNullOrWhiteSpace(deployment))
-            {
-                logger.LogError("Azure OpenAI deployment name is not configured or not found in Key Vault.");
-                throw new InvalidOperationException(
-                    "Azure OpenAI deployment is not configured. Set 'App--AzureOpenAI--Deployment' in Key Vault or 'AzureOpenAI:Deployment' in configuration.");
-            }
-
-            if (string.IsNullOrWhiteSpace(endpoint))
-            {
-                logger.LogError("Azure OpenAI endpoint is not configured or not found in Key Vault.");
-                throw new InvalidOperationException(
-                    "Azure OpenAI endpoint is not configured. Set 'App--AzureOpenAI--Endpoint' in Key Vault.");
-            }
-
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                logger.LogError("Azure OpenAI API key is not configured or not found in Key Vault.");
-                throw new InvalidOperationException(
-                    "Azure OpenAI API key is not configured. Set 'App--AzureOpenAI--ApiKey' in Key Vault.");
-            }
-
-            _deploymentName = deployment;
-            _chatService = new AzureOpenAIChatCompletionService(
-                deploymentName: deployment,
-                endpoint: endpoint,
-                apiKey: apiKey
-            );
-
-            // Bind PromptConfiguration via options
+            _chatCompletion = chatCompletion;
+            _promptBuilder = promptBuilder;
+            _logger = logger;
             _promptConfig = promptOptions.Value ?? new PromptConfiguration();
-
-            if (_promptConfig.SystemPrompts == null || _promptConfig.SystemPrompts.Count == 0)
-            {
-                throw new InvalidOperationException("PromptConfiguration is not properly configured in appsettings.json");
-            }
-
-            // Load file analysis limits configuration via options
-            _fileLimits = fileLimitOptions.Value ?? new FileAnalysisLimitsConfig();
         }
 
         /// <summary>
@@ -95,15 +48,15 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         {
             try
             {
-                var prompt = BuildAnalysisPrompt(code, analysisType, staticAnalysis);
-                var systemPrompt = GetSystemPrompt(analysisType);
+                var prompt = _promptBuilder.BuildAnalysisPrompt(code, analysisType, staticAnalysis);
+                var systemPrompt = _promptBuilder.GetSystemPrompt(analysisType);
 
                 // Build chat history for the chat completion API
                 var chatHistory = new ChatHistory();
                 chatHistory.AddSystemMessage(systemPrompt);
                 chatHistory.AddUserMessage(prompt);
 
-                var result = await _chatService.GetChatMessageContentsAsync(chatHistory);
+                var result = await _chatCompletion.GetChatMessageContentsAsync(chatHistory);
                 return result?.FirstOrDefault()?.Content 
                     ?? _promptConfig.ErrorMessages.GetValueOrDefault("noResponse", "No response from AI.");
             }
@@ -128,15 +81,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// <returns>The system prompt as a string.</returns>
         public string GetSystemPrompt(string analysisType)
         {
-            if (_promptConfig.SystemPrompts.TryGetValue(analysisType, out var prompt))
-            {
-                return prompt;
-            }
-
-            return _promptConfig.SystemPrompts.GetValueOrDefault(
-                "general",
-                "You are a senior software architect providing comprehensive code analysis."
-            );
+            return _promptBuilder.GetSystemPrompt(analysisType);
         }
 
         /// <summary>
@@ -154,24 +99,14 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
             try
             {
-                var batchPrompt = BuildBatchAnalysisPrompt(fileAnalyses, analysisType);
-                var systemPrompt = GetSystemPrompt(analysisType) + 
-                    "\n\nCRITICAL: You MUST return ONLY valid JSON. No markdown, no explanations, just JSON.\n" +
-                    "Required JSON structure:\n" +
-                    "{\n" +
-                    "  \"analyses\": [\n" +
-                    "    {\"fileName\": \"File1.cs\", \"assessment\": \"Your detailed analysis here...\"},\n" +
-                    "    {\"fileName\": \"File2.cs\", \"assessment\": \"Your detailed analysis here...\"}\n" +
-                    "  ]\n" +
-                    "}\n" +
-                    "Every file in the input MUST have exactly one entry in the analyses array. " +
-                    "The assessment should be comprehensive (200-500 words) covering all aspects of the analysis type.";
+                var batchPrompt = _promptBuilder.BuildBatchAnalysisPrompt(fileAnalyses, analysisType);
+                var systemPrompt = _promptBuilder.GetBatchSystemPrompt(analysisType);
 
                 var chatHistory = new ChatHistory();
                 chatHistory.AddSystemMessage(systemPrompt);
                 chatHistory.AddUserMessage(batchPrompt);
 
-                var result = await _chatService.GetChatMessageContentsAsync(chatHistory);
+                var result = await _chatCompletion.GetChatMessageContentsAsync(chatHistory);
                 var response = result?.FirstOrDefault()?.Content ?? "";
 
                 return ParseBatchAnalysisResponse(response, fileAnalyses.Select(f => f.fileName).ToList());
@@ -194,61 +129,6 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             }
         }
 
-        /// <summary>
-        /// Builds an optimized batch analysis prompt for multiple files.
-        /// Token-efficient structure while maintaining analysis quality.
-        /// </summary>
-        private string BuildBatchAnalysisPrompt(
-            List<(string fileName, string code, CodeAnalysisResult staticAnalysis)> fileAnalyses,
-            string analysisType)
-        {
-            // Optimize code preview length based on batch size to stay within token limits
-            int baseMaxLength = _promptConfig.CodePreviewMaxLength > 0 
-                ? _promptConfig.CodePreviewMaxLength 
-                : _fileLimits.DefaultCodePreviewLength;
-            // Reduce preview length for larger batches to fit more files
-            int maxLength = fileAnalyses.Count > _fileLimits.BatchSizeThresholdForPreviewReduction 
-                ? Math.Max(_fileLimits.MinCodePreviewLength, baseMaxLength / (fileAnalyses.Count / _fileLimits.BatchPreviewLengthDivisor)) 
-                : baseMaxLength;
-            
-            var fileSections = new List<string>();
-            for (int i = 0; i < fileAnalyses.Count; i++)
-            {
-                var (fileName, code, analysis) = fileAnalyses[i];
-                var codePreview = code.Length > maxLength ? code.Substring(0, maxLength) + "..." : code;
-                
-                // Compact format to reduce tokens while maintaining information
-                fileSections.Add($@"
-FILE {i + 1}: {fileName}
-Metrics: {analysis.ClassCount} classes, {analysis.MethodCount} methods, {analysis.PropertyCount} properties
-Top Classes: {string.Join(", ", analysis.Classes.Take(_fileLimits.MaxTopClassesToDisplay))}
-Code:
-{codePreview}
-");
-            }
-
-            var batchPrompt = $@"
-Analyze {fileAnalyses.Count} C# files for {analysisType} assessment. Provide comprehensive analysis for EACH file.
-
-{string.Join("\n---\n", fileSections)}
-
-Return ONLY valid JSON (no markdown, no explanations):
-{{
-  ""analyses"": [
-    {{""fileName"": ""File1.cs"", ""assessment"": ""{_fileLimits.MinAnalysisWordCount}-{_fileLimits.MaxAnalysisWordCount} word analysis covering all {analysisType} aspects""}},
-    {{""fileName"": ""File2.cs"", ""assessment"": ""{_fileLimits.MinAnalysisWordCount}-{_fileLimits.MaxAnalysisWordCount} word analysis covering all {analysisType} aspects""}}
-  ]
-}}
-
-Requirements:
-- Every file must have exactly one entry
-- Assessments must be comprehensive ({_fileLimits.MinAnalysisWordCount}-{_fileLimits.MaxAnalysisWordCount} words)
-- Focus on {analysisType}-specific insights
-- Include actionable recommendations
-";
-
-            return batchPrompt;
-        }
 
         /// <summary>
         /// Parses the batch analysis response from the AI model with improved error handling.
@@ -368,8 +248,8 @@ Requirements:
             var fileNameIndex = response.IndexOf(fileName, StringComparison.OrdinalIgnoreCase);
             if (fileNameIndex >= 0)
             {
-                    var startIndex = fileNameIndex + fileName.Length;
-                    var endIndex = Math.Min(startIndex + _fileLimits.DefaultCodePreviewLength, response.Length);
+                var startIndex = fileNameIndex + fileName.Length;
+                var endIndex = Math.Min(startIndex + 2000, response.Length);
                 var extracted = response.Substring(startIndex, endIndex - startIndex).Trim();
                 
                 // Clean up common prefixes
@@ -381,48 +261,6 @@ Requirements:
                 }
             }
             return null;
-        }
-
-        /// <summary>
-        /// Builds the analysis prompt using configuration-based templates and code metrics.
-        /// </summary>
-        /// <param name="code">The source code to analyze.</param>
-        /// <param name="analysisType">The type of analysis to perform.</param>
-        /// <param name="analysis">The static analysis results.</param>
-        /// <returns>The constructed prompt string for the AI model.</returns>
-        private string BuildAnalysisPrompt(string code, string analysisType, CodeAnalysisResult analysis)
-        {
-            // Use configuration-based code preview length
-            int maxLength = _promptConfig.CodePreviewMaxLength > 0
-                ? _promptConfig.CodePreviewMaxLength
-                : _fileLimits.DefaultCodePreviewLength;
-            var codePreview = code.Length > maxLength ? code.Substring(0, maxLength) + "..." : code;
-
-            // Build base prompt from configuration template
-            var basePrompt = _promptConfig.AnalysisPromptTemplates.BaseTemplate
-                .Replace("{analysisType}", analysisType)
-                .Replace("{classCount}", analysis.ClassCount.ToString())
-                .Replace("{methodCount}", analysis.MethodCount.ToString())
-                .Replace("{propertyCount}", analysis.PropertyCount.ToString())
-                .Replace("{principalClasses}", string.Join(", ", analysis.Classes.Take(3)))
-                .Replace("{codePreview}", codePreview);
-
-            // Get analysis sections from configuration
-            if (_promptConfig.AnalysisPromptTemplates.Templates.TryGetValue(analysisType, out var template))
-            {
-                var sections = string.Join("\n", template.Sections);
-                return basePrompt + "\n" + sections;
-            }
-            else if (_promptConfig.AnalysisPromptTemplates.Templates.TryGetValue("general", out var generalTemplate))
-            {
-                var sections = string.Join("\n", generalTemplate.Sections);
-                return basePrompt + "\n" + sections;
-            }
-            else
-            {
-                // Fallback if no template found
-                return basePrompt;
-            }
         }
 
         /// <summary>

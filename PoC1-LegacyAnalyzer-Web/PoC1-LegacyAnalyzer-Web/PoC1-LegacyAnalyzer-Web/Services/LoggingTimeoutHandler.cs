@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// Logs a warning if any LLM HttpClient call exceeds the specified threshold (default: 200 seconds).
@@ -8,11 +9,15 @@ public class LoggingTimeoutHandler : DelegatingHandler
     private readonly int _thresholdSeconds;
     private readonly ILogger<LoggingTimeoutHandler> _logger;
 
-    public LoggingTimeoutHandler(int thresholdSeconds)
+    public LoggingTimeoutHandler(ILogger<LoggingTimeoutHandler> logger)
+        : this(200, logger) // Default threshold 200 seconds
+    {
+    }
+
+    public LoggingTimeoutHandler(int thresholdSeconds, ILogger<LoggingTimeoutHandler> logger)
     {
         _thresholdSeconds = thresholdSeconds;
-        // You may want to inject ILogger via DI in a real implementation
-        _logger = LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<LoggingTimeoutHandler>();
+        _logger = logger;
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

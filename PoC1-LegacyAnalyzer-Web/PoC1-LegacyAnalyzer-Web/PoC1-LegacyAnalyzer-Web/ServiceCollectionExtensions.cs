@@ -1,4 +1,6 @@
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
 using PoC1_LegacyAnalyzer_Web.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +16,7 @@ namespace PoC1_LegacyAnalyzer_Web
         {
             // Core analysis services (scoped for Blazor circuits)
             services.AddScoped<ICodeAnalysisService, CodeAnalysisService>();
+            services.AddScoped<IPromptBuilderService, PromptBuilderService>();
             services.AddScoped<IAIAnalysisService, AIAnalysisService>();
             services.AddScoped<IReportService, ReportService>();
             services.AddScoped<IMultiFileAnalysisService, MultiFileAnalysisService>();
@@ -30,8 +33,15 @@ namespace PoC1_LegacyAnalyzer_Web
             // FilePreProcessingService as facade (maintains backward compatibility)
             services.AddScoped<IFilePreProcessingService, FilePreProcessingService>();
             
+            // Multi-file analysis services
+            services.AddScoped<IBatchAnalysisOrchestrator, BatchAnalysisOrchestrator>();
+            services.AddScoped<IComplexityCalculatorService, ComplexityCalculatorService>();
+            services.AddScoped<IRiskAssessmentService, RiskAssessmentService>();
+            services.AddScoped<IRecommendationGeneratorService, RecommendationGeneratorService>();
+            services.AddScoped<IBusinessMetricsCalculator, BusinessMetricsCalculator>();
+            
             // Helper services
-            services.AddScoped<TokenEstimationService>();
+            services.AddScoped<ITokenEstimationService, TokenEstimationService>();
 
             return services;
         }
@@ -52,6 +62,13 @@ namespace PoC1_LegacyAnalyzer_Web
             services.AddScoped<IConflictResolver, ConflictResolverService>();
             services.AddScoped<IConsensusCalculator, ConsensusCalculatorService>();
             services.AddScoped<IAgentCommunicationCoordinator, AgentCommunicationCoordinator>();
+
+            // Project analysis services
+            services.AddScoped<IProjectMetadataService, ProjectMetadataService>();
+            services.AddScoped<IFolderAnalysisService, FolderAnalysisService>();
+            services.AddScoped<IArchitectureAssessmentService, ArchitectureAssessmentService>();
+            services.AddScoped<IBusinessImpactCalculator, BusinessImpactCalculator>();
+            services.AddScoped<IProjectInsightsGenerator, ProjectInsightsGenerator>();
 
             // Agent orchestration (scoped - each circuit gets fresh state)
             services.AddScoped<IAgentOrchestrationService, AgentOrchestrationService>();
@@ -103,6 +120,33 @@ namespace PoC1_LegacyAnalyzer_Web
             // Register HttpClient for Azure OpenAI
             services.AddSingleton<HttpClient>(httpClient);
 
+            // Register IChatCompletionService for AIAnalysisService
+            services.AddScoped<IChatCompletionService>(sp =>
+            {
+                var config = sp.GetRequiredService<IConfiguration>();
+                var keyVaultService = sp.GetRequiredService<IKeyVaultService>();
+                
+                // Try Key Vault first, then fallback to configuration
+                var endpoint = keyVaultService.GetSecretAsync("App--AzureOpenAI--Endpoint").GetAwaiter().GetResult() 
+                    ?? config["AzureOpenAI:Endpoint"]
+                    ?? throw new InvalidOperationException("Azure OpenAI endpoint is not configured. Set 'App--AzureOpenAI--Endpoint' in Key Vault or 'AzureOpenAI:Endpoint' in configuration.");
+                
+                var apiKey = keyVaultService.GetSecretAsync("App--AzureOpenAI--ApiKey").GetAwaiter().GetResult() 
+                    ?? config["AzureOpenAI:ApiKey"]
+                    ?? throw new InvalidOperationException("Azure OpenAI API key is not configured. Set 'App--AzureOpenAI--ApiKey' in Key Vault or 'AzureOpenAI:ApiKey' in configuration.");
+                
+                var deployment = keyVaultService.GetSecretAsync("App--AzureOpenAI--Deployment").GetAwaiter().GetResult()
+                    ?? config["AzureOpenAI:Deployment"]
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
+                    ?? throw new InvalidOperationException("Azure OpenAI deployment is not configured. Set 'App--AzureOpenAI--Deployment' in Key Vault or 'AzureOpenAI:Deployment' in configuration.");
+
+                return new AzureOpenAIChatCompletionService(
+                    deploymentName: deployment,
+                    endpoint: endpoint,
+                    apiKey: apiKey
+                );
+            });
+
             services.AddScoped<Kernel>(sp =>
             {
                 var endpoint = configuration["AzureOpenAI:Endpoint"]
@@ -124,7 +168,9 @@ namespace PoC1_LegacyAnalyzer_Web
             httpClient.DefaultRequestHeaders.Add("X-SK-Timeout", "300s");
 
             // Register a handler to log if any LLM call exceeds 200 seconds
-            services.AddSingleton<DelegatingHandler>(new LoggingTimeoutHandler(200));
+            services.AddTransient<LoggingTimeoutHandler>();
+            services.AddHttpClient("AzureOpenAI")
+                .AddHttpMessageHandler<LoggingTimeoutHandler>();
 
             // Use the handler in your Kernel setup if supported
             // (If using KernelBuilder, pass the HttpClient and handler)

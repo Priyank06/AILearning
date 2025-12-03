@@ -1,14 +1,28 @@
+using Microsoft.Extensions.Options;
+using PoC1_LegacyAnalyzer_Web.Models;
+
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
     /// <summary>
     /// Service for estimating token usage in AI operations.
     /// </summary>
-    public class TokenEstimationService
+    public class TokenEstimationService : ITokenEstimationService
     {
         private const int AVERAGE_CHARACTERS_PER_TOKEN = 4;
+        private readonly TokenEstimationConfig _tokenEstimation;
+        private readonly BatchProcessingConfig _batchConfig;
+
+        public TokenEstimationService(
+            IOptions<TokenEstimationConfig> tokenEstimationOptions,
+            IOptions<BatchProcessingConfig> batchOptions)
+        {
+            _tokenEstimation = tokenEstimationOptions.Value ?? new TokenEstimationConfig();
+            _batchConfig = batchOptions.Value ?? new BatchProcessingConfig();
+        }
 
         /// <summary>
         /// Estimates token count from text length.
+        /// Accounts for code structure (more tokens per character than plain text).
         /// </summary>
         /// <param name="text">Input text</param>
         /// <returns>Estimated token count</returns>
@@ -17,7 +31,14 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             if (string.IsNullOrEmpty(text))
                 return 0;
 
-            return Math.Max(1, text.Length / AVERAGE_CHARACTERS_PER_TOKEN);
+            // More accurate estimation: code has more tokens per character
+            // C# code typically has ~3-4 chars per token, but we use configurable value
+            var baseEstimate = text.Length / _batchConfig.TokenEstimationCharsPerToken;
+            
+            // Add overhead for code structure (brackets, keywords, etc. increase token density)
+            var structureOverhead = (int)(baseEstimate * _tokenEstimation.CodeStructureOverheadPercentage);
+            
+            return baseEstimate + structureOverhead;
         }
 
         /// <summary>
@@ -56,6 +77,18 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 < 1000000 => $"{tokenCount / 1000.0:F1}K tokens",
                 _ => $"{tokenCount / 1000000.0:F1}M tokens"
             };
+        }
+
+        /// <summary>
+        /// Estimates additional tokens needed for batch prompt overhead.
+        /// Includes system prompt, JSON structure, and per-file separators.
+        /// </summary>
+        public int EstimateBatchPromptOverhead(int fileCount)
+        {
+            var baseOverhead = _tokenEstimation.BaseBatchPromptOverhead + _tokenEstimation.BatchJsonStructureOverhead;
+            var perFileOverhead = fileCount * _tokenEstimation.PerFileBatchOverhead;
+            
+            return baseOverhead + perFileOverhead;
         }
     }
 }
