@@ -52,6 +52,9 @@ namespace PoC1_LegacyAnalyzer_Web
             services.Configure<AgentConfiguration>(configuration.GetSection("AgentConfiguration"));
             services.Configure<BusinessCalculationRules>(configuration.GetSection("BusinessCalculationRules"));
 
+            // Register result transformer service
+            services.AddScoped<IResultTransformerService, ResultTransformerService>();
+
             // Register new services for DI
             services.AddScoped<IPeerReviewCoordinator, PeerReviewCoordinator>();
             services.AddScoped<IRecommendationSynthesizer, RecommendationSynthesizer>();
@@ -80,19 +83,22 @@ namespace PoC1_LegacyAnalyzer_Web
                 new SecurityAnalystAgent(
                     sp.GetRequiredService<Kernel>(),
                     sp.GetRequiredService<ILogger<SecurityAnalystAgent>>(),
-                    configuration));
+                    configuration,
+                    sp.GetRequiredService<IResultTransformerService>()));
 
             services.AddScoped<PerformanceAnalystAgent>(sp =>
                 new PerformanceAnalystAgent(
                     sp.GetRequiredService<Kernel>(),
                     sp.GetRequiredService<ILogger<PerformanceAnalystAgent>>(),
-                    configuration));
+                    configuration,
+                    sp.GetRequiredService<IResultTransformerService>()));
 
             services.AddScoped<ArchitecturalAnalystAgent>(sp =>
                 new ArchitecturalAnalystAgent(
                     sp.GetRequiredService<Kernel>(),
                     sp.GetRequiredService<ILogger<ArchitecturalAnalystAgent>>(),
-                    configuration));
+                    configuration,
+                    sp.GetRequiredService<IResultTransformerService>()));
 
             // Register as collection for orchestrator
             services.AddScoped<IEnumerable<ISpecialistAgentService>>(sp =>
