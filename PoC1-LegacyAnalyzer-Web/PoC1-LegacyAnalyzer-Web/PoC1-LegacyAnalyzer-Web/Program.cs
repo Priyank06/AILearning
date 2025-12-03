@@ -5,6 +5,8 @@ using PoC1_LegacyAnalyzer_Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
+using PoC1_LegacyAnalyzer_Web.Services;
 
 public class Program
 {

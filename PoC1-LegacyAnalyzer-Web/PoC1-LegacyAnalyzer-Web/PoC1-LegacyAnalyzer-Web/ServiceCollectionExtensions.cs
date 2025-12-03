@@ -19,6 +19,15 @@ namespace PoC1_LegacyAnalyzer_Web
             services.AddScoped<IMultiFileAnalysisService, MultiFileAnalysisService>();
             services.AddScoped<IFileDownloadService, FileDownloadService>();
             services.AddScoped<ICodeAnalysisAgentService, CodeAnalysisAgentService>();
+            
+            // File preprocessing focused services
+            services.AddScoped<IFileCacheManager, FileCacheManager>();
+            services.AddScoped<IComplexityCalculationService, ComplexityCalculationService>();
+            services.AddScoped<IPatternDetectionService, PatternDetectionService>();
+            services.AddScoped<IFileFilteringService, FileFilteringService>();
+            services.AddScoped<IMetadataExtractionService, MetadataExtractionService>();
+            
+            // FilePreProcessingService as facade (maintains backward compatibility)
             services.AddScoped<IFilePreProcessingService, FilePreProcessingService>();
             
             // Helper services
@@ -29,14 +38,23 @@ namespace PoC1_LegacyAnalyzer_Web
 
         public static IServiceCollection AddMultiAgentOrchestration(this IServiceCollection services, IConfiguration configuration)
         {
+            // Configure options
+            services.Configure<AgentConfiguration>(configuration.GetSection("AgentConfiguration"));
+            services.Configure<BusinessCalculationRules>(configuration.GetSection("BusinessCalculationRules"));
+
+            // Register new services for DI
+            services.AddScoped<IPeerReviewCoordinator, PeerReviewCoordinator>();
+            services.AddScoped<IRecommendationSynthesizer, RecommendationSynthesizer>();
+            services.AddScoped<IExecutiveSummaryGenerator, ExecutiveSummaryGenerator>();
+
+            // Register new focused services
+            services.AddScoped<IAgentRegistry, AgentRegistryService>();
+            services.AddScoped<IConflictResolver, ConflictResolverService>();
+            services.AddScoped<IConsensusCalculator, ConsensusCalculatorService>();
+            services.AddScoped<IAgentCommunicationCoordinator, AgentCommunicationCoordinator>();
+
             // Agent orchestration (scoped - each circuit gets fresh state)
-            services.AddScoped<IAgentOrchestrationService>(sp =>
-                new AgentOrchestrationService(
-                    sp,
-                    sp.GetRequiredService<Kernel>(),
-                    sp.GetRequiredService<ILogger<AgentOrchestrationService>>(),
-                    configuration,
-                    sp.GetRequiredService<IFilePreProcessingService>()));
+            services.AddScoped<IAgentOrchestrationService, AgentOrchestrationService>();
 
             services.AddScoped<IEnhancedProjectAnalysisService, EnhancedProjectAnalysisService>();
 
@@ -63,8 +81,8 @@ namespace PoC1_LegacyAnalyzer_Web
             services.AddScoped<IEnumerable<ISpecialistAgentService>>(sp =>
             [
                 sp.GetRequiredService<SecurityAnalystAgent>(),
-            sp.GetRequiredService<PerformanceAnalystAgent>(),
-            sp.GetRequiredService<ArchitecturalAnalystAgent>()
+                sp.GetRequiredService<PerformanceAnalystAgent>(),
+                sp.GetRequiredService<ArchitecturalAnalystAgent>()
             ]);
 
             return services;
