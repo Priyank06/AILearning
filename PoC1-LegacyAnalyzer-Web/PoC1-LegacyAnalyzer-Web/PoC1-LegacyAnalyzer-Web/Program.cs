@@ -108,6 +108,7 @@ public class Program
         builder.Services.AddCodeAnalysisServices();
         builder.Services.AddMultiAgentOrchestration(builder.Configuration);
         builder.Services.AddSemanticKernel(builder.Configuration);
+        builder.Services.AddScoped<ITeamReportService, TeamReportService>();
 
         // Create logger using LoggerFactory with Application Insights support
         using var loggerFactory = LoggerFactory.Create(logging =>

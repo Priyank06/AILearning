@@ -15,6 +15,7 @@
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnvironment
 @inject IReportService ReportService
 @inject IFileDownloadService FileDownloadService
+@inject ITeamReportService TeamReportService
 @inject Microsoft.Extensions.Options.IOptions<PoC1_LegacyAnalyzer_Web.Models.FilePreProcessingOptions> PreProcessingOptions
 
 <PageTitle>Multi-Agent Team Analysis</PageTitle>
@@ -154,7 +155,12 @@
 
         try
         {
-            var content = GenerateTeamReport();
+            var content = TeamReportService.GenerateTeamReport(
+                teamResult,
+                projectSummary,
+                lastBusinessObjective,
+                lastCustomObjective,
+                lastSelectedAgents);
             var bytes = System.Text.Encoding.UTF8.GetBytes(content);
             var fileName = $"team-analysis-{DateTime.Now:yyyyMMdd-HHmmss}.md";
             await FileDownloadService.DownloadFileAsync(fileName, bytes, "text/markdown");
@@ -166,59 +172,6 @@
         }
     }
 
-    private string GenerateTeamReport()
-    {
-        if (teamResult is null) return "";
-
-        var sb = new System.Text.StringBuilder();
-        var objectiveText = !string.IsNullOrWhiteSpace(lastCustomObjective) 
-            ? lastCustomObjective 
-            : lastBusinessObjective;
-
-        sb.AppendLine("# Multi-Agent Team Analysis Report");
-        sb.AppendLine($"**Objective:** {objectiveText}");
-        sb.AppendLine($"**Agents:** {string.Join(", ", lastSelectedAgents)}");
-        sb.AppendLine($"**Completed:** {DateTime.Now:yyyy-MM-dd HH:mm}");
-        sb.AppendLine();
-
-        if (projectSummary is not null)
-        {
-            sb.AppendLine("## Project Summary");
-            sb.AppendLine($"- Files: {projectSummary.TotalFiles}");
-            sb.AppendLine($"- Classes: {projectSummary.TotalClasses}");
-            sb.AppendLine($"- Methods: {projectSummary.TotalMethods}");
-            sb.AppendLine($"- Properties: {projectSummary.TotalProperties}");
-            sb.AppendLine($"- Risk Level: {projectSummary.RiskLevel}");
-            sb.AppendLine($"- Complexity Score: {projectSummary.ComplexityScore}");
-            sb.AppendLine();
-        }
-
-        if (!string.IsNullOrWhiteSpace(teamResult.ExecutiveSummary))
-        {
-            sb.AppendLine("## Executive Summary");
-            sb.AppendLine(teamResult.ExecutiveSummary);
-            sb.AppendLine();
-        }
-
-        sb.AppendLine("## Team Metrics");
-        sb.AppendLine($"- Specialist Agents: {teamResult.IndividualAnalyses?.Count ?? 0}");
-        sb.AppendLine($"- Collaboration Messages: {teamResult.TeamDiscussion?.Count ?? 0}");
-        sb.AppendLine($"- Team Consensus: {teamResult.Consensus?.AgreementPercentage ?? 0:F0}%");
-        sb.AppendLine($"- Overall Confidence: {teamResult.OverallConfidenceScore}%");
-        sb.AppendLine();
-
-        if (teamResult.FinalRecommendations is not null)
-        {
-            sb.AppendLine("## Recommendations Summary");
-            sb.AppendLine($"- High Priority: {teamResult.FinalRecommendations.HighPriorityActions?.Count ?? 0}");
-            sb.AppendLine($"- Medium Priority: {teamResult.FinalRecommendations.MediumPriorityActions?.Count ?? 0}");
-            sb.AppendLine($"- Long-term Strategic: {teamResult.FinalRecommendations.LongTermStrategic?.Count ?? 0}");
-            sb.AppendLine($"- Total Estimated Effort: {teamResult.FinalRecommendations.TotalEstimatedEffort} hours");
-            sb.AppendLine();
-        }
-
-        return sb.ToString();
-    }
 }
 
 <style>
