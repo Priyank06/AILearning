@@ -10,6 +10,11 @@ main {
 
 .sidebar {
     background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+    transition: width 0.3s ease;
+}
+
+.sidebar-collapsed {
+    width: 60px !important;
 }
 
 .top-row {
@@ -43,6 +48,11 @@ main {
     .top-row a, .top-row .btn-link {
         margin-left: 0;
     }
+
+    .sidebar-collapsed {
+        width: 0 !important;
+        overflow: hidden;
+    }
 }
 
 @media (min-width: 641px) {
@@ -51,10 +61,15 @@ main {
     }
 
     .sidebar {
-        width: 250px;
+        width: 220px;
         height: 100vh;
         position: sticky;
         top: 0;
+        overflow-y: auto;
+    }
+
+    .sidebar-collapsed {
+        width: 60px !important;
     }
 
     .top-row {

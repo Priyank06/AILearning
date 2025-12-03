@@ -3,66 +3,88 @@
 @using PoC1_LegacyAnalyzer_Web.Services
 
 @* Analysis results container - master composite component *@
-<div class="col-lg-7">
-    <BusinessContextCard 
-        BusinessObjective="@BusinessObjective"
-        CustomObjective="@CustomObjective"
-        SelectedAgents="@SelectedAgents"
-        ProjectSummary="@ProjectSummary"
-        CodeInputLength="@EstimatedInputTokens" />
+<div>
+    <div id="section-business-context" class="scroll-section">
+        <BusinessContextCard 
+            BusinessObjective="@BusinessObjective"
+            CustomObjective="@CustomObjective"
+            SelectedAgents="@SelectedAgents"
+            ProjectSummary="@ProjectSummary"
+            CodeInputLength="@EstimatedInputTokens" />
+    </div>
         
     @if (ProjectSummary != null)
     {
-        <ProjectOverviewCard ProjectSummary="@ProjectSummary" />
+        <div id="section-project-overview" class="scroll-section">
+            <ProjectOverviewCard ProjectSummary="@ProjectSummary" />
+        </div>
     }
     
-    <TokenUsageCard 
-        TokenUsage="@TeamResult?.TokenUsage"
-        EstimatedInputTokens="@EstimatedInputTokens"
-        EstimatedCompletionTokens="@(TeamResult?.ExecutiveSummary?.Length / 4 ?? 1000)" />
+    <div id="section-token-usage" class="scroll-section">
+        <TokenUsageCard 
+            TokenUsage="@TeamResult?.TokenUsage"
+            EstimatedInputTokens="@EstimatedInputTokens"
+            EstimatedCompletionTokens="@(TeamResult?.ExecutiveSummary?.Length / 4 ?? 1000)" />
+    </div>
         
-    <TeamPerformanceDashboard TeamResult="@TeamResult" />
+    <div id="section-metrics" class="scroll-section">
+        <TeamPerformanceDashboard TeamResult="@TeamResult" />
+    </div>
     
-    <ExecutiveSummaryCard 
-        ExecutiveSummary="@TeamResult?.ExecutiveSummary"
-        IsAnalyzing="@IsAnalyzing" />
+    <div id="section-executive-summary" class="scroll-section">
+        <ExecutiveSummaryCard 
+            ExecutiveSummary="@TeamResult?.ExecutiveSummary"
+            IsAnalyzing="@IsAnalyzing" />
+    </div>
         
     @if (TeamResult?.IndividualAnalyses?.Any() == true)
     {
-        <div class="card shadow mb-3">
-            <div class="card-header bg-dark text-white">
-                <h5 class="mb-0"><i class="bi bi-person-badge"></i> Individual Agent Analysis</h5>
-            </div>
-            <div class="card-body">
-                @foreach (var analysis in TeamResult.IndividualAnalyses.OrderByDescending(a => a.ConfidenceScore))
-                {
-                    <AgentAnalysisCard Analysis="@analysis" />
-                }
+        <div id="section-agent-analysis" class="scroll-section">
+            <div class="card shadow mb-3">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-person-badge"></i> Individual Agent Analysis</h5>
+                </div>
+                <div class="card-body">
+                    @foreach (var analysis in TeamResult.IndividualAnalyses.OrderByDescending(a => a.ConfidenceScore))
+                    {
+                        <AgentAnalysisCard Analysis="@analysis" />
+                    }
+                </div>
             </div>
         </div>
     }
     
     @if (TeamResult?.TeamDiscussion?.Any() == true)
     {
-        <TeamDiscussionCard 
-            Discussion="@TeamResult.TeamDiscussion"
-            ExpandedMessages="@expandedMessages"
-            OnToggleMessage="@ToggleMessage" />
+        <div id="section-team-discussion" class="scroll-section">
+            <TeamDiscussionCard 
+                Discussion="@TeamResult.TeamDiscussion"
+                ExpandedMessages="@expandedMessages"
+                OnToggleMessage="@ToggleMessage" />
+        </div>
     }
     
     @if (TeamResult?.FinalRecommendations != null)
     {
-        <ConsolidatedRecommendationsCard 
-            Recommendations="@TeamResult.FinalRecommendations"
-            ActiveTab="@activeTab"
-            ExpandedStates="@expandedRecommendations"
-            IsStrategyExpanded="@isStrategyExpanded"
-            OnTabChange="@OnTabChanged"
-            OnToggleRecommendation="@ToggleRecommendation"
-            OnToggleStrategy="@ToggleStrategy"
-            OnDownloadReport="@OnDownloadReport" />
+        <div id="section-recommendations" class="scroll-section">
+            <ConsolidatedRecommendationsCard 
+                Recommendations="@TeamResult.FinalRecommendations"
+                ActiveTab="@activeTab"
+                ExpandedStates="@expandedRecommendations"
+                IsStrategyExpanded="@isStrategyExpanded"
+                OnTabChange="@OnTabChanged"
+                OnToggleRecommendation="@ToggleRecommendation"
+                OnToggleStrategy="@ToggleStrategy"
+                OnDownloadReport="@OnDownloadReport" />
+        </div>
     }
 </div>
+
+<style>
+    .scroll-section {
+        scroll-margin-top: 4rem;
+    }
+</style>
 
 @code {
     private string activeTab = "high";

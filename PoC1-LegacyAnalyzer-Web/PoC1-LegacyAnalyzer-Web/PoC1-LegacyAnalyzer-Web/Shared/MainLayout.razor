@@ -3,8 +3,8 @@
 <PageTitle>AI Legacy Code Analyzer</PageTitle>
 
 <div class="page">
-    <div class="sidebar">
-        <NavMenu />
+    <div class="sidebar @(sidebarCollapsed ? "sidebar-collapsed" : "")">
+        <NavMenu OnSidebarToggle="@HandleSidebarToggle" />
     </div>
 
     <main>
@@ -20,3 +20,13 @@
         </article>
     </main>
 </div>
+
+@code {
+    private bool sidebarCollapsed = false;
+
+    private void HandleSidebarToggle(bool collapsed)
+    {
+        sidebarCollapsed = collapsed;
+        StateHasChanged();
+    }
+}

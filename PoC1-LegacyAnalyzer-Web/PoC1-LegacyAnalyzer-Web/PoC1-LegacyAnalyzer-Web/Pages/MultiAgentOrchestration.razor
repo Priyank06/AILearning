@@ -6,6 +6,7 @@
 @using PoC1_LegacyAnalyzer_Web.Components.Configuration
 @using PoC1_LegacyAnalyzer_Web.Components.Analysis
 @using PoC1_LegacyAnalyzer_Web.Components.Shared
+@inject IJSRuntime JSRuntime
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components.Web
 @inject IAgentOrchestrationService OrchestrationService
@@ -45,19 +46,30 @@
                 OnPhaseChanged="@HandlePhaseChanged" />
         </div>
 
-        <!-- Results Section (full width under configuration) -->
+        <!-- Results Section with right sidebar -->
         @if (teamResult is not null)
         {
             <div class="col-12">
-                <AnalysisResultsContainer 
-                    TeamResult="@teamResult"
-                    BusinessObjective="@lastBusinessObjective"
-                    CustomObjective="@lastCustomObjective"
-                    SelectedAgents="@lastSelectedAgents"
-                    ProjectSummary="@projectSummary"
-                    EstimatedInputTokens="@lastAiInputCharCount"
-                    IsAnalyzing="@isAnalyzing"
-                    OnDownloadReport="@DownloadTeamReport" />
+                <div class="row">
+                    <!-- Main Content -->
+                    <div class="col-12 col-xl-9">
+                        <AnalysisResultsContainer 
+                            TeamResult="@teamResult"
+                            BusinessObjective="@lastBusinessObjective"
+                            CustomObjective="@lastCustomObjective"
+                            SelectedAgents="@lastSelectedAgents"
+                            ProjectSummary="@projectSummary"
+                            EstimatedInputTokens="@lastAiInputCharCount"
+                            IsAnalyzing="@isAnalyzing"
+                            OnDownloadReport="@DownloadTeamReport" />
+                    </div>
+                    <!-- Right Sidebar -->
+                    <div class="col-xl-3 d-none d-xl-block">
+                        <QuickNavigationSidebar 
+                            TeamResult="@teamResult"
+                            OnDownloadReport="@DownloadTeamReport" />
+                    </div>
+                </div>
             </div>
         }
         else if (!isAnalyzing)
@@ -214,9 +226,9 @@
         background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
     }
 
-    /* Constrain page content and ensure a clean single-column layout */
+    /* Constrain page content - accounts for left sidebar (220px) and right sidebar (280px) */
     .multiagent-single-column {
-        max-width: 1200px;
+        max-width: 1600px;
         margin: 0 auto;
     }
 </style>
