@@ -22,16 +22,10 @@
 
 <div class="container-fluid multiagent-single-column">
     <!-- Header Section -->
-    <div class="row mb-4">
-        <div class="col-12 text-center">
-            <div class="bg-gradient-primary text-white p-4 rounded shadow">
-                <h1 class="display-4 mb-2">🤖 Multi-Agent Team Analysis</h1>
-                <p class="lead mb-0">Coordinated AI specialist team for comprehensive code analysis</p>
-                <div class="mt-3">
-                    <BadgeWithIcon Text="Security Expert" Icon="🛡️" Color="light" />
-                    <BadgeWithIcon Text="Performance Specialist" Icon="⚡" Color="light" />
-                    <BadgeWithIcon Text="Architecture Analyst" Icon="🏗️" Color="light" />
-                </div>
+    <div class="row mb-2">
+        <div class="col-12">
+            <div class="bg-light border-bottom border-2 p-2">
+                <h2 class="h4 mb-1">🤖 Multi-Agent Team Analysis</h2>
             </div>
         </div>
     </div>
@@ -64,12 +58,36 @@
                             IsAnalyzing="@isAnalyzing"
                             OnDownloadReport="@DownloadTeamReport" />
                     </div>
-                    <!-- Right Sidebar -->
-                    <div class="col-xl-3 d-none d-xl-block">
+                    <!-- Right Sidebar (desktop) -->
+                    <div class="col-xl-3 d-none d-xl-block position-relative quick-nav-desktop">
                         <QuickNavigationSidebar 
                             TeamResult="@teamResult"
                             OnDownloadReport="@DownloadTeamReport" />
                     </div>
+                </div>
+            </div>
+
+            <!-- Mobile Navigation Toggle (only visible on small screens) -->
+            <div class="d-xl-none position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
+                <button class="btn btn-primary rounded-circle shadow-lg" 
+                        style="width: 56px; height: 56px;"
+                        @onclick="ToggleMobileNav">
+                    <i class="bi bi-list" style="font-size: 1.5rem;"></i>
+                </button>
+            </div>
+
+            <!-- Mobile Navigation Panel -->
+            <div class="mobile-nav-overlay @(showMobileNav ? "show" : "")" @onclick="ToggleMobileNav"></div>
+            <div class="mobile-nav-panel @(showMobileNav ? "show" : "")">
+                <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
+                    <h6 class="mb-0">Quick Navigation</h6>
+                    <button class="btn-close" @onclick="ToggleMobileNav"></button>
+                </div>
+                <div class="p-2">
+                    <QuickNavigationSidebar 
+                        TeamResult="@teamResult"
+                        OnDownloadReport="@DownloadTeamReport"
+                        OnNavigate="@(() => showMobileNav = false)" />
                 </div>
             </div>
         }
@@ -95,6 +113,7 @@
     private bool isAnalyzing = false;
     private int currentPhase = 0;
     private int lastAiInputCharCount = 0;
+    private bool showMobileNav = false;
     
     // Store last analysis parameters for results display
     private string lastBusinessObjective = "";
@@ -147,6 +166,11 @@
     {
         currentPhase = phase;
         StateHasChanged();
+    }
+
+    private void ToggleMobileNav()
+    {
+        showMobileNav = !showMobileNav;
     }
 
     private async Task DownloadTeamReport()

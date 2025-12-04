@@ -1,7 +1,28 @@
 @import url('open-iconic/font/css/open-iconic-bootstrap.min.css');
 
+/* Professional muted color palette */
+:root {
+    --bs-primary: #0056b3;      /* Darker blue */
+    --bs-primary-rgb: 0, 86, 179;
+    --bs-success: #d4edda;      /* Pale green */
+    --bs-warning: #fff3cd;      /* Pale yellow */
+    --bs-danger: #f8d7da;       /* Pale red */
+    --bs-info: #d1ecf1;         /* Pale blue */
+}
+
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+/* Enable smooth scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Increase information density */
+body {
+    font-size: 0.875rem !important;  /* 14px instead of 16px */
+    line-height: 1.6;
 }
 
 h1:focus {
@@ -12,10 +33,15 @@ a, .btn-link {
     color: #0071c1;
 }
 
+/* Reduce button brightness */
 .btn-primary {
-    color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+    background-color: #0056b3;
+    border-color: #004494;
+}
+
+.btn-primary:hover {
+    background-color: #004494;
+    border-color: #003875;
 }
 
 .content {
@@ -94,6 +120,17 @@ a, .btn-link {
     font-size: 0.9rem;
 }
 
+/* Keep important metrics readable */
+.metric-value {
+    font-size: 1.25rem !important;
+    font-weight: 600;
+}
+
+/* Small text for secondary info */
+small, .small {
+    font-size: 0.8125rem;
+}
+
 .badge {
     font-size: 0.8rem;
     padding: 0.4rem 0.6rem;
@@ -103,6 +140,8 @@ a, .btn-link {
     border-radius: 6px;
     font-weight: 500;
     transition: all 0.2s ease;
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
 }
 
     .btn:hover {
@@ -120,6 +159,7 @@ pre {
     border-radius: 6px;
     border: 1px solid #ddd;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    font-size: 0.875rem;
 }
 
     .form-control:focus, .form-select:focus {
@@ -160,4 +200,98 @@ pre {
     100% {
         opacity: 1;
     }
+}
+
+/* Reduce section spacing and support scroll padding */
+.scroll-section {
+    margin-bottom: 1.5rem !important; /* Previously 3-4rem */
+    scroll-margin-top: 4rem;
+    scroll-snap-margin-top: 4rem; /* Safari support */
+}
+
+.card {
+    margin-bottom: 1rem !important; /* Previously 2-3rem */
+}
+
+/* Override Bootstrap spacing utilities */
+.mb-4 {
+    margin-bottom: 1rem !important;
+}
+
+.mb-5 {
+    margin-bottom: 1.5rem !important;
+}
+
+/* Compact card gaps in results container */
+.multiagent-single-column .card {
+    margin-bottom: 1rem;
+}
+
+/* Subtle backgrounds for status indicators */
+.bg-primary {
+    background-color: #e7f1ff !important;
+    color: #004085 !important;
+}
+
+.bg-success {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+
+.bg-warning {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+
+/* Reduce heading scale across application */
+h1, .h1 {
+    font-size: 1.5rem !important; /* 24px - was larger */
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+h2, .h2 {
+    font-size: 1.25rem !important; /* 20px */
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+h3, .h3 {
+    font-size: 1.125rem !important; /* 18px */
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+h4, .h4 {
+    font-size: 1rem !important; /* 16px */
+    font-weight: 600;
+}
+
+h5, .h5 {
+    font-size: 1rem !important; /* 16px */
+    font-weight: 600;
+}
+
+h6, .h6 {
+    font-size: 0.875rem !important; /* 14px */
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Reduce display classes */
+.display-1 { font-size: 2.5rem !important; }
+.display-2 { font-size: 2rem !important; }
+.display-3 { font-size: 1.75rem !important; }
+.display-4 { font-size: 1.5rem !important; }
+
+/* Remove lead text emphasis */
+.lead {
+    font-size: 1rem !important;
+    font-weight: normal !important;
+}
+
+/* Global scroll padding to prevent layout shift */
+* {
+    scroll-padding-top: 2rem;
 }

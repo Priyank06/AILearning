@@ -3,82 +3,128 @@
 @using PoC1_LegacyAnalyzer_Web.Helpers
 
 @* Individual agent analysis display card *@
-<div class="agent-result-card mb-4">
-    <div class="d-flex justify-content-between align-items-start mb-3">
-        <div>
-            <h6 class="text-primary mb-1">
-                @GetAgentIcon(Analysis.AgentName) @Analysis.AgentName
-            </h6>
-            <small class="text-muted">@Analysis.Specialty</small>
+<div class="card mb-2">
+    <div class="card-body p-2 clickable" @onclick="ToggleExpanded">
+        <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="agent-icon">@GetAgentIcon(Analysis.AgentName)</span>
+                <strong>@Analysis.AgentName</strong>
+                <span class="badge bg-light text-dark border">Confidence: @Analysis.ConfidenceScore%</span>
+                @if (HighPriorityCount > 0)
+                {
+                    <span class="badge bg-danger">⚠️ @HighPriorityCount High Priority</span>
+                }
+            </div>
+            <i class="bi bi-chevron-@(isExpanded ? "up" : "down")"></i>
         </div>
-        <div class="text-end">
-            <BadgeWithIcon 
-                Text="@($"{Analysis.ConfidenceScore}% Confidence")"
-                Color="@GetConfidenceColor(Analysis.ConfidenceScore)"
-                Size="fs-6" />
-            <br>
-            <small class="text-muted">@Analysis.Priority Priority</small>
-        </div>
+        <small class="text-muted d-block mt-1">
+            "@GetKeySummary()" <span class="text-secondary">[View Details]</span>
+        </small>
     </div>
-
-    <div class="row">
-        <div class="col-md-6">
-            <strong>Key Findings (@(Analysis.KeyFindings?.Count ?? 0)):</strong>
-            @if (Analysis.KeyFindings?.Any() == true)
-            {
-                <ul class="list-unstyled mt-2">
-                    @foreach (var finding in Analysis.KeyFindings.Take(5))
+    
+    <!-- Full Details (collapsed by default) -->
+    <div class="collapse @(isExpanded ? "show" : "")" id="agent-@Analysis.AgentName-details">
+        <div class="card-body border-top">
+            <div class="mb-2">
+                <small class="text-muted">@Analysis.Specialty</small>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <strong>Key Findings (@(Analysis.KeyFindings?.Count ?? 0)):</strong>
+                    @if (Analysis.KeyFindings?.Any() == true)
                     {
-                        <li class="mb-1">
-                            <BadgeWithIcon 
-                                Text="@finding.Severity"
-                                Color="@GetSeverityColor(finding.Severity)" />
-                            <strong>@finding.Category:</strong> @finding.Description
-                        </li>
-                    }
-                </ul>
-            }
-            else
-            {
-                <p class="text-muted mt-2"><small>No findings reported</small></p>
-            }
-        </div>
-        <div class="col-md-6">
-            <strong>Recommendations (@(Analysis.Recommendations?.Count ?? 0)):</strong>
-            @if (Analysis.Recommendations?.Any() == true)
-            {
-                <ul class="list-unstyled mt-2">
-                    @foreach (var rec in Analysis.Recommendations.Take(3))
-                    {
-                        <li class="mb-2">
-                            <strong>@rec.Title</strong><br>
-                            <small class="text-muted">Priority: @rec.Priority | Effort: @rec.EstimatedHours hours</small>
-                            @if (!string.IsNullOrWhiteSpace(rec.Description))
+                        <ul class="list-unstyled mt-2">
+                            @foreach (var finding in Analysis.KeyFindings)
                             {
-                                <br><small class="text-muted">@rec.Description</small>
+                                <li class="mb-1">
+                                    <BadgeWithIcon 
+                                        Text="@finding.Severity"
+                                        Color="@GetSeverityColor(finding.Severity)" />
+                                    <strong>@finding.Category:</strong> @finding.Description
+                                </li>
                             }
-                        </li>
+                        </ul>
                     }
-                </ul>
-            }
-            else
+                    else
+                    {
+                        <p class="text-muted mt-2"><small>No findings reported</small></p>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <strong>Recommendations (@(Analysis.Recommendations?.Count ?? 0)):</strong>
+                    @if (Analysis.Recommendations?.Any() == true)
+                    {
+                        <ul class="list-unstyled mt-2">
+                            @foreach (var rec in Analysis.Recommendations)
+                            {
+                                <li class="mb-2">
+                                    <strong>@rec.Title</strong><br>
+                                    <small class="text-muted">Priority: @rec.Priority | Effort: @rec.EstimatedHours hours</small>
+                                    @if (!string.IsNullOrWhiteSpace(rec.Description))
+                                    {
+                                        <br><small class="text-muted">@rec.Description</small>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p class="text-muted mt-2"><small>No recommendations provided</small></p>
+                    }
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(Analysis.BusinessImpact))
             {
-                <p class="text-muted mt-2"><small>No recommendations provided</small></p>
+                <div class="mt-3 p-3 bg-light rounded">
+                    <strong>Business Impact:</strong><br>
+                    <small>@Analysis.BusinessImpact</small>
+                </div>
             }
         </div>
     </div>
-
-    @if (!string.IsNullOrEmpty(Analysis.BusinessImpact))
-    {
-        <div class="mt-3 p-3 bg-light rounded">
-            <strong>Business Impact:</strong><br>
-            <small>@Analysis.BusinessImpact</small>
-        </div>
-    }
 </div>
 
 @code {
     [Parameter] public SpecialistAnalysisResult Analysis { get; set; } = null!;
+    
+    private bool isExpanded = false;
+    
+    private int HighPriorityCount => Analysis.KeyFindings?.Count(f => 
+        f.Severity?.ToUpper() == "CRITICAL" || f.Severity?.ToUpper() == "HIGH") ?? 0;
+
+    private void ToggleExpanded()
+    {
+        isExpanded = !isExpanded;
+        StateHasChanged();
+    }
+
+    private string GetKeySummary()
+    {
+        // Try to get a summary from the first finding or business impact
+        var summary = "";
+        
+        if (Analysis.KeyFindings?.Any() == true)
+        {
+            summary = Analysis.KeyFindings.First().Description;
+        }
+        else if (!string.IsNullOrEmpty(Analysis.BusinessImpact))
+        {
+            summary = Analysis.BusinessImpact;
+        }
+        else if (Analysis.Recommendations?.Any() == true)
+        {
+            summary = Analysis.Recommendations.First().Description ?? Analysis.Recommendations.First().Title;
+        }
+        else
+        {
+            summary = $"{Analysis.Specialty} analysis completed with {Analysis.ConfidenceScore}% confidence";
+        }
+        
+        return summary.Length > 100 ? summary.Substring(0, 97) + "..." : summary;
+    }
 
     private string GetAgentIcon(string agentName)
     {
@@ -116,17 +162,16 @@
 }
 
 <style>
-    .agent-result-card {
-        border: 1px solid #dee2e6;
-        border-radius: 12px;
-        padding: 1.5rem;
-        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
+    .clickable {
+        cursor: pointer;
+        transition: background-color 0.2s;
     }
 
-    .agent-result-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    .clickable:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .agent-icon {
+        font-size: 1.2rem;
     }
 </style>

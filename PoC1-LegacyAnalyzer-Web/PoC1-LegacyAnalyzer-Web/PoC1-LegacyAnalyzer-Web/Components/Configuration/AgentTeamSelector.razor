@@ -85,13 +85,6 @@
     [Parameter] public string DisplayMode { get; set; } = "vertical"; // "vertical" or "inline"
     [Parameter] public EventCallback<List<string>> OnSelectionChange { get; set; }
 
-    protected override void OnParametersSet()
-    {
-        includeSecurityAgent = IncludeSecurityAgent;
-        includePerformanceAgent = IncludePerformanceAgent;
-        includeArchitectureAgent = IncludeArchitectureAgent;
-    }
-
     private async Task OnSelectionChanged()
     {
         await OnSelectionChange.InvokeAsync(GetSelectedAgents());

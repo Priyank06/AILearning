@@ -1,15 +1,16 @@
 @using PoC1_LegacyAnalyzer_Web.Components.Analysis
 @using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
+@using PoC1_LegacyAnalyzer_Web.Models.MultiAgent
 @using PoC1_LegacyAnalyzer_Web.Helpers
 
 @* Consolidated recommendations card - composite component *@
 <div class="card shadow">
-    <div class="card-header bg-warning text-dark">
-        <h5 class="mb-0"><i class="bi bi-list-check"></i> Team Recommendations</h5>
+    <div class="card-header border-bottom border-2 bg-transparent">
+        <h6 class="text-secondary mb-0"><i class="bi bi-list-check card-icon"></i> Team Recommendations</h6>
     </div>
     <div class="card-body">
         <!-- Implementation Summary -->
-        <div class="mb-4 p-3 bg-primary text-white rounded">
+        <div class="mb-4 p-3 bg-light border rounded">
             <h6 class="mb-2"><i class="bi bi-clock"></i> Implementation Summary</h6>
             <div class="row">
                 <div class="col-md-4">
@@ -27,56 +28,95 @@
             </div>
         </div>
 
-        <!-- Priority Tabs -->
-        <ul class="nav nav-tabs mb-3" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link @(ActiveTab == "high" ? "active" : "")" 
-                        @onclick="@(() => OnTabChange.InvokeAsync("high"))"
-                        type="button" role="tab">
-                    <i class="bi bi-exclamation-triangle-fill text-danger"></i> High Priority 
-                    <span class="badge bg-danger ms-1">@(Recommendations?.HighPriorityActions?.Count ?? 0)</span>
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link @(ActiveTab == "medium" ? "active" : "")" 
-                        @onclick="@(() => OnTabChange.InvokeAsync("medium"))"
-                        type="button" role="tab">
-                    <i class="bi bi-exclamation-circle-fill text-warning"></i> Medium Priority 
-                    <span class="badge bg-warning text-dark ms-1">@(Recommendations?.MediumPriorityActions?.Count ?? 0)</span>
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link @(ActiveTab == "longterm" ? "active" : "")" 
-                        @onclick="@(() => OnTabChange.InvokeAsync("longterm"))"
-                        type="button" role="tab">
-                    <i class="bi bi-calendar-check-fill text-info"></i> Long-Term Strategic 
-                    <span class="badge bg-info ms-1">@(Recommendations?.LongTermStrategic?.Count ?? 0)</span>
-                </button>
-            </li>
-        </ul>
+        <!-- High Priority (always visible) -->
+        <div class="priority-section mb-3">
+            <h6 class="text-danger mb-2">
+                <i class="bi bi-exclamation-circle inline-icon"></i> High Priority (@HighPriorityCount)
+            </h6>
+            @if (GetHighPriorityRecommendations().Any())
+            {
+                @foreach (var rec in GetHighPriorityRecommendations().Take(showAllHigh ? int.MaxValue : 5))
+                {
+                    var recId = $"High-{rec.GetHashCode()}";
+                    var isExpanded = ExpandedStates.GetValueOrDefault(recId, false);
+                    <RecommendationCard 
+                        Recommendation="@rec"
+                        IsExpanded="@isExpanded"
+                        OnToggle="@(() => OnToggleRecommendation.InvokeAsync(recId))" />
+                }
+                @if (HighPriorityCount > 5 && !showAllHigh)
+                {
+                    <button class="btn btn-link btn-sm p-0 mt-2" @onclick="() => { showAllHigh = true; StateHasChanged(); }">
+                        Show all @HighPriorityCount high priority recommendations <i class="bi bi-chevron-down"></i>
+                    </button>
+                }
+            }
+            else
+            {
+                <div class="alert alert-light border">
+                    <i class="bi bi-info-circle"></i> No high priority recommendations available.
+                </div>
+            }
+        </div>
 
-        <!-- Tab Content -->
-        <div class="tab-content">
-            <PriorityRecommendationsTab 
-                Recommendations="@Recommendations?.HighPriorityActions"
-                Priority="High"
-                IsActive="@(ActiveTab == "high")"
-                ExpandedStates="@ExpandedStates"
-                OnToggle="@OnToggleRecommendation" />
+        <!-- Medium Priority (collapsed by default) -->
+        <div class="priority-section mb-3">
+            <button class="btn btn-link p-0 text-start w-100" @onclick="ToggleMedium">
+                <h6 class="text-warning mb-0">
+                    <i class="bi bi-exclamation-triangle inline-icon"></i> Medium Priority (@MediumPriorityCount)
+                    <i class="bi bi-chevron-@(showMedium ? "up" : "down") inline-icon float-end"></i>
+                </h6>
+            </button>
+            <div class="collapse @(showMedium ? "show" : "")">
+                @if (GetMediumPriorityRecommendations().Any())
+                {
+                    @foreach (var rec in GetMediumPriorityRecommendations())
+                    {
+                        var recId = $"Medium-{rec.GetHashCode()}";
+                        var isExpanded = ExpandedStates.GetValueOrDefault(recId, false);
+                        <RecommendationCard 
+                            Recommendation="@rec"
+                            IsExpanded="@isExpanded"
+                            OnToggle="@(() => OnToggleRecommendation.InvokeAsync(recId))" />
+                    }
+                }
+                else
+                {
+                    <div class="alert alert-light border mt-2">
+                        <i class="bi bi-info-circle"></i> No medium priority recommendations available.
+                    </div>
+                }
+            </div>
+        </div>
 
-            <PriorityRecommendationsTab 
-                Recommendations="@Recommendations?.MediumPriorityActions"
-                Priority="Medium"
-                IsActive="@(ActiveTab == "medium")"
-                ExpandedStates="@ExpandedStates"
-                OnToggle="@OnToggleRecommendation" />
-
-            <PriorityRecommendationsTab 
-                Recommendations="@Recommendations?.LongTermStrategic"
-                Priority="Long-term strategic"
-                IsActive="@(ActiveTab == "longterm")"
-                ExpandedStates="@ExpandedStates"
-                OnToggle="@OnToggleRecommendation" />
+        <!-- Low Priority (collapsed by default) -->
+        <div class="priority-section">
+            <button class="btn btn-link p-0 text-start w-100" @onclick="ToggleLow">
+                <h6 class="text-secondary mb-0">
+                    <i class="bi bi-info-circle inline-icon"></i> Long-term Improvements (@LowPriorityCount)
+                    <i class="bi bi-chevron-@(showLow ? "up" : "down") inline-icon float-end"></i>
+                </h6>
+            </button>
+            <div class="collapse @(showLow ? "show" : "")">
+                @if (GetLowPriorityRecommendations().Any())
+                {
+                    @foreach (var rec in GetLowPriorityRecommendations())
+                    {
+                        var recId = $"Low-{rec.GetHashCode()}";
+                        var isExpanded = ExpandedStates.GetValueOrDefault(recId, false);
+                        <RecommendationCard 
+                            Recommendation="@rec"
+                            IsExpanded="@isExpanded"
+                            OnToggle="@(() => OnToggleRecommendation.InvokeAsync(recId))" />
+                    }
+                }
+                else
+                {
+                    <div class="alert alert-light border mt-2">
+                        <i class="bi bi-info-circle"></i> No long-term recommendations available.
+                    </div>
+                }
+            </div>
         </div>
 
         <ImplementationStrategySection 
@@ -101,4 +141,39 @@
     [Parameter] public EventCallback<string> OnToggleRecommendation { get; set; }
     [Parameter] public EventCallback OnToggleStrategy { get; set; }
     [Parameter] public EventCallback OnDownloadReport { get; set; }
+    
+    private bool showAllHigh = false;
+    private bool showMedium = false;
+    private bool showLow = false;
+    
+    private int HighPriorityCount => Recommendations?.HighPriorityActions?.Count ?? 0;
+    private int MediumPriorityCount => Recommendations?.MediumPriorityActions?.Count ?? 0;
+    private int LowPriorityCount => Recommendations?.LongTermStrategic?.Count ?? 0;
+    
+    private void ToggleMedium()
+    {
+        showMedium = !showMedium;
+        StateHasChanged();
+    }
+    
+    private void ToggleLow()
+    {
+        showLow = !showLow;
+        StateHasChanged();
+    }
+    
+    private List<Recommendation> GetHighPriorityRecommendations()
+    {
+        return Recommendations?.HighPriorityActions ?? new List<Recommendation>();
+    }
+    
+    private List<Recommendation> GetMediumPriorityRecommendations()
+    {
+        return Recommendations?.MediumPriorityActions ?? new List<Recommendation>();
+    }
+    
+    private List<Recommendation> GetLowPriorityRecommendations()
+    {
+        return Recommendations?.LongTermStrategic ?? new List<Recommendation>();
+    }
 }

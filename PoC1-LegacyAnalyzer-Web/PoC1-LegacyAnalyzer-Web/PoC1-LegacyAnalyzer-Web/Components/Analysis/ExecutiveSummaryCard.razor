@@ -2,8 +2,8 @@
 
 @* Executive summary display card *@
 <div class="card shadow mb-3">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> Executive Summary</h5>
+    <div class="card-header border-bottom border-2 bg-transparent">
+        <h6 class="text-secondary mb-0"><i class="bi bi-file-earmark-text card-icon"></i> Executive Summary</h6>
     </div>
     <div class="card-body">
         @if (IsAnalyzing)
@@ -26,9 +26,30 @@
         }
         else
         {
-            <div class="executive-summary-content">
-                @((MarkupString)FormattingHelpers.FormatExecutiveSummary(ExecutiveSummary))
-            </div>
+            <ul class="list-unstyled mb-0">
+                @foreach (var insight in GetKeyInsights())
+                {
+                    <li class="mb-2 d-flex align-items-start">
+                        <i class="bi @insight.Icon inline-icon me-2 mt-1" style="color: @insight.Color;"></i>
+                        <div>
+                            <strong>@insight.Category:</strong> @insight.Message
+                        </div>
+                    </li>
+                }
+            </ul>
+            
+            @if (!showFullSummary)
+            {
+                <button class="btn btn-link btn-sm p-0 mt-2" @onclick="() => { showFullSummary = true; StateHasChanged(); }">
+                    View full summary <i class="bi bi-chevron-down"></i>
+                </button>
+            }
+            else
+            {
+                <div class="mt-3 pt-3 border-top">
+                    <small class="text-muted">@ExecutiveSummary</small>
+                </div>
+            }
         }
     </div>
 </div>
@@ -36,33 +57,167 @@
 @code {
     [Parameter] public string? ExecutiveSummary { get; set; }
     [Parameter] public bool IsAnalyzing { get; set; }
+    
+    private bool showFullSummary = false;
+    
+    private List<KeyInsight> GetKeyInsights()
+    {
+        if (string.IsNullOrWhiteSpace(ExecutiveSummary))
+            return new List<KeyInsight>();
+        
+        var insights = new List<KeyInsight>();
+        var summary = ExecutiveSummary;
+        
+        // Extract critical/security findings
+        var criticalFinding = ExtractCriticalFinding(summary);
+        if (!string.IsNullOrEmpty(criticalFinding))
+        {
+            insights.Add(new KeyInsight
+            {
+                Icon = "bi-exclamation-triangle-fill",
+                Color = "#dc3545",
+                Category = "Critical",
+                Message = criticalFinding
+            });
+        }
+        
+        // Extract performance findings
+        var performanceFinding = ExtractPerformanceFinding(summary);
+        if (!string.IsNullOrEmpty(performanceFinding))
+        {
+            insights.Add(new KeyInsight
+            {
+                Icon = "bi-speedometer2",
+                Color = "#ffc107",
+                Category = "Performance",
+                Message = performanceFinding
+            });
+        }
+        
+        // Extract architecture findings
+        var architectureFinding = ExtractArchitectureFinding(summary);
+        if (!string.IsNullOrEmpty(architectureFinding))
+        {
+            insights.Add(new KeyInsight
+            {
+                Icon = "bi-gear-fill",
+                Color = "#0dcaf0",
+                Category = "Architecture",
+                Message = architectureFinding
+            });
+        }
+        
+        // Extract recommendations/next steps
+        var recommendationFinding = ExtractRecommendationFinding(summary);
+        if (!string.IsNullOrEmpty(recommendationFinding))
+        {
+            insights.Add(new KeyInsight
+            {
+                Icon = "bi-check-circle-fill",
+                Color = "#198754",
+                Category = "Recommendation",
+                Message = recommendationFinding
+            });
+        }
+        
+        // If no specific insights found, create generic ones from sentences
+        if (insights.Count == 0)
+        {
+            var sentences = summary.Split(new[] { '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => s.Length > 20)
+                .Take(4)
+                .ToList();
+            
+            for (int i = 0; i < sentences.Count && i < 4; i++)
+            {
+                var icon = i switch
+                {
+                    0 => "bi-exclamation-triangle-fill",
+                    1 => "bi-speedometer2",
+                    2 => "bi-gear-fill",
+                    _ => "bi-info-circle-fill"
+                };
+                var color = i switch
+                {
+                    0 => "#dc3545",
+                    1 => "#ffc107",
+                    2 => "#0dcaf0",
+                    _ => "#6c757d"
+                };
+                var category = i switch
+                {
+                    0 => "Key Finding",
+                    1 => "Analysis",
+                    2 => "Assessment",
+                    _ => "Summary"
+                };
+                
+                insights.Add(new KeyInsight
+                {
+                    Icon = icon,
+                    Color = color,
+                    Category = category,
+                    Message = sentences[i].Length > 150 ? sentences[i].Substring(0, 147) + "..." : sentences[i]
+                });
+            }
+        }
+        
+        return insights;
+    }
+    
+    private string ExtractCriticalFinding(string summary)
+    {
+        var keywords = new[] { "critical", "security", "vulnerability", "risk", "threat", "breach", "exploit", "attack" };
+        return ExtractSentenceWithKeywords(summary, keywords, 150);
+    }
+    
+    private string ExtractPerformanceFinding(string summary)
+    {
+        var keywords = new[] { "performance", "speed", "bottleneck", "slow", "optimization", "efficiency", "latency", "throughput" };
+        return ExtractSentenceWithKeywords(summary, keywords, 150);
+    }
+    
+    private string ExtractArchitectureFinding(string summary)
+    {
+        var keywords = new[] { "architecture", "design", "structure", "pattern", "maintainability", "scalability", "modularity", "refactoring" };
+        return ExtractSentenceWithKeywords(summary, keywords, 150);
+    }
+    
+    private string ExtractRecommendationFinding(string summary)
+    {
+        var keywords = new[] { "recommend", "suggest", "should", "priority", "action", "next step", "implement", "improve" };
+        return ExtractSentenceWithKeywords(summary, keywords, 150);
+    }
+    
+    private string ExtractSentenceWithKeywords(string summary, string[] keywords, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(summary)) return "";
+        
+        var sentences = summary.Split(new[] { '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 20);
+        
+        foreach (var sentence in sentences)
+        {
+            var lowerSentence = sentence.ToLower();
+            if (keywords.Any(kw => lowerSentence.Contains(kw)))
+            {
+                var result = sentence.Trim();
+                if (result.Length > maxLength)
+                    result = result.Substring(0, maxLength - 3) + "...";
+                return result;
+            }
+        }
+        
+        return "";
+    }
+    
+    private class KeyInsight
+    {
+        public string Icon { get; set; } = "";
+        public string Color { get; set; } = "";
+        public string Category { get; set; } = "";
+        public string Message { get; set; } = "";
+    }
 }
-
-<style>
-    .executive-summary-content {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border-radius: 12px;
-        padding: 2rem;
-        line-height: 1.8;
-        font-size: 15px;
-        border-left: 5px solid #007bff;
-    }
-
-    .executive-summary-content h6 {
-        color: #2c3e50;
-        margin: 1.5rem 0 0.8rem 0;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-    }
-
-    .executive-summary-content h6::before {
-        content: "??";
-        margin-right: 0.5rem;
-        font-size: 1.2em;
-    }
-
-    .executive-summary-content p {
-        margin-bottom: 1rem;
-    }
-</style>

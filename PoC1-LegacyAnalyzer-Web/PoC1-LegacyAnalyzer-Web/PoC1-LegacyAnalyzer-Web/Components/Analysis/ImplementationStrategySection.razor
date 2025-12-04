@@ -37,13 +37,13 @@
         if (string.IsNullOrEmpty(strategy)) return "";
 
         // Format phases and sections
-        strategy = strategy.Replace("Phase 1:", "<h6 class='text-primary mt-3 mb-2'><i class='bi bi-1-circle'></i> Phase 1:</h6>");
-        strategy = strategy.Replace("Phase 2:", "<h6 class='text-primary mt-3 mb-2'><i class='bi bi-2-circle'></i> Phase 2:</h6>");
-        strategy = strategy.Replace("Phase 3:", "<h6 class='text-primary mt-3 mb-2'><i class='bi bi-3-circle'></i> Phase 3:</h6>");
+        strategy = strategy.Replace("Phase 1:", "<h6 class='text-secondary mt-3 mb-2'><i class='bi bi-1-circle'></i> Phase 1:</h6>");
+        strategy = strategy.Replace("Phase 2:", "<h6 class='text-secondary mt-3 mb-2'><i class='bi bi-2-circle'></i> Phase 2:</h6>");
+        strategy = strategy.Replace("Phase 3:", "<h6 class='text-secondary mt-3 mb-2'><i class='bi bi-3-circle'></i> Phase 3:</h6>");
 
         strategy = strategy.Replace("\n\n", "</p><p>");
         strategy = strategy.Replace("\n", "<br>");
-        strategy = strategy.Replace("• ", "<i class='bi bi-check-circle text-success me-1'></i>");
+        strategy = strategy.Replace("ï¿½ ", "<i class='bi bi-check-circle text-success me-1'></i>");
 
         if (!strategy.StartsWith("<h6") && !strategy.StartsWith("<p"))
         {

@@ -30,5 +30,26 @@
     </div>
 
     <script src="_framework/blazor.server.js"></script>
+    <script>
+        function initScrollSpy(dotnetHelper) {
+            const sections = document.querySelectorAll('.scroll-section');
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+                        const id = entry.target.id || '';
+                        if (!id.startsWith('section-')) return;
+                        const sectionId = id.replace('section-', '');
+                        dotnetHelper.invokeMethodAsync('UpdateActiveSection', sectionId);
+                    }
+                });
+            }, {
+                threshold: [0.5],
+                rootMargin: '-100px 0px -50% 0px'
+            });
+
+            sections.forEach(section => observer.observe(section));
+        }
+    </script>
 </body>
 </html>

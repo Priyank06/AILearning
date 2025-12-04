@@ -26,10 +26,6 @@
             EstimatedInputTokens="@EstimatedInputTokens"
             EstimatedCompletionTokens="@(TeamResult?.ExecutiveSummary?.Length / 4 ?? 1000)" />
     </div>
-        
-    <div id="section-metrics" class="scroll-section">
-        <TeamPerformanceDashboard TeamResult="@TeamResult" />
-    </div>
     
     <div id="section-executive-summary" class="scroll-section">
         <ExecutiveSummaryCard 
@@ -41,8 +37,8 @@
     {
         <div id="section-agent-analysis" class="scroll-section">
             <div class="card shadow mb-3">
-                <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><i class="bi bi-person-badge"></i> Individual Agent Analysis</h5>
+                <div class="card-header border-bottom border-2 bg-transparent">
+                    <h6 class="text-secondary mb-0"><i class="bi bi-person-badge"></i> Individual Agent Analysis</h6>
                 </div>
                 <div class="card-body">
                     @foreach (var analysis in TeamResult.IndividualAnalyses.OrderByDescending(a => a.ConfidenceScore))
@@ -51,16 +47,6 @@
                     }
                 </div>
             </div>
-        </div>
-    }
-    
-    @if (TeamResult?.TeamDiscussion?.Any() == true)
-    {
-        <div id="section-team-discussion" class="scroll-section">
-            <TeamDiscussionCard 
-                Discussion="@TeamResult.TeamDiscussion"
-                ExpandedMessages="@expandedMessages"
-                OnToggleMessage="@ToggleMessage" />
         </div>
     }
     
@@ -89,7 +75,6 @@
 @code {
     private string activeTab = "high";
     private Dictionary<string, bool> expandedRecommendations = new();
-    private Dictionary<string, bool> expandedMessages = new();
     private bool isStrategyExpanded = false;
 
     [Parameter] public TeamAnalysisResult? TeamResult { get; set; }
@@ -116,19 +101,6 @@
         else
         {
             expandedRecommendations[recId] = true;
-        }
-        StateHasChanged();
-    }
-
-    private async Task ToggleMessage(string messageId)
-    {
-        if (expandedMessages.ContainsKey(messageId))
-        {
-            expandedMessages[messageId] = !expandedMessages[messageId];
-        }
-        else
-        {
-            expandedMessages[messageId] = true;
         }
         StateHasChanged();
     }

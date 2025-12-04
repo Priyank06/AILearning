@@ -4,39 +4,38 @@
 
 @* Right sidebar with quick navigation, key metrics, and actions *@
 <div class="quick-nav-sidebar">
-    <div class="sticky-top" style="top: 3.5rem; padding-top: 1rem;">
+    <div class="quick-nav-inner">
         <!-- Quick Navigation -->
         <div class="card mb-3 shadow-sm">
             <div class="card-header bg-primary text-white">
-                <h6 class="mb-0"><i class="bi bi-list-ul"></i> Quick Navigation</h6>
+                <h6 class="mb-0"><i class="bi bi-list-ul card-icon"></i> Quick Navigation</h6>
             </div>
             <div class="card-body p-2">
                 <nav class="nav flex-column">
-                    <a class="nav-link quick-nav-link" href="#section-business-context" @onclick:preventDefault="true" @onclick="@(() => ScrollToElement("section-business-context"))">
-                        <i class="bi bi-info-circle"></i> Business Context
+                    <a class="nav-link quick-nav-link @(activeSection == "business-context" ? "active" : "")"
+                       href="#section-business-context" @onclick:preventDefault="true" @onclick="@(() => ScrollToElement("section-business-context"))">
+                        <i class="bi bi-info-circle inline-icon"></i> Business Context
                     </a>
-                    <a class="nav-link quick-nav-link" href="#section-metrics" @onclick:preventDefault="true" @onclick="@(() => ScrollToElement("section-metrics"))">
-                        <i class="bi bi-speedometer2"></i> Metrics
+                    <a class="nav-link quick-nav-link @(activeSection == "metrics" ? "active" : "")"
+                       href="#section-metrics" @onclick:preventDefault="true" @onclick="@(() => ScrollToElement("section-metrics"))">
+                        <i class="bi bi-speedometer2 inline-icon"></i> Metrics
                     </a>
-                    <a class="nav-link quick-nav-link" href="#section-executive-summary" @onclick:preventDefault="true" @onclick="@(() => ScrollToElement("section-executive-summary"))">
-                        <i class="bi bi-file-text"></i> Executive Summary
+                    <a class="nav-link quick-nav-link @(activeSection == "executive-summary" ? "active" : "")"
+                       href="#section-executive-summary" @onclick:preventDefault="true" @onclick="@(() => ScrollToElement("section-executive-summary"))">
+                        <i class="bi bi-file-text inline-icon"></i> Executive Summary
                     </a>
                     @if (TeamResult?.IndividualAnalyses?.Any() == true)
                     {
-                        <a class="nav-link quick-nav-link" href="#section-agent-analysis" @onclick:preventDefault="true" @onclick="@(() => ScrollToElement("section-agent-analysis"))">
-                            <i class="bi bi-person-badge"></i> Agent Analysis
-                        </a>
-                    }
-                    @if (TeamResult?.TeamDiscussion?.Any() == true)
-                    {
-                        <a class="nav-link quick-nav-link" href="#section-team-discussion" @onclick:preventDefault="true" @onclick="@(() => ScrollToElement("section-team-discussion"))">
-                            <i class="bi bi-chat-dots"></i> Team Discussion
+                        <a class="nav-link quick-nav-link @(activeSection == "agent-analysis" ? "active" : "")"
+                           href="#section-agent-analysis" @onclick:preventDefault="true" @onclick="@(() => ScrollToElement("section-agent-analysis"))">
+                            <i class="bi bi-person-badge inline-icon"></i> Agent Analysis
                         </a>
                     }
                     @if (TeamResult?.FinalRecommendations != null)
                     {
-                        <a class="nav-link quick-nav-link" href="#section-recommendations" @onclick:preventDefault="true" @onclick="@(() => ScrollToElement("section-recommendations"))">
-                            <i class="bi bi-list-check"></i> Recommendations
+                        <a class="nav-link quick-nav-link @(activeSection == "recommendations" ? "active" : "")"
+                           href="#section-recommendations" @onclick:preventDefault="true" @onclick="@(() => ScrollToElement("section-recommendations"))">
+                            <i class="bi bi-list-check inline-icon"></i> Recommendations
                         </a>
                     }
                 </nav>
@@ -48,7 +47,7 @@
         {
             <div class="card mb-3 shadow-sm">
                 <div class="card-header bg-success text-white">
-                    <h6 class="mb-0"><i class="bi bi-graph-up"></i> Key Metrics</h6>
+                    <h6 class="mb-0"><i class="bi bi-graph-up card-icon"></i> Key Metrics</h6>
                 </div>
                 <div class="card-body p-3">
                     <div class="mb-2">
@@ -62,10 +61,6 @@
                     <div class="mb-2">
                         <small class="text-muted d-block">Specialist Agents</small>
                         <strong>@(TeamResult.IndividualAnalyses?.Count ?? 0)</strong>
-                    </div>
-                    <div class="mb-2">
-                        <small class="text-muted d-block">Collaboration Messages</small>
-                        <strong>@(TeamResult.TeamDiscussion?.Count ?? 0)</strong>
                     </div>
                     @if (TeamResult.FinalRecommendations != null)
                     {
@@ -85,7 +80,7 @@
         <!-- Quick Actions -->
         <div class="card shadow-sm">
             <div class="card-header bg-dark text-white">
-                <h6 class="mb-0"><i class="bi bi-lightning"></i> Quick Actions</h6>
+                <h6 class="mb-0"><i class="bi bi-lightning card-icon"></i> Quick Actions</h6>
             </div>
             <div class="card-body p-2">
                 <button class="btn btn-primary btn-sm w-100 mb-2" @onclick="OnDownloadReport">
@@ -102,22 +97,55 @@
 @code {
     [Parameter] public TeamAnalysisResult? TeamResult { get; set; }
     [Parameter] public EventCallback OnDownloadReport { get; set; }
+    [Parameter] public EventCallback OnNavigate { get; set; }
+
+    private string activeSection = "business-context";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var dotNetRef = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("initScrollSpy", dotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public void UpdateActiveSection(string sectionId)
+    {
+        activeSection = sectionId;
+        StateHasChanged();
+    }
 
     private async Task ScrollToElement(string elementId)
     {
         await JSRuntime.InvokeVoidAsync("scrollToElement", elementId);
+
+        if (OnNavigate.HasDelegate)
+        {
+            await OnNavigate.InvokeAsync(null);
+        }
     }
 
     private async Task ScrollToTop()
     {
         await JSRuntime.InvokeVoidAsync("scrollToTop");
+
+        if (OnNavigate.HasDelegate)
+        {
+            await OnNavigate.InvokeAsync(null);
+        }
     }
 }
 
 <style>
     .quick-nav-sidebar {
         width: 280px;
-        padding: 0 1rem;
+        padding: 0 1rem 0 0.5rem;
+        position: sticky;
+        top: 2rem;
+        max-height: calc(100vh - 4rem);
+        overflow-y: auto;
     }
 
     .quick-nav-link {
@@ -153,6 +181,16 @@
 
     .card-body {
         font-size: 0.9rem;
+    }
+
+    /* Custom scrollbar styling */
+    .quick-nav-sidebar::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .quick-nav-sidebar::-webkit-scrollbar-thumb {
+        background-color: #dee2e6;
+        border-radius: 3px;
     }
 
     @@media (max-width: 1200px) {
