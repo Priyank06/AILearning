@@ -43,10 +43,4 @@ namespace PoC1_LegacyAnalyzer_Web.Models
         public long EstimatedSequentialTimeMs { get; set; }
         public double ParallelSpeedup { get; set; }
     }
-
-    public class TeamAnalysisResult
-    {
-        // ...existing properties...
-        public PerformanceMetrics PerformanceMetrics { get; set; } = new PerformanceMetrics();
-    }
 }

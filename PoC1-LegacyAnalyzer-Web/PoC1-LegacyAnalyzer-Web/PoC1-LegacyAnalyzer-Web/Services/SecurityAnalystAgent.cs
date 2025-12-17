@@ -44,10 +44,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         {
             var template = _agentConfig.AgentPromptTemplates["security"].AnalysisPrompt;
             var prompt = template
-                .Replace("{agentPersona}", AgentPersona)
-                .Replace("{code}", code)
-                .Replace("{complianceStandards}", complianceStandards)
-                .Replace("{businessContext}", businessContext);
+                .Replace("{agentPersona}", AgentPersona).Replace("{code}", code)
+                .Replace("{complianceStandards}", complianceStandards).Replace("{businessContext}", businessContext);
 
             var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);

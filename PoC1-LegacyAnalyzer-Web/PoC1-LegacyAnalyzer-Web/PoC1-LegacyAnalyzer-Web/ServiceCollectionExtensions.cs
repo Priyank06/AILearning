@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PoC1_LegacyAnalyzer_Web.Models;
+using System.Net.Http;
 
 namespace PoC1_LegacyAnalyzer_Web
 {
@@ -117,39 +118,53 @@ namespace PoC1_LegacyAnalyzer_Web
         /// </summary>
         public static IServiceCollection AddSemanticKernel(this IServiceCollection services, IConfiguration configuration)
         {
-            // Create HttpClient with 5 minute timeout for all LLM calls
-            var httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(300) // 5 minutes
-            };
+            // Configuration knobs
+            int maxConnectionsPerServer = configuration.GetValue<int?>("AgentConfiguration:MaxConnectionsPerServer") ?? 8;
+            TimeSpan httpTimeout = TimeSpan.FromSeconds(configuration.GetValue<int?>("AgentConfiguration:HttpTimeoutSeconds") ?? 300);
 
-            // Register HttpClient for Azure OpenAI
-            services.AddSingleton<HttpClient>(httpClient);
+            // Register named HttpClients for each agent
+            services.AddHttpClient("SecurityAgent", c => c.Timeout = httpTimeout)
+                .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+                {
+                    MaxConnectionsPerServer = maxConnectionsPerServer
+                });
+            services.AddHttpClient("PerformanceAgent", c => c.Timeout = httpTimeout)
+                .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+                {
+                    MaxConnectionsPerServer = maxConnectionsPerServer
+                });
+            services.AddHttpClient("ArchitectureAgent", c => c.Timeout = httpTimeout)
+                .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+                {
+                    MaxConnectionsPerServer = maxConnectionsPerServer
+                });
 
-            // Register IChatCompletionService for AIAnalysisService
+            // Register IChatCompletionService for AIAnalysisService (uses default client)
             services.AddScoped<IChatCompletionService>(sp =>
             {
                 var config = sp.GetRequiredService<IConfiguration>();
                 var keyVaultService = sp.GetRequiredService<IKeyVaultService>();
-                
-                // Try Key Vault first, then fallback to configuration
-                var endpoint = keyVaultService.GetSecretAsync("App--AzureOpenAI--Endpoint").GetAwaiter().GetResult() 
+
+                var endpoint = keyVaultService.GetSecretAsync("App--AzureOpenAI--Endpoint").GetAwaiter().GetResult()
                     ?? config["AzureOpenAI:Endpoint"]
-                    ?? throw new InvalidOperationException("Azure OpenAI endpoint is not configured. Set 'App--AzureOpenAI--Endpoint' in Key Vault or 'AzureOpenAI:Endpoint' in configuration.");
-                
-                var apiKey = keyVaultService.GetSecretAsync("App--AzureOpenAI--ApiKey").GetAwaiter().GetResult() 
+                    ?? throw new InvalidOperationException("Azure OpenAI endpoint is not configured.");
+                var apiKey = keyVaultService.GetSecretAsync("App--AzureOpenAI--ApiKey").GetAwaiter().GetResult()
                     ?? config["AzureOpenAI:ApiKey"]
-                    ?? throw new InvalidOperationException("Azure OpenAI API key is not configured. Set 'App--AzureOpenAI--ApiKey' in Key Vault or 'AzureOpenAI:ApiKey' in configuration.");
-                
+                    ?? throw new InvalidOperationException("Azure OpenAI API key is not configured.");
                 var deployment = keyVaultService.GetSecretAsync("App--AzureOpenAI--Deployment").GetAwaiter().GetResult()
                     ?? config["AzureOpenAI:Deployment"]
                     ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
-                    ?? throw new InvalidOperationException("Azure OpenAI deployment is not configured. Set 'App--AzureOpenAI--Deployment' in Key Vault or 'AzureOpenAI:Deployment' in configuration.");
+                    ?? throw new InvalidOperationException("Azure OpenAI deployment is not configured.");
+
+                // Use default HttpClientFactory (per-request)
+                var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+                var httpClient = httpClientFactory.CreateClient();
 
                 return new AzureOpenAIChatCompletionService(
                     deploymentName: deployment,
                     endpoint: endpoint,
-                    apiKey: apiKey
+                    apiKey: apiKey,
+                    httpClient: httpClient
                 );
             });
 
@@ -170,16 +185,12 @@ namespace PoC1_LegacyAnalyzer_Web
                 return builder.Build();
             });
 
-            // Optionally, add a delegating handler to log slow requests
-            httpClient.DefaultRequestHeaders.Add("X-SK-Timeout", "300s");
+            // Remove singleton HttpClient registration
 
-            // Register a handler to log if any LLM call exceeds 200 seconds
+            // Optionally, add a delegating handler to log slow requests
             services.AddTransient<LoggingTimeoutHandler>();
             services.AddHttpClient("AzureOpenAI")
                 .AddHttpMessageHandler<LoggingTimeoutHandler>();
-
-            // Use the handler in your Kernel setup if supported
-            // (If using KernelBuilder, pass the HttpClient and handler)
 
             return services;
         }

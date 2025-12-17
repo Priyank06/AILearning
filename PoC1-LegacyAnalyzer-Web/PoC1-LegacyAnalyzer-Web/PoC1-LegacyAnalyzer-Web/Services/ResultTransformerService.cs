@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 using PoC1_LegacyAnalyzer_Web.Models;
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.Hosting; // For IHostEnvironment
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -17,10 +19,15 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly SecurityAnalystConfig _securityConfig;
         private readonly PerformanceAnalystConfig _performanceConfig;
         private readonly ArchitecturalAnalystConfig _architecturalConfig;
+        private readonly IHostEnvironment? _env;
 
-        public ResultTransformerService(ILogger<ResultTransformerService> logger, IConfiguration configuration)
+        public ResultTransformerService(
+            ILogger<ResultTransformerService> logger,
+            IConfiguration configuration,
+            IHostEnvironment? env = null)
         {
             _logger = logger;
+            _env = env;
 
             // Load configurations
             _securityConfig = new SecurityAnalystConfig();
@@ -35,33 +42,229 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
         public SpecialistAnalysisResult TransformToResult(string rawAnalysis, string agentName, string specialty)
         {
+            if (_env?.IsDevelopment() == true)
+            {
+                _logger.LogInformation("Raw LLM Analysis Response (truncated):\n{Raw}", Truncate(rawAnalysis, 8000));
+            }
+
             try
             {
-                var result = new SpecialistAnalysisResult
+                var cleanedJson = CleanPotentialJson(rawAnalysis);
+                var options = new JsonSerializerOptions
                 {
-                    AgentName = agentName,
-                    Specialty = specialty,
-                    AnalysisTimestamp = DateTime.UtcNow,
-                    ConfidenceScore = CalculateConfidenceScore(rawAnalysis, specialty),
-                    BusinessImpact = ExtractBusinessImpact(rawAnalysis, specialty),
-                    EstimatedEffort = EstimateEffort(rawAnalysis, specialty),
-                    Priority = DeterminePriority(rawAnalysis),
-                    KeyFindings = ExtractFindings(rawAnalysis, specialty),
-                    Recommendations = ExtractRecommendations(rawAnalysis, specialty),
-                    RiskLevel = AssessRisk(rawAnalysis, specialty),
-                    SpecialtyMetrics = CalculateSpecialtyMetrics(rawAnalysis, specialty)
+                    PropertyNameCaseInsensitive = true,
+                    AllowTrailingCommas = true,
+                    ReadCommentHandling = JsonCommentHandling.Skip
                 };
+                var structured = JsonSerializer.Deserialize<LLMStructuredResponse>(cleanedJson, options);
+                if (structured != null && structured.ConfidenceScore > 0)
+                {
+                    // --- PATCH START ---
+                    var findings = structured.Findings ?? new List<Finding>();
+                    if (findings.Count == 0 && specialty.Equals("security", StringComparison.OrdinalIgnoreCase))
+                    {
+                        findings.Add(new Finding
+                        {
+                            Category = "Security",
+                            Description = "No security issues were detected in the provided context.",
+                            Severity = "LOW",
+                            Location = "",
+                            Evidence = new List<string>()
+                        });
+                    }
+                    // --- PATCH END ---
 
-                _logger.LogInformation("Transformed analysis for {AgentName} with confidence: {Confidence}%", 
-                    agentName, result.ConfidenceScore);
-
-                return result;
+                    return new SpecialistAnalysisResult
+                    {
+                        AgentName = agentName,
+                        Specialty = specialty,
+                        ConfidenceScore = structured.ConfidenceScore,
+                        BusinessImpact = !string.IsNullOrWhiteSpace(structured.BusinessImpact)
+                            ? structured.BusinessImpact
+                            : ExtractBusinessImpact(rawAnalysis, specialty),
+                        KeyFindings = findings,
+                        Recommendations = structured.Recommendations ?? new List<Recommendation>()
+                    };
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to transform analysis result for {AgentName}", agentName);
-                return CreateErrorResult(ex.Message, agentName, specialty);
+                _logger.LogWarning(ex, "Failed to parse LLM response as JSON. Falling back to text parsing.");
             }
+
+            // Fallback: Parse from unstructured text
+            return ParseFromUnstructuredText(rawAnalysis, agentName, specialty);
+        }
+
+        // Helper: Clean LLM output for JSON parsing
+        private string CleanPotentialJson(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return "{}";
+            var cleaned = input.Trim();
+
+            // Remove Markdown code fences (```json ... ``')
+            cleaned = Regex.Replace(cleaned, @"^```json\s*|```$", "", RegexOptions.IgnoreCase | RegexOptions.Multiline).Trim();
+            cleaned = Regex.Replace(cleaned, @"^```[\w]*\s*|```$", "", RegexOptions.IgnoreCase | RegexOptions.Multiline).Trim();
+
+            // Remove any leading/trailing non-JSON text
+            var firstBrace = cleaned.IndexOf('{');
+            var lastBrace = cleaned.LastIndexOf('}');
+            if (firstBrace >= 0 && lastBrace > firstBrace)
+            {
+                cleaned = cleaned.Substring(firstBrace, lastBrace - firstBrace + 1);
+            }
+
+            // Remove trailing commas in objects/arrays
+            cleaned = Regex.Replace(cleaned, @",(\s*[\]}])", "$1");
+
+            // Optionally normalize quotes (rarely needed)
+            // cleaned = cleaned.Replace("“", "\"").Replace("”", "\"").Replace("‘", "'").Replace("’", "'");
+
+            return cleaned;
+        }
+
+        // Helper: Fallback parsing from unstructured text
+        private SpecialistAnalysisResult ParseFromUnstructuredText(string rawAnalysis, string agentName, string specialty)
+        {
+            var findings = ExtractFindingsFromText(rawAnalysis, specialty);
+            var recommendations = ExtractRecommendations(rawAnalysis, specialty);
+
+            return new SpecialistAnalysisResult
+            {
+                AgentName = agentName,
+                Specialty = specialty,
+                ConfidenceScore = CalculateConfidenceScore(rawAnalysis, specialty),
+                BusinessImpact = ExtractBusinessImpact(rawAnalysis, specialty),
+                KeyFindings = findings,
+                Recommendations = recommendations
+            };
+        }
+
+        // Improved findings extraction: parse LLM prose for findings
+        private List<Finding> ExtractFindingsFromText(string analysis, string specialty)
+        {
+            var findings = new List<Finding>();
+            if (string.IsNullOrWhiteSpace(analysis)) return findings;
+
+            // Patterns for findings
+            var patterns = new[]
+            {
+                new { Regex = new Regex(@"Finding:\s*(.+?)(?=(?:\nFinding:|\nRecommendation:|\nIssue:|\nProblem:|$))", RegexOptions.Singleline | RegexOptions.IgnoreCase), Label = "Finding:" },
+                new { Regex = new Regex(@"Issue:\s*(.+?)(?=(?:\nIssue:|\nFinding:|\nRecommendation:|\nProblem:|$))", RegexOptions.Singleline | RegexOptions.IgnoreCase), Label = "Issue:" },
+                new { Regex = new Regex(@"Problem:\s*(.+?)(?=(?:\nProblem:|\nIssue:|\nFinding:|\nRecommendation:|$))", RegexOptions.Singleline | RegexOptions.IgnoreCase), Label = "Problem:" },
+                new { Regex = new Regex(@"^\d+\.\s*(.+?)(?=(?:\n\d+\.|\nRecommendation:|$))", RegexOptions.Multiline | RegexOptions.Singleline), Label = "Numbered" },
+                new { Regex = new Regex(@"^[-*]\s+(.+?)(?=(?:\n[-*]\s+|$))", RegexOptions.Multiline | RegexOptions.Singleline), Label = "Bullet" }
+            };
+
+            var matches = new List<string>();
+            foreach (var pat in patterns)
+            {
+                foreach (Match m in pat.Regex.Matches(analysis))
+                {
+                    var text = m.Groups[1].Value.Trim();
+                    if (!string.IsNullOrWhiteSpace(text))
+                        matches.Add(text);
+                }
+            }
+
+            // If no matches, fallback to sentence-based heuristics
+            if (matches.Count == 0)
+            {
+                // Split by sentences, look for "vulnerability", "issue", "problem", etc.
+                var sentences = Regex.Split(analysis, @"(?<=[.!?])\s+");
+                foreach (var s in sentences)
+                {
+                    if (Regex.IsMatch(s, @"vulnerability|issue|problem|risk|flaw|defect", RegexOptions.IgnoreCase))
+                        matches.Add(s.Trim());
+                }
+            }
+
+            foreach (var findingText in matches.Distinct())
+            {
+                findings.Add(new Finding
+                {
+                    Category = DetermineCategoryFromText(findingText, specialty),
+                    Description = findingText,
+                    Severity = DetermineSeverityFromText(findingText),
+                    Location = ExtractLocationFromText(findingText),
+                    Evidence = ExtractEvidenceFromText(findingText, analysis)
+                });
+            }
+
+            return findings;
+        }
+
+        // Helper: Determine category from finding text
+        private string DetermineCategoryFromText(string text, string specialty)
+        {
+            if (text.Contains("SQL injection", StringComparison.OrdinalIgnoreCase)) return "SQL Injection";
+            if (text.Contains("authentication", StringComparison.OrdinalIgnoreCase)) return "Authentication";
+            if (text.Contains("authorization", StringComparison.OrdinalIgnoreCase)) return "Authorization";
+            if (text.Contains("performance", StringComparison.OrdinalIgnoreCase)) return "Performance";
+            if (text.Contains("architecture", StringComparison.OrdinalIgnoreCase)) return "Architecture";
+            if (text.Contains("pattern", StringComparison.OrdinalIgnoreCase)) return "Pattern";
+            if (text.Contains("scalability", StringComparison.OrdinalIgnoreCase)) return "Scalability";
+            if (text.Contains("memory", StringComparison.OrdinalIgnoreCase)) return "Memory";
+            if (text.Contains("design", StringComparison.OrdinalIgnoreCase)) return "Design";
+            // Fallback to specialty
+            return specialty;
+        }
+
+        // Helper: Determine severity from finding text
+        private string DetermineSeverityFromText(string text)
+        {
+            if (Regex.IsMatch(text, @"critical|severe|urgent|dangerous", RegexOptions.IgnoreCase)) return "CRITICAL";
+            if (Regex.IsMatch(text, @"high|important|significant", RegexOptions.IgnoreCase)) return "HIGH";
+            if (Regex.IsMatch(text, @"medium|moderate", RegexOptions.IgnoreCase)) return "MEDIUM";
+            if (Regex.IsMatch(text, @"low|minor|trivial", RegexOptions.IgnoreCase)) return "LOW";
+            return "MEDIUM";
+        }
+
+        // Helper: Extract location from finding text (file, line, class, method)
+        private string ExtractLocationFromText(string text)
+        {
+            // Look for "in <FileName> line <number>" or "at <FileName>:<number>"
+            var fileLine = Regex.Match(text, @"(\w+\.(cs|js|ts|py|java|cpp|h|cshtml))\s*(line|:)?\s*(\d+)?", RegexOptions.IgnoreCase);
+            if (fileLine.Success)
+            {
+                var file = fileLine.Groups[1].Value;
+                var line = fileLine.Groups[4].Success ? $" line {fileLine.Groups[4].Value}" : "";
+                return $"{file}{line}".Trim();
+            }
+            // Look for class/method
+            var classMatch = Regex.Match(text, @"class\s+(\w+)", RegexOptions.IgnoreCase);
+            if (classMatch.Success) return $"Class {classMatch.Groups[1].Value}";
+            var methodMatch = Regex.Match(text, @"method\s+(\w+)", RegexOptions.IgnoreCase);
+            if (methodMatch.Success) return $"Method {methodMatch.Groups[1].Value}";
+            return "";
+        }
+
+        // Helper: Extract evidence (first 200 chars or code block)
+        private List<string> ExtractEvidenceFromText(string findingText, string fullText)
+        {
+            var evidence = new List<string>();
+            // Try to find code block near findingText
+            var idx = fullText.IndexOf(findingText, StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0)
+            {
+                // Look for code block after finding
+                var after = fullText.Substring(idx);
+                var codeBlock = Regex.Match(after, @"```[a-zA-Z]*\s*([\s\S]+?)```", RegexOptions.Multiline);
+                if (codeBlock.Success)
+                {
+                    evidence.Add(codeBlock.Groups[1].Value.Trim());
+                }
+            }
+            // Always add a concise snippet
+            evidence.Add(findingText.Length > 200 ? findingText.Substring(0, 200) : findingText);
+            return evidence.Distinct().ToList();
+        }
+
+        // Truncate helper for logging
+        private string Truncate(string input, int maxLen)
+        {
+            if (string.IsNullOrEmpty(input)) return "";
+            return input.Length <= maxLen ? input : input.Substring(0, maxLen) + "...";
         }
 
         public SpecialistAnalysisResult CreateErrorResult(string errorMessage, string agentName, string specialty)

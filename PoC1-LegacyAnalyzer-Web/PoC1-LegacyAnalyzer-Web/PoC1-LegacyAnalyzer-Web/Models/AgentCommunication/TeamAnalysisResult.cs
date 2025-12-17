@@ -2,19 +2,6 @@
 
 namespace PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
 {
-    public class PerformanceMetrics
-    {
-        public long PreprocessingTimeMs { get; set; }
-        public long AgentAnalysisTimeMs { get; set; }
-        public long PeerReviewTimeMs { get; set; }
-        public long SynthesisTimeMs { get; set; }
-        public long ExecutiveSummaryTimeMs { get; set; }
-        public long TotalTimeMs { get; set; }
-        public int TotalLLMCalls { get; set; }
-        public long EstimatedSequentialTimeMs { get; set; }
-        public double ParallelSpeedup { get; set; }
-    }
-
     public class TeamAnalysisResult
     {
         public string ConversationId { get; set; } = "";
@@ -26,6 +13,6 @@ namespace PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
         public int OverallConfidenceScore { get; set; }
         public string ExecutiveSummary { get; set; } = "";
         public TokenUsage? TokenUsage { get; set; }
-        public PerformanceMetrics PerformanceMetrics { get; set; } = new PerformanceMetrics();
+        public PerformanceMetrics PerformanceMetrics { get; set; } = new PerformanceMetrics();        
     }
 }

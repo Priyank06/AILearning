@@ -3,12 +3,10 @@ using Microsoft.SemanticKernel.ChatCompletion;
 using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication;
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
 using PoC1_LegacyAnalyzer_Web.Models;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using System.ComponentModel;
 using System.Text.Json;
 using Microsoft.AspNetCore.Components.Forms;
-using System.Runtime.CompilerServices;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -84,20 +82,19 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             IProgress<string>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Starting team analysis coordination for objective: {Objective}", businessObjective);
+            var orchestrationSw = System.Diagnostics.Stopwatch.StartNew();
+            _logger.LogInformation("[Orchestrator] Team analysis STARTED at {UtcNow}", DateTime.UtcNow);
 
             var conversationId = Guid.NewGuid().ToString();
-            var teamResult = new PoC1_LegacyAnalyzer_Web.Models.AgentCommunication.TeamAnalysisResult
+            var teamResult = new TeamAnalysisResult
             {
                 ConversationId = conversationId
             };
 
             try
             {
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                var perfMetrics = new PoC1_LegacyAnalyzer_Web.Models.AgentCommunication.PerformanceMetrics();
+                var perfMetrics = new PerformanceMetrics();
                 int llmCalls = 0;
-                var orchestrationSw = System.Diagnostics.Stopwatch.StartNew();
 
                 // Preprocessing phase
                 var preprocessingSw = System.Diagnostics.Stopwatch.StartNew();
@@ -106,38 +103,52 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 preprocessingSw.Stop();
                 perfMetrics.PreprocessingTimeMs = preprocessingSw.ElapsedMilliseconds;
 
-                _logger.LogInformation("Preprocessed {FileCount} files in {ElapsedMs}ms, extracted metadata", files.Count, preprocessingSw.ElapsedMilliseconds);
+                _logger.LogInformation("[Orchestrator] Preprocessed {FileCount} files in {ElapsedMs}ms", files.Count, preprocessingSw.ElapsedMilliseconds);
                 progress?.Report($"Preprocessed {files.Count} files in {preprocessingSw.ElapsedMilliseconds}ms");
 
-                // Step 1: Create analysis plan (use compact summary of metadata)
+                // Step 1: Create analysis plan
                 var codeContext = $"Preprocessed {metadata.Count} files, token-optimized for agent routing.";
                 var analysisPlanSw = System.Diagnostics.Stopwatch.StartNew();
-                var analysisPlan = await CreateAnalysisPlanAsync(businessObjective, codeContext); llmCalls++;
+                var analysisPlan = await CreateAnalysisPlanAsync(businessObjective, codeContext);
+                llmCalls++;
                 analysisPlanSw.Stop();
+
                 // Step 2: Execute specialist analyses in parallel
-                var agentAnalysisSw = System.Diagnostics.Stopwatch.StartNew();
+                var agentAnalysisSw = System.Diagnostics.Stopwatch.StartNew();                
+                var agentTaskStartTime = DateTime.UtcNow;
+
                 var specialistTasks = requiredSpecialties
                     .Where(specialty => _agentRegistry.IsRegistered(specialty))
                     .Select(async specialty =>
                     {
+                        var taskCreatedAt = DateTime.UtcNow;
+                        _logger.LogInformation("[Agent:{Specialty}] TASK CREATED at {UtcNow}", specialty, taskCreatedAt);
+
                         var agentData = await _preprocessing.GetAgentSpecificData(metadata, specialty);
                         var filteredCount = agentData.Split('\n').Length;
                         var reduction = metadata.Count > 0 ? 100 - (filteredCount * 100 / metadata.Count) : 0;
-                        _logger.LogInformation("Filtered {Total} files to {Filtered} for {Specialty} agent ({Reduction}% reduction)",
-                            metadata.Count, filteredCount, specialty, reduction);
+                        _logger.LogInformation("[Agent:{Specialty}] Filtered {Total} files to {Filtered} ({Reduction}% reduction)", specialty, metadata.Count, filteredCount, reduction);
                         progress?.Report($"Filtered {metadata.Count} files to {filteredCount} for {specialty} agent ({reduction}% reduction)");
-                        return await ExecuteSpecialistAnalysisAsync(specialty, agentData, businessObjective, cancellationToken);
+
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                        var result = await ExecuteSpecialistAnalysisAsync(specialty, agentData, businessObjective, cancellationToken);
+                        sw.Stop();                        
+
+                        return result;
                     })
                     .ToList();
+
+                // All agent tasks are started immediately above
+                _logger.LogInformation("[Orchestrator] All specialist agent tasks CREATED at {UtcNow}", agentTaskStartTime);
+
                 var specialistResults = (await Task.WhenAll(specialistTasks)).OfType<SpecialistAnalysisResult>().ToArray();
                 agentAnalysisSw.Stop();
-                perfMetrics.AgentAnalysisTimeMs = agentAnalysisSw.ElapsedMilliseconds;
-                _logger.LogInformation("Completed {Count} specialist analyses", specialistResults.Length);
+                perfMetrics.AgentAnalysisTimeMs = agentAnalysisSw.ElapsedMilliseconds;                
 
                 // Assign individual analyses to team result
                 teamResult.IndividualAnalyses = specialistResults.ToList();
 
-                // Step 3: Peer review discussion
+                // Step 3: Peer review discussion (starts after all agents complete)
                 var peerReviewSw = System.Diagnostics.Stopwatch.StartNew();
                 var discussion = await _communicationCoordinator.FacilitateAgentDiscussionAsync(
                     $"Code Analysis for: {businessObjective}",
@@ -148,16 +159,14 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 perfMetrics.PeerReviewTimeMs = peerReviewSw.ElapsedMilliseconds;
                 teamResult.TeamDiscussion = discussion.Messages;
 
-                // Step 4 & 6: Synthesis and executive summary in parallel
-                // Note: IndividualAnalyses must be populated before generating executive summary
-                _logger.LogInformation("Executing synthesis and summary in parallel");
+                // Step 4 & 6: Synthesis and executive summary in parallel (after agent results)
+                _logger.LogInformation("[Orchestrator] Starting synthesis and executive summary in parallel at {UtcNow}", DateTime.UtcNow);
                 var synthesisSw = System.Diagnostics.Stopwatch.StartNew();
                 var synthesisTask = _synthesizer.SynthesizeRecommendationsAsync(
                     specialistResults.ToList(),
                     businessObjective,
                     cancellationToken);
                 var summarySw = System.Diagnostics.Stopwatch.StartNew();
-                // Executive summary generation now has access to IndividualAnalyses
                 var summaryTask = _summaryGenerator.GenerateAsync(
                     teamResult,
                     businessObjective,
@@ -181,23 +190,22 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 {
                     synthesisSw.Stop();
                     summarySw.Stop();
-                    _logger.LogError(ex, "Error during parallel synthesis/summary");
+                    _logger.LogError(ex, "[Orchestrator] Error during parallel synthesis/summary");
                     if (synthesisTask.IsFaulted)
                         synthesisEx = synthesisTask.Exception;
                     if (summaryTask.IsFaulted)
                         summaryEx = summaryTask.Exception;
                 }
                 var parallelTimeMs = Math.Max(synthesisSw.ElapsedMilliseconds, summarySw.ElapsedMilliseconds);
-                _logger.LogInformation("Completed synthesis and summary in {ElapsedMs}ms (parallel, sequential estimate: {SeqMs}ms)",
-                    parallelTimeMs, 35000);
+                _logger.LogInformation("[Orchestrator] Synthesis and summary completed in {ElapsedMs}ms (parallel, sequential estimate: {SeqMs}ms)", parallelTimeMs, 35000);
 
                 if (recommendations != null)
                 {
                     // Generate implementation strategy if not already generated
-                    if (string.IsNullOrWhiteSpace(recommendations.ImplementationStrategy) || 
+                    if (string.IsNullOrWhiteSpace(recommendations.ImplementationStrategy) ||
                         recommendations.ImplementationStrategy == "Implementation strategy to be generated.")
                     {
-                        _logger.LogInformation("Generating implementation strategy for consolidated recommendations");
+                        _logger.LogInformation("[Orchestrator] Generating implementation strategy for consolidated recommendations");
                         try
                         {
                             recommendations.ImplementationStrategy = await GenerateImplementationStrategyAsync(
@@ -207,19 +215,19 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "Failed to generate implementation strategy");
+                            _logger.LogError(ex, "[Orchestrator] Failed to generate implementation strategy");
                             recommendations.ImplementationStrategy = "Implementation strategy generation failed. Please try again.";
                         }
                     }
                     teamResult.FinalRecommendations = recommendations;
                 }
                 else if (synthesisEx != null)
-                    _logger.LogError(synthesisEx, "Synthesis failed, recommendations not set");
+                    _logger.LogError(synthesisEx, "[Orchestrator] Synthesis failed, recommendations not set");
 
                 if (summary != null)
                     teamResult.ExecutiveSummary = summary;
                 else if (summaryEx != null)
-                    _logger.LogError(summaryEx, "Summary failed, executive summary not set");
+                    _logger.LogError(summaryEx, "[Orchestrator] Summary failed, executive summary not set");
 
                 // Step 5: Calculate consensus metrics
                 teamResult.Consensus = _consensusCalculator.CalculateConsensusMetrics(discussion, specialistResults);
@@ -230,18 +238,10 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 orchestrationSw.Stop();
                 perfMetrics.TotalTimeMs = orchestrationSw.ElapsedMilliseconds;
                 perfMetrics.TotalLLMCalls = llmCalls;
-                // Sequential estimates (example values, adjust as needed)
-                perfMetrics.EstimatedSequentialTimeMs = perfMetrics.PreprocessingTimeMs +
-                    (perfMetrics.AgentAnalysisTimeMs * specialistResults.Length) +
-                    (perfMetrics.PeerReviewTimeMs * specialistResults.Length) +
-                    (perfMetrics.SynthesisTimeMs + perfMetrics.ExecutiveSummaryTimeMs);
-                perfMetrics.ParallelSpeedup = perfMetrics.EstimatedSequentialTimeMs > 0
-                    ? Math.Round((double)perfMetrics.EstimatedSequentialTimeMs / perfMetrics.TotalTimeMs, 2)
+                perfMetrics.ParallelSpeedup = perfMetrics.AgentAnalysisTimeMs > 0
+                    ? Math.Round((double)(perfMetrics.AgentAnalysisTimeMs * specialistResults.Length) / perfMetrics.AgentAnalysisTimeMs, 2)
                     : 1.0;
                 teamResult.PerformanceMetrics = perfMetrics;
-
-                _logger.LogInformation("Performance: {TotalTimeMs}ms total, {Speedup}x speedup", perfMetrics.TotalTimeMs, perfMetrics.ParallelSpeedup);
-                _logger.LogInformation("Performance Metrics: {@perfMetrics}", perfMetrics);
 
                 // Add performance summary to executive summary
                 if (!string.IsNullOrEmpty(teamResult.ExecutiveSummary))
@@ -258,7 +258,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Team analysis coordination failed");
+                _logger.LogError(ex, "[Orchestrator] Team analysis coordination failed");
                 throw;
             }
         }
@@ -290,8 +290,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
                 // Log token count reduction
                 int tokenCount = filteredMetadataSummary?.Length > 0 ? filteredMetadataSummary.Length / 4 : 0;
-                _logger.LogInformation("Routing filtered metadata summary to {Specialty} agent. Token count: {TokenCount}", specialty, tokenCount);
+                _logger.LogInformation("[Agent:{Specialty}] Routing filtered metadata summary. Token count: {TokenCount}", specialty, tokenCount);
 
+                // Diagnostics: API call is about to start (already logged in orchestration)
                 var analysisResultString = await agent.AnalyzeAsync(filteredMetadataSummary, businessObjective, cancellationToken);
                 var analysisResult = JsonSerializer.Deserialize<SpecialistAnalysisResult>(
                     analysisResultString,
@@ -307,7 +308,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to execute {Specialty} analysis", specialty);
+                _logger.LogError(ex, "[Agent:{Specialty}] Failed to execute analysis", specialty);
 
                 // Return error result instead of failing completely
                 return new SpecialistAnalysisResult
@@ -409,7 +410,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         {
             // Build detailed recommendation context with actual recommendation details
             var recDetails = new System.Text.StringBuilder();
-            
+
             if (recommendations.HighPriorityActions?.Any() == true)
             {
                 recDetails.AppendLine("HIGH PRIORITY RECOMMENDATIONS:");
@@ -424,7 +425,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 }
                 recDetails.AppendLine();
             }
-            
+
             if (recommendations.MediumPriorityActions?.Any() == true)
             {
                 recDetails.AppendLine("MEDIUM PRIORITY RECOMMENDATIONS:");
@@ -470,7 +471,7 @@ Do NOT provide generic advice. Focus on the specific recommendations and how to 
                 executionSettings.ExtensionData = new Dictionary<string, object>();
             executionSettings.ExtensionData["max_tokens"] = 1500;
             executionSettings.ExtensionData["temperature"] = 0.4;
-            
+
             var result = await chatCompletion.GetChatMessageContentAsync(prompt, executionSettings, cancellationToken: cancellationToken);
             return result.Content ?? "Implementation strategy generation failed";
         }
@@ -599,6 +600,20 @@ Specialist Agent Findings:
                 initialAnalyses,
                 codeContext,
                 cancellationToken);
+        }
+    }
+
+    // Helper for atomic max update
+    internal static class InterlockedExtensions
+    {
+        public static void UpdateMax(ref int target, int value)
+        {
+            int initialValue, newValue;
+            do
+            {
+                initialValue = target;
+                newValue = Math.Max(initialValue, value);
+            } while (initialValue != Interlocked.CompareExchange(ref target, newValue, initialValue));
         }
     }
 }
