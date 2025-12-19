@@ -1,18 +1,19 @@
 @using PoC1_LegacyAnalyzer_Web.Components.Shared
 @using PoC1_LegacyAnalyzer_Web.Models.MultiAgent
 @using PoC1_LegacyAnalyzer_Web.Helpers
+@using Microsoft.AspNetCore.Components
 
 @* Individual agent analysis display card *@
 <div class="card mb-2">
     <div class="card-body p-2 clickable" @onclick="ToggleExpanded">
         <div class="d-flex align-items-center justify-content-between">
             <div class="d-flex align-items-center gap-2 flex-wrap">
-                <span class="agent-icon">@GetAgentIcon(Analysis.AgentName)</span>
+                <span class="agent-icon">@((MarkupString)GetAgentIcon(Analysis.AgentName))</span>
                 <strong>@Analysis.AgentName</strong>
                 <span class="badge bg-light text-dark border">Confidence: @Analysis.ConfidenceScore%</span>
                 @if (HighPriorityCount > 0)
                 {
-                    <span class="badge bg-danger">⚠️ @HighPriorityCount High Priority</span>
+                    <span class="badge bg-danger"><i class="bi bi-exclamation-triangle-fill"></i> @HighPriorityCount High Priority</span>
                 }
             </div>
             <i class="bi bi-chevron-@(isExpanded ? "up" : "down")"></i>
@@ -130,10 +131,10 @@
     {
         return agentName.ToLower() switch
         {
-            var name when name.Contains("security") => "???",
-            var name when name.Contains("performance") => "?",
-            var name when name.Contains("architectural") || name.Contains("architecture") => "???",
-            _ => "??"
+            var name when name.Contains("security") => "<i class=\"bi bi-shield-check\"></i>",
+            var name when name.Contains("performance") => "<i class=\"bi bi-speedometer2\"></i>",
+            var name when name.Contains("architectural") || name.Contains("architecture") => "<i class=\"bi bi-diagram-3\"></i>",
+            _ => "<i class=\"bi bi-robot\"></i>"
         };
     }
 

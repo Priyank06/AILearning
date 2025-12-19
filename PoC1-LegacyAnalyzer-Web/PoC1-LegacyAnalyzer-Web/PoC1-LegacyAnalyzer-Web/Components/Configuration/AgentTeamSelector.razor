@@ -1,5 +1,5 @@
 @* Agent team selector component *@
-<div class="mb-3">
+<div class="mb-2">
     <label class="form-label fw-bold small">AI Agent Team</label>
     
     @if (DisplayMode == "inline")
@@ -10,21 +10,21 @@
                 <input class="form-check-input" type="checkbox" @bind="includeSecurityAgent" 
                        @bind:after="OnSelectionChanged" id="securityAgentInline">
                 <label class="form-check-label" for="securityAgentInline">
-                    <strong>??? Security</strong>
+                    <strong><i class="bi bi-shield-check"></i> Security</strong>
                 </label>
             </div>
             <div class="form-check form-check-inline">
                 <input class="form-check-input" type="checkbox" @bind="includePerformanceAgent" 
                        @bind:after="OnSelectionChanged" id="performanceAgentInline">
                 <label class="form-check-label" for="performanceAgentInline">
-                    <strong>? Performance</strong>
+                    <strong><i class="bi bi-speedometer2"></i> Performance</strong>
                 </label>
             </div>
             <div class="form-check form-check-inline">
                 <input class="form-check-input" type="checkbox" @bind="includeArchitectureAgent" 
                        @bind:after="OnSelectionChanged" id="architectureAgentInline">
                 <label class="form-check-label" for="architectureAgentInline">
-                    <strong>??? Architecture</strong>
+                    <strong><i class="bi bi-diagram-3"></i> Architecture</strong>
                 </label>
             </div>
         </div>
@@ -38,7 +38,7 @@
                     <input class="form-check-input" type="checkbox" @bind="includeSecurityAgent" 
                            @bind:after="OnSelectionChanged" id="securityAgent">
                     <label class="form-check-label" for="securityAgent">
-                        <strong>??? Security Analyst</strong><br>
+                        <strong><i class="bi bi-shield-check"></i> Security Analyst</strong><br>
                         <small class="text-muted">Vulnerability assessment, compliance analysis</small>
                     </label>
                 </div>
@@ -48,7 +48,7 @@
                     <input class="form-check-input" type="checkbox" @bind="includePerformanceAgent" 
                            @bind:after="OnSelectionChanged" id="performanceAgent">
                     <label class="form-check-label" for="performanceAgent">
-                        <strong>? Performance Analyst</strong><br>
+                        <strong><i class="bi bi-speedometer2"></i> Performance Analyst</strong><br>
                         <small class="text-muted">Bottleneck identification, scalability assessment</small>
                     </label>
                 </div>
@@ -58,7 +58,7 @@
                     <input class="form-check-input" type="checkbox" @bind="includeArchitectureAgent" 
                            @bind:after="OnSelectionChanged" id="architectureAgent">
                     <label class="form-check-label" for="architectureAgent">
-                        <strong>??? Architecture Analyst</strong><br>
+                        <strong><i class="bi bi-diagram-3"></i> Architecture Analyst</strong><br>
                         <small class="text-muted">Design patterns, SOLID principles, code structure</small>
                     </label>
                 </div>
@@ -117,7 +117,7 @@
     /// <summary>
     /// Auto-configures agent team based on objective.
     /// </summary>
-    public void ConfigureForObjective(string objective)
+    public async Task ConfigureForObjective(string objective)
     {
         switch (objective)
         {
@@ -143,5 +143,7 @@
                 break;
         }
         StateHasChanged();
+        // Notify parent component of the change
+        await OnSelectionChanged();
     }
 }

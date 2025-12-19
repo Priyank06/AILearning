@@ -5,11 +5,11 @@
 
 @if (DisplayMode == "compact")
 {
-    <div class="mb-3">
-        <label class="form-label fw-bold small">Upload Files</label>
+    <div class="mb-2">
+        <label class="form-label fw-bold small mb-1">Upload Files</label>
         
         <!-- Inline buttons -->
-        <div class="upload-buttons-compact mb-2">
+        <div class="upload-buttons-compact mb-1">
             <InputFile id="folderInputCompact" OnChange="HandleFolderSelection"
                        multiple accept="@AcceptedTypes" class="d-none" webkitdirectory />
             <label for="folderInputCompact" class="btn btn-outline-primary btn-sm">
@@ -36,13 +36,13 @@
         <!-- Compact horizontal summary (no per-file name list) -->
         @if (selectedFiles.Any())
         {
-            <div class="compact-file-summary d-flex flex-wrap align-items-center gap-2">
+            <div class="compact-file-summary d-flex flex-wrap align-items-center gap-2 mt-1">
                 <span class="file-badge">
                     <i class="bi bi-files"></i>
-                    <span>@selectedFiles.Count files selected</span>
+                    <span>@selectedFiles.Count files</span>
                 </span>
                 <span class="text-muted small">
-                    Total size: @FormattingHelpers.FormatFileSize(selectedFiles.Sum(f => f.Size))
+                    @FormattingHelpers.FormatFileSize(selectedFiles.Sum(f => f.Size))
                 </span>
             </div>
         }

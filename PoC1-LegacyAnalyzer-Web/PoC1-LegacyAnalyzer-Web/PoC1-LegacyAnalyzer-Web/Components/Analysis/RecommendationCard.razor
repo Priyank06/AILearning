@@ -1,5 +1,6 @@
 @using PoC1_LegacyAnalyzer_Web.Models.MultiAgent
 @using PoC1_LegacyAnalyzer_Web.Helpers
+@using Microsoft.AspNetCore.Components
 
 @* Individual recommendation card component *@
 <div class="card mb-2 border-start @GetBorderClass() border-4">
@@ -7,7 +8,7 @@
         <div class="d-flex justify-content-between align-items-center">
             <div class="flex-grow-1">
                 <span class="badge @FormattingHelpers.GetPriorityBadgeClass(Recommendation.Priority) me-2">
-                    @FormattingHelpers.GetPriorityIcon(Recommendation.Priority) @Recommendation.Priority
+                    @((MarkupString)FormattingHelpers.GetPriorityIcon(Recommendation.Priority)) @Recommendation.Priority
                 </span>
                 <strong class="me-2">@Recommendation.Title</strong>
                 <small class="text-muted">

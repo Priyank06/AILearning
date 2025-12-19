@@ -16,12 +16,13 @@
         </small>
     </div>
     <div class="collapse @(isConfigExpanded ? "show" : "")" id="teamConfigContent">
-        <div class="card-body">
+        <div class="card-body py-2">
             <!-- Row 1: Objective + Agents side-by-side -->
-            <div class="row configuration-row">
+            <div class="row configuration-row mb-2">
                 <div class="col-md-6">
                     <BusinessObjectiveSelector 
                         ShowLabel="true"
+                        ShowDescription="false"
                         SelectedObjective="@selectedObjective"
                         CustomObjective="@customObjective"
                         OnObjectiveChange="@OnObjectiveChanged"
@@ -38,13 +39,15 @@
             </div>
             
             <!-- Row 2: File upload compact -->
-            <FileUploadManager 
-                DisplayMode="compact"
-                SelectedFiles="@selectedFiles"
-                MaxFiles="@MaxFiles"
-                MaxFileSizeMB="@MaxFileSizeMB"
-                OnFilesChanged="@OnFilesChanged"
-                OnStatusChanged="@OnStatusChanged" />
+            <div class="mb-2">
+                <FileUploadManager 
+                    DisplayMode="compact"
+                    SelectedFiles="@selectedFiles"
+                    MaxFiles="@MaxFiles"
+                    MaxFileSizeMB="@MaxFileSizeMB"
+                    OnFilesChanged="@OnFilesChanged"
+                    OnStatusChanged="@OnStatusChanged" />
+            </div>
 
             <!-- Row 3: Action button -->
             <div class="d-grid mb-2">
@@ -114,7 +117,23 @@
     protected override void OnInitialized()
     {
         statusMessage = "Multi-agent team ready! Select agents and provide code for comprehensive analysis.";
+        // Initialize with default agents (all three are selected by default)
+        selectedAgents = new List<string> { "security", "performance", "architecture" };
         ValidateConfiguration();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && agentSelector != null)
+        {
+            // Sync initial agent selection from the selector component
+            var initialAgents = agentSelector.GetSelectedAgents();
+            if (initialAgents.Any() && !selectedAgents.SequenceEqual(initialAgents))
+            {
+                selectedAgents = initialAgents;
+                StateHasChanged();
+            }
+        }
     }
 
     private async Task OnObjectiveChanged(string objective)
@@ -122,7 +141,10 @@
         selectedObjective = objective;
         
         // Auto-configure agents based on objective
-        agentSelector?.ConfigureForObjective(objective);
+        if (agentSelector != null)
+        {
+            await agentSelector.ConfigureForObjective(objective);
+        }
         
         ValidateConfiguration();
         StateHasChanged();

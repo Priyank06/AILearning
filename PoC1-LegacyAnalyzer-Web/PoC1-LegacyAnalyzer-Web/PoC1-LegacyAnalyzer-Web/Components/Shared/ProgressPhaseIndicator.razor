@@ -3,7 +3,7 @@
     <div class="mb-2">
         @if (IsCompleted)
         {
-            <span class="text-success">?</span>
+            <i class="bi bi-check-circle-fill text-success"></i>
         }
         else if (IsCurrent)
         {
@@ -11,7 +11,7 @@
         }
         else
         {
-            <span class="text-muted">?</span>
+            <i class="bi bi-circle text-muted"></i>
         }
         <strong class="ms-2">@PhaseName</strong>
     </div>

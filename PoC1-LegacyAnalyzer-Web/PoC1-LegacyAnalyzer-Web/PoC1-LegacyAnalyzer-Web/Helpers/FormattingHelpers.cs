@@ -81,10 +81,10 @@ namespace PoC1_LegacyAnalyzer_Web.Helpers
 
             return priority.ToUpper() switch
             {
-                "CRITICAL" => "??",
-                "HIGH" => "??",
-                "MEDIUM" => "?",
-                "LOW" => "??",
+                "CRITICAL" => "<i class=\"bi bi-exclamation-triangle-fill\"></i>",
+                "HIGH" => "<i class=\"bi bi-exclamation-circle-fill\"></i>",
+                "MEDIUM" => "<i class=\"bi bi-info-circle-fill\"></i>",
+                "LOW" => "<i class=\"bi bi-info-circle\"></i>",
                 _ => ""
             };
         }
