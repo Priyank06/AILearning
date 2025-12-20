@@ -57,7 +57,7 @@ else
                 <i class="bi bi-folder2-open"></i>
             </div>
             <h6>Upload Legacy Code Files</h6>
-            <p class="text-muted mb-3">Select C# files for multi-agent analysis</p>
+            <p class="text-muted mb-3">Select source code files for multi-agent analysis (C#, Python, JavaScript, TypeScript, Java, Go)</p>
 
             <InputFile id="folderInput" OnChange="HandleFolderSelection"
                        multiple accept="@AcceptedTypes" class="d-none" webkitdirectory />
@@ -114,7 +114,8 @@ else
     [Parameter] public List<IBrowserFile> SelectedFiles { get; set; } = new();
     [Parameter] public int MaxFiles { get; set; } = 50;
     [Parameter] public int MaxFileSizeMB { get; set; } = 10;
-    [Parameter] public string AcceptedTypes { get; set; } = ".cs";
+    // Default: enable common code file types for multi-language analysis
+    [Parameter] public string AcceptedTypes { get; set; } = ".cs,.py,.js,.ts,.java,.go";
     [Parameter] public string DisplayMode { get; set; } = "standard"; // "standard" or "compact"
     [Parameter] public EventCallback<List<IBrowserFile>> OnFilesChanged { get; set; }
     [Parameter] public EventCallback<string> OnStatusChanged { get; set; }
@@ -136,15 +137,15 @@ else
 
     private async Task ProcessFileSelection(IEnumerable<IBrowserFile> newFiles, bool isFolder)
     {
-        var csFiles = newFiles.Where(f =>
-            f.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)).ToList();
-
-        // Filter out generated files
-        var sourceFiles = csFiles.Where(f =>
-            !f.Name.Contains(".Designer.") &&
-            !f.Name.Contains(".g.cs") &&
-            !f.Name.Contains("AssemblyInfo.cs")
-        ).ToList();
+        // Allow multiple languages; filter by extension list
+        var allowedExtensions = new[] { ".cs", ".py", ".js", ".ts", ".java", ".go" };
+        var sourceFiles = newFiles.Where(f =>
+                allowedExtensions.Any(ext => f.Name.EndsWith(ext, StringComparison.OrdinalIgnoreCase)) &&
+                !f.Name.Contains(".Designer.", StringComparison.OrdinalIgnoreCase) &&
+                !f.Name.Contains(".g.cs", StringComparison.OrdinalIgnoreCase) &&
+                !f.Name.Contains("AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
+            )
+            .ToList();
 
         // Filter by file size
         var maxFileSizeBytes = MaxFileSizeMB * 1024L * 1024L;
@@ -162,7 +163,7 @@ else
         else
         {
             statusMessage = isFolder 
-                ? $"Loaded {selectedFiles.Count} C# source files from project folder."
+                ? $"Loaded {selectedFiles.Count} source files from project folder."
                 : $"Selected {selectedFiles.Count} individual files.";
             hasError = false;
         }

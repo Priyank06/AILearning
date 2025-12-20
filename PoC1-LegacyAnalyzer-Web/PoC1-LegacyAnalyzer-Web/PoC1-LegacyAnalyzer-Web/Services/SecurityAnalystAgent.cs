@@ -36,9 +36,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             configuration.GetSection("AgentConfiguration").Bind(_agentConfig);
         }
 
-        [KernelFunction, Description("Perform comprehensive security analysis of C# code")]
+        [KernelFunction, Description("Perform comprehensive security analysis of source code")]
         public async Task<string> AnalyzeSecurityVulnerabilities(
-            [Description("C# source code to analyze")] string code,
+            [Description("Source code to analyze (supports multiple languages)")] string code,
             [Description("Security compliance requirements (OWASP, PCI-DSS, etc.)")] string complianceStandards,
             [Description("Business context and risk tolerance")] string businessContext)
         {

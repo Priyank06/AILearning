@@ -44,6 +44,20 @@ namespace PoC1_LegacyAnalyzer_Web
             // Helper services
             services.AddScoped<ITokenEstimationService, TokenEstimationService>();
 
+            // Analysis abstraction: Roslyn + Tree-sitter
+            services.AddSingleton<Services.Analysis.ITreeSitterLanguageRegistry, Services.Analysis.TreeSitterLanguageRegistry>();
+            services.AddSingleton<Services.Analysis.ILanguageDetector, Services.Analysis.LanguageDetector>();
+            
+            // Register analyzers for each language
+            services.AddScoped<Services.Analysis.ICodeAnalyzer, Services.Analysis.RoslynCSharpAnalyzer>();
+            services.AddScoped<Services.Analysis.ICodeAnalyzer, Services.Analysis.TreeSitterPythonAnalyzer>();
+            services.AddScoped<Services.Analysis.ICodeAnalyzer, Services.Analysis.TreeSitterJavaScriptAnalyzer>();
+            services.AddScoped<Services.Analysis.ICodeAnalyzer, Services.Analysis.TreeSitterTypeScriptAnalyzer>();
+            services.AddScoped<Services.Analysis.ICodeAnalyzer, Services.Analysis.TreeSitterJavaAnalyzer>();
+            services.AddScoped<Services.Analysis.ICodeAnalyzer, Services.Analysis.TreeSitterGoAnalyzer>();
+            
+            services.AddScoped<Services.Analysis.IAnalyzerRouter, Services.Analysis.AnalyzerRouter>();
+
             return services;
         }
 

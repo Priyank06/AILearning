@@ -26,7 +26,7 @@
                     <div class="text-center p-4">
                         <i class="bi bi-files display-4 text-success mb-3"></i>
                         <h6>📄 Individual Files</h6>
-                        <p class="text-muted mb-0">Select specific C# source files</p>
+                        <p class="text-muted mb-0">Select specific source code files</p>
                         <small>Manual file selection and upload</small>
                     </div>
                 </div>
@@ -71,7 +71,7 @@
                             <div class="col-md-8">
                                 <strong>Path:</strong> @selectedProjectPath<br>
                                 <strong>Type:</strong> @projectType<br>
-                                <strong>Files Found:</strong> @discoveredFiles.Count C# files
+                                <strong>Files Found:</strong> @discoveredFiles.Count source files
                             </div>
                             <div class="col-md-4 text-end">
                                 <button class="btn btn-success" @onclick="AnalyzeDiscoveredProject">
@@ -96,7 +96,7 @@
 
                 <label for="individualFiles" class="btn btn-outline-primary btn-lg d-block">
                     <i class="bi bi-file-earmark-code me-2"></i>
-                    Select Individual C# Files
+                    Select Individual Source Files
                 </label>
             </div>
         }
@@ -312,11 +312,11 @@
         }
         else if (selectedFiles.Count > 10)
         {
-            projectType = "Large C# Project";
+            projectType = "Large Source Code Project";
         }
         else
         {
-            projectType = "C# Source Files";
+            projectType = "Source Code Files";
         }
     }
 

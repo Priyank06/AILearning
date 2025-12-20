@@ -45,8 +45,8 @@
                             <div style="font-size: 3rem;" class="text-muted mb-3">
                                 <i class="bi bi-folder2-open"></i>
                             </div>
-                            <h6>Upload C# Project Files</h6>
-                            <p class="text-muted mb-3">Select multiple C# files from your project folder</p>
+                            <h6>Upload Source Code Files</h6>
+                            <p class="text-muted mb-3">Select multiple source code files from your project folder (C#, Python, JavaScript, TypeScript, Java, Go)</p>
 
                             <!-- Enhanced file input to allow folder-like selection -->
                             <InputFile id="fileInput" OnChange="HandleFileSelection" multiple accept=".cs" class="d-none" webkitdirectory />
@@ -936,11 +936,11 @@
 
         if (sourceFiles.Count != newFiles.Count())
         {
-            statusMessage = $"Folder selection: Found {sourceFiles.Count} relevant C# source files from {newFiles.Count()} total files.";
+            statusMessage = $"Folder selection: Found {sourceFiles.Count} relevant source files from {newFiles.Count()} total files.";
         }
         else
         {
-            statusMessage = $"Successfully loaded {sourceFiles.Count} C# source files from project folder.";
+            statusMessage = $"Successfully loaded {sourceFiles.Count} source files from project folder.";
         }
 
         // Clear existing and add new files
@@ -1352,11 +1352,11 @@
 
         if (csFiles.Count != newFiles.Count())
         {
-            statusMessage = $"Filtered to {csFiles.Count} C# source files from {newFiles.Count()} total files.";
+            statusMessage = $"Filtered to {csFiles.Count} source files from {newFiles.Count()} total files.";
         }
         else
         {
-            statusMessage = $"Successfully selected {csFiles.Count} C# source files.";
+            statusMessage = $"Successfully selected {csFiles.Count} source files.";
         }
 
         selectedFiles.AddRange(csFiles);

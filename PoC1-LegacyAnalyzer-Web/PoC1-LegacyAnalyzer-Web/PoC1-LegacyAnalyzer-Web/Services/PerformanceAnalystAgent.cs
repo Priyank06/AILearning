@@ -36,7 +36,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
         [KernelFunction, Description("Analyze code for performance bottlenecks and optimization opportunities")]
         public async Task<string> AnalyzePerformanceBottlenecks(
-            [Description("C# source code to analyze")] string code,
+            [Description("Source code to analyze (supports multiple languages)")] string code,
             [Description("Expected performance requirements")] string performanceRequirements,
             [Description("Scalability targets and constraints")] string scalabilityTargets)
         {

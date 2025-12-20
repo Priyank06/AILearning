@@ -39,12 +39,12 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         }
 
         // Delegate to MetadataExtractionService
-        public Task<FileMetadata> ExtractMetadataAsync(IBrowserFile file, string languageHint = "csharp")
+        public Task<FileMetadata> ExtractMetadataAsync(IBrowserFile file, string? languageHint = null)
         {
             return _metadataExtraction.ExtractMetadataAsync(file, languageHint);
         }
 
-        public Task<List<FileMetadata>> ExtractMetadataParallelAsync(List<IBrowserFile> files, string languageHint = "csharp", int maxConcurrency = 5)
+        public Task<List<FileMetadata>> ExtractMetadataParallelAsync(List<IBrowserFile> files, string? languageHint = null, int maxConcurrency = 5)
         {
             return _metadataExtraction.ExtractMetadataParallelAsync(files, languageHint, maxConcurrency);
         }

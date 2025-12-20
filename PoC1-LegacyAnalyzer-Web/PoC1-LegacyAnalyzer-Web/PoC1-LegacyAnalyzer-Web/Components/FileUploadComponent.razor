@@ -15,7 +15,7 @@
 
             <div class="text-center p-4">
                 <div style="font-size: 3rem;" class="text-muted mb-3"><span class="oi oi-folder"></span></div>
-                <h6>Drag & Drop C# Files Here</h6>
+                <h6>Drag & Drop Source Code Files Here</h6>
                 <p class="text-muted">Or click to browse files (max 10 files)</p>
 
                 <InputFile id="fileInput"
@@ -152,11 +152,11 @@
 
         if (csFiles.Count != newFiles.Count())
         {
-            statusMessage = $"Only C# files (.cs) are supported. Added {csFiles.Count} out of {newFiles.Count()} files.";
+            statusMessage = $"Added {csFiles.Count} source files out of {newFiles.Count()} files.";
         }
         else
         {
-            statusMessage = $"Added {csFiles.Count} C# files ready for analysis.";
+            statusMessage = $"Added {csFiles.Count} source files ready for analysis.";
         }
 
         uploadedFiles.AddRange(csFiles);

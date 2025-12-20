@@ -96,10 +96,11 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 var perfMetrics = new PerformanceMetrics();
                 int llmCalls = 0;
 
-                // Preprocessing phase
+                // Preprocessing phase - language detection happens automatically in ExtractMetadataParallelAsync
                 var preprocessingSw = System.Diagnostics.Stopwatch.StartNew();
                 progress?.Report("Preprocessing files...");
-                var metadata = await _preprocessing.ExtractMetadataParallelAsync(files, "csharp");
+                // Language hint is now optional - metadata extraction will auto-detect language for each file
+                var metadata = await _preprocessing.ExtractMetadataParallelAsync(files);
                 preprocessingSw.Stop();
                 perfMetrics.PreprocessingTimeMs = preprocessingSw.ElapsedMilliseconds;
 

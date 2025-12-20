@@ -9,9 +9,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
     public interface ICodeAnalysisService
     {
         /// <summary>
-        /// Analyzes C# source code and extracts structural information.
+        /// Analyzes source code and extracts structural information.
         /// </summary>
-        /// <param name="code">C# source code to analyze</param>
+        /// <param name="code">Source code to analyze (supports multiple languages)</param>
         /// <returns>Analysis result containing classes, methods, and complexity metrics</returns>
         Task<CodeAnalysisResult> AnalyzeCodeAsync(string code);
 

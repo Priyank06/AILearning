@@ -60,9 +60,9 @@
 
                     <!-- Code Input -->
                     <div class="mb-3">
-                        <label class="form-label">Legacy C# Code:</label>
+                        <label class="form-label">Legacy Source Code:</label>
                         <textarea class="form-control font-monospace" rows="12" @bind="codeInput"
-                                  placeholder="Paste your legacy C# code here..." style="font-size: 13px;"></textarea>
+                                  placeholder="Paste your legacy source code here (C#, Python, JavaScript, TypeScript, Java, Go)..." style="font-size: 13px;"></textarea>
                     </div>
 
                     <!-- Action Buttons -->
@@ -705,7 +705,7 @@ namespace LegacyECommerceSystem
     {
         if (string.IsNullOrWhiteSpace(codeInput))
         {
-            statusMessage = "Please enter C# code for agent analysis.";
+            statusMessage = "Please enter source code for agent analysis.";
             return;
         }
 

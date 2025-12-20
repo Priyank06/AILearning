@@ -14,9 +14,17 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         public PatternDetectionService(ILogger<PatternDetectionService> logger)
         {
             _logger = logger;
+            var pythonStrategy = new PythonPatternDetectionStrategy();
+            var multiLangStrategy = new MultiLanguagePatternDetectionStrategy();
+            
             _strategies = new Dictionary<string, IPatternDetectionStrategy>
             {
-                { "csharp", new CSharpPatternDetectionStrategy() }
+                { "csharp", new CSharpPatternDetectionStrategy() },
+                { "python", pythonStrategy },
+                { "javascript", multiLangStrategy },
+                { "typescript", multiLangStrategy },
+                { "java", multiLangStrategy },
+                { "go", multiLangStrategy }
             };
         }
 
@@ -30,19 +38,17 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 return analysis;
             }
 
-            if (!string.Equals(language, "csharp", StringComparison.OrdinalIgnoreCase))
-            {
-                _logger?.LogDebug("Pattern detection for language '{Language}' not supported, returning empty analysis", language);
-                return analysis;
-            }
-
-            if (_strategies.TryGetValue(language.ToLower(), out var strategy))
+            var languageKey = language?.ToLower() ?? "unknown";
+            
+            if (_strategies.TryGetValue(languageKey, out var strategy))
             {
                 strategy.DetectPatterns(code, analysis);
+                _logger?.LogDebug("Pattern detection completed for language '{Language}': {SecurityCount} security, {PerformanceCount} performance, {ArchitectureCount} architecture findings", 
+                    language, analysis.SecurityFindings.Count, analysis.PerformanceFindings.Count, analysis.ArchitectureFindings.Count);
             }
             else
             {
-                _logger?.LogWarning("No pattern detection strategy found for language: {Language}", language);
+                _logger?.LogWarning("No pattern detection strategy found for language: {Language}, returning empty analysis", language);
             }
 
             return analysis;

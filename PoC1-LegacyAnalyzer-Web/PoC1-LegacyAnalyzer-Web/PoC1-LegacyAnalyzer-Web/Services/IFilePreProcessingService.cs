@@ -20,35 +20,37 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// No external AI calls are made; all processing is local and highly performant.
         /// </summary>
         /// <param name="file">The uploaded code file to analyze (IBrowserFile).</param>
-        /// <param name="languageHint">Optional language hint (default: "csharp").</param>
+        /// <param name="languageHint">Optional language hint. If null/empty, language is auto-detected from file extension.</param>
         /// <returns>A <see cref="FileMetadata"/> object containing extracted metadata, code patterns, and complexity metrics.</returns>
         /// <remarks>
         /// Use this method before sending code to any LLM or AI agent to minimize token usage and cost.
         /// Can be executed in parallel for batch file analysis. Results are suitable for caching.
+        /// Language is automatically detected if languageHint is not provided.
         /// <para>Example usage:</para>
         /// <code>
-        /// var metadata = await service.ExtractMetadataAsync(file, "csharp");
+        /// var metadata = await service.ExtractMetadataAsync(file); // Auto-detects language
         /// </code>
         /// </remarks>
-        Task<FileMetadata> ExtractMetadataAsync(IBrowserFile file, string languageHint = "csharp");
+        Task<FileMetadata> ExtractMetadataAsync(IBrowserFile file, string? languageHint = null);
 
         /// <summary>
-        /// Extracts metadata from multiple code files in parallel using local Roslyn static analysis, with a configurable concurrency limit.
+        /// Extracts metadata from multiple code files in parallel using unified analyzers (Roslyn for C#, TreeSitter for others), with a configurable concurrency limit.
         /// This method leverages Task.WhenAll for high throughput and processes files in parallel, but limits the number of concurrent file reads using SemaphoreSlim.
         /// Each file is processed independently; errors in one file do not affect others.
+        /// Language is auto-detected for each file if languageHint is not provided.
         /// </summary>
         /// <param name="files">A list of uploaded code files to analyze (IBrowserFile).</param>
-        /// <param name="languageHint">Optional language hint (default: "csharp").</param>
+        /// <param name="languageHint">Optional language hint. If null/empty, language is auto-detected per file.</param>
         /// <param name="maxConcurrency">Maximum number of files to process concurrently (default: 5).</param>
         /// <returns>A list of <see cref="FileMetadata"/> objects containing extracted metadata, code patterns, and complexity metrics for each file.</returns>
         /// <remarks>
         /// Use this method for batch preprocessing before sending code to LLMs or AI agents. Optimized for parallel execution and suitable for caching.
         /// Concurrency is controlled to avoid overwhelming system resources. Example usage:
         /// <code>
-        /// var metadatas = await preprocessor.ExtractMetadataParallelAsync(files, "csharp", maxConcurrency: 8);
+        /// var metadatas = await preprocessor.ExtractMetadataParallelAsync(files); // Auto-detects language per file
         /// </code>
         /// </remarks>
-        Task<List<FileMetadata>> ExtractMetadataParallelAsync(List<IBrowserFile> files, string languageHint = "csharp", int maxConcurrency = 5);
+        Task<List<FileMetadata>> ExtractMetadataParallelAsync(List<IBrowserFile> files, string? languageHint = null, int maxConcurrency = 5);
 
         /// <summary>
         /// Creates a consolidated project summary from a list of file metadata objects.

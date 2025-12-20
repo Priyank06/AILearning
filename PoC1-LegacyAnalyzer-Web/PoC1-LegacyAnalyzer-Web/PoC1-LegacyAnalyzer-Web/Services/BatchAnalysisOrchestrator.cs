@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components.Forms;
-using PoC1_LegacyAnalyzer_Web.Models;
 using Microsoft.Extensions.Options;
+using PoC1_LegacyAnalyzer_Web.Models;
+using PoC1_LegacyAnalyzer_Web.Services.Analysis;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -14,6 +15,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly BatchProcessingConfig _batchConfig;
         private readonly FileAnalysisLimitsConfig _fileLimits;
         private readonly TokenEstimationConfig _tokenEstimationConfig;
+        private readonly IAnalyzerRouter _analyzerRouter;
+        private readonly ILanguageDetector _languageDetector;
+        private readonly IFilePreProcessingService _preprocessing;
 
         public BatchAnalysisOrchestrator(
             ICodeAnalysisService codeAnalysisService,
@@ -23,7 +27,10 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             ILogger<BatchAnalysisOrchestrator> logger,
             IOptions<BatchProcessingConfig> batchOptions,
             IOptions<FileAnalysisLimitsConfig> fileLimitOptions,
-            IOptions<TokenEstimationConfig> tokenEstimationOptions)
+            IOptions<TokenEstimationConfig> tokenEstimationOptions,
+            IAnalyzerRouter analyzerRouter,
+            ILanguageDetector languageDetector,
+            IFilePreProcessingService preprocessing)
         {
             _codeAnalysisService = codeAnalysisService;
             _aiAnalysisService = aiAnalysisService;
@@ -33,6 +40,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             _batchConfig = batchOptions.Value ?? new BatchProcessingConfig();
             _fileLimits = fileLimitOptions.Value ?? new FileAnalysisLimitsConfig();
             _tokenEstimationConfig = tokenEstimationOptions.Value ?? new TokenEstimationConfig();
+            _analyzerRouter = analyzerRouter;
+            _languageDetector = languageDetector;
+            _preprocessing = preprocessing;
         }
 
         public async Task<List<FileAnalysisResult>> AnalyzeFilesInBatchesAsync(
@@ -119,29 +129,58 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             return fileResults;
         }
 
-        private async Task<List<(IBrowserFile file, string content, CodeAnalysisResult staticAnalysis)>> PrepareFileDataAsync(
+        private async Task<List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)>> PrepareFileDataAsync(
             List<IBrowserFile> files,
             AnalysisProgress analysisProgress = null,
             IProgress<AnalysisProgress> progress = null)
         {
-            var fileData = new List<(IBrowserFile file, string content, CodeAnalysisResult staticAnalysis)>();
+            var fileData = new List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)>();
             
             if (analysisProgress != null)
             {
-                analysisProgress.Status = "Performing static code analysis (no API calls)...";
+                analysisProgress.Status = "Extracting metadata and performing static analysis (no API calls)...";
                 progress?.Report(analysisProgress);
             }
+
+            // Extract metadata for all files (uses TreeSitter/Roslyn, achieves token optimization)
+            var metadataList = await _preprocessing.ExtractMetadataParallelAsync(files);
+            var metadataDict = metadataList.ToDictionary(m => m.FileName, m => m);
 
             foreach (var file in files)
             {
                 try
                 {
+                    // Get metadata for this file
+                    if (!metadataDict.TryGetValue(file.Name, out var metadata))
+                    {
+                        _logger.LogWarning("Metadata not found for {FileName}, skipping", file.Name);
+                        continue;
+                    }
+
+                    // Still need static analysis for metrics
                     using var stream = file.OpenReadStream(_fileLimits.MaxFileSizeBytes);
                     using var reader = new StreamReader(stream);
                     var content = await reader.ReadToEndAsync();
-                    var staticAnalysis = await _codeAnalysisService.AnalyzeCodeAsync(content);
-                    
-                    fileData.Add((file, content, staticAnalysis));
+
+                    var languageKind = _languageDetector.DetectLanguage(file.Name, content);
+                    var analyzable = new AnalyzableFile
+                    {
+                        FileName = file.Name,
+                        Content = content,
+                        Language = languageKind
+                    };
+
+                    var (_, staticAnalysis) = await _analyzerRouter.AnalyzeAsync(analyzable);
+                    staticAnalysis.LanguageKind = languageKind;
+                    staticAnalysis.Language = languageKind.ToString().ToLowerInvariant();
+
+                    // Use metadata summary instead of full code content
+                    var metadataSummary = !string.IsNullOrEmpty(metadata.PatternSummary) 
+                        ? metadata.PatternSummary 
+                        : $"File: {file.Name} | Language: {metadata.Language} | Classes: {metadata.Complexity.ClassCount} | Methods: {metadata.Complexity.MethodCount}";
+
+                    fileData.Add((file, metadataSummary, staticAnalysis));
+                    _logger.LogDebug("Prepared file {FileName} with metadata summary (token optimized)", file.Name);
                 }
                 catch (Exception ex)
                 {
@@ -153,11 +192,11 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             return fileData;
         }
 
-        private List<List<(IBrowserFile file, string content, CodeAnalysisResult staticAnalysis)>> GroupFilesIntoBatches(
-            List<(IBrowserFile file, string content, CodeAnalysisResult staticAnalysis)> fileData)
+        private List<List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)>> GroupFilesIntoBatches(
+            List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)> fileData)
         {
-            var batches = new List<List<(IBrowserFile file, string content, CodeAnalysisResult staticAnalysis)>>();
-            var currentBatch = new List<(IBrowserFile file, string content, CodeAnalysisResult staticAnalysis)>();
+            var batches = new List<List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)>>();
+            var currentBatch = new List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)>();
             var currentBatchTokens = 0;
             
             // Calculate available tokens (reserve space for response and prompt overhead)
@@ -166,9 +205,10 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
             foreach (var fileInfo in fileData)
             {
-                var fileTokens = _tokenEstimation.EstimateTokens(fileInfo.content);
+                // Estimate tokens for metadata summary (much smaller than full code)
+                var metadataTokens = _tokenEstimation.EstimateTokens(fileInfo.metadataSummary);
                 var batchPromptOverhead = _tokenEstimation.EstimateBatchPromptOverhead(currentBatch.Count);
-                var totalTokensIfAdded = currentBatchTokens + fileTokens + batchPromptOverhead;
+                var totalTokensIfAdded = currentBatchTokens + metadataTokens + batchPromptOverhead;
 
                 // Check if adding this file would exceed limits
                 bool exceedsFileLimit = currentBatch.Count >= _batchConfig.MaxFilesPerBatch;
@@ -180,23 +220,23 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                     if (currentBatch.Any())
                     {
                         batches.Add(currentBatch);
-                        _logger.LogDebug("Created batch with {FileCount} files, {TokenCount} tokens", 
+                        _logger.LogDebug("Created batch with {FileCount} files, {TokenCount} tokens (using metadata summaries)", 
                             currentBatch.Count, currentBatchTokens);
                     }
-                    currentBatch = new List<(IBrowserFile file, string content, CodeAnalysisResult staticAnalysis)>();
+                    currentBatch = new List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)>();
                     currentBatchTokens = 0;
                 }
 
                 // Add file to current batch
                 currentBatch.Add(fileInfo);
-                currentBatchTokens += fileTokens;
+                currentBatchTokens += metadataTokens;
             }
 
             // Add the last batch if it has files
             if (currentBatch.Any())
             {
                 batches.Add(currentBatch);
-                _logger.LogDebug("Created final batch with {FileCount} files, {TokenCount} tokens", 
+                _logger.LogDebug("Created final batch with {FileCount} files, {TokenCount} tokens (using metadata summaries)", 
                     currentBatch.Count, currentBatchTokens);
             }
 
@@ -204,7 +244,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         }
 
         private async Task<List<FileAnalysisResult>> ProcessBatchAsync(
-            List<(IBrowserFile file, string content, CodeAnalysisResult staticAnalysis)> batch,
+            List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)> batch,
             string analysisType,
             AnalysisProgress analysisProgress,
             IProgress<AnalysisProgress> progress)
@@ -213,10 +253,11 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
             try
             {
-                // Prepare batch data for AI analysis
-                var batchData = batch.Select(f => (f.file.Name, f.content, f.staticAnalysis)).ToList();
+                // Prepare batch data for AI analysis using metadata summaries instead of full code
+                var batchData = batch.Select(f => (f.file.Name, f.metadataSummary, f.staticAnalysis)).ToList();
+                _logger.LogInformation("Processing batch with {FileCount} files using metadata summaries (token optimized)", batch.Count);
 
-                // Call batch AI analysis (single API call for multiple files)
+                // Call batch AI analysis (single API call for multiple files, using metadata summaries)
                 var aiResults = await _aiAnalysisService.GetBatchAnalysisAsync(batchData, analysisType);
 
                 // Create file results from batch AI response with error isolation
@@ -277,7 +318,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         }
 
         private async Task<List<FileAnalysisResult>> ProcessBatchWithFallbackAsync(
-            List<(IBrowserFile file, string content, CodeAnalysisResult staticAnalysis)> batch,
+            List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)> batch,
             string analysisType,
             AnalysisProgress analysisProgress,
             IProgress<AnalysisProgress> progress)
@@ -288,10 +329,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             {
                 try
                 {
-                    var previewLength = _fileLimits.DefaultCodePreviewLength;
-                    var analysisContent = fileInfo.content.Length > previewLength 
-                        ? fileInfo.content.Substring(0, previewLength) + "..." 
-                        : fileInfo.content;
+                    // Use metadata summary even in fallback mode (token optimized)
+                    var analysisContent = fileInfo.metadataSummary;
+                    _logger.LogDebug("Fallback: Using metadata summary for {FileName}", fileInfo.file.Name);
                     
                     var aiInsight = await _aiAnalysisService.GetAnalysisAsync(analysisContent, analysisType, fileInfo.staticAnalysis);
                     

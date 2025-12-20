@@ -38,7 +38,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
         [KernelFunction, Description("Analyze software architecture and design patterns")]
         public async Task<string> AnalyzeArchitecturalDesign(
-            [Description("C# source code to analyze")] string code,
+            [Description("Source code to analyze (supports multiple languages)")] string code,
             [Description("Target architecture style and patterns")] string targetArchitecture,
             [Description("Business domain and constraints")] string businessDomain)
         {

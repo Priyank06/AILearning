@@ -39,11 +39,11 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">C# Code to Analyze:</label>
+                        <label class="form-label">Source Code to Analyze:</label>
                         <textarea class="form-control font-monospace"
                                   rows="12"
                                   @bind="codeInput"
-                                  placeholder="Paste your C# code here..."
+                                  placeholder="Paste your source code here (C#, Python, JavaScript, TypeScript, Java, Go)..."
                                   style="font-size: 13px;"></textarea>
                     </div>
 
@@ -312,12 +312,12 @@
     {
         if (string.IsNullOrWhiteSpace(codeInput))
         {
-            statusMessage = "Please enter some C# code to analyze.";
+            statusMessage = "Please enter some source code to analyze.";
             return;
         }
 
         isAnalyzing = true;
-        statusMessage = "Parsing C# code with Roslyn...";
+        statusMessage = "Analyzing code structure...";
         StateHasChanged();
 
         try
@@ -397,7 +397,7 @@
 
     protected override void OnInitialized()
     {
-        statusMessage = "Ready for code analysis. Load sample code or paste your own C# code.";
+        statusMessage = "Ready for code analysis. Load sample code or paste your own source code.";
     }
 
     private async Task DownloadMarkdownReport()

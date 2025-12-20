@@ -23,9 +23,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             _kernel.Plugins.AddFromObject(this, "CodeAnalysis");
         }
 
-        [KernelFunction, Description("Analyze C# code structure, complexity, and quality metrics")]
+        [KernelFunction, Description("Analyze code structure, complexity, and quality metrics")]
         public async Task<string> AnalyzeCodeStructure(
-            [Description("The C# source code to analyze")] string code)
+            [Description("The source code to analyze (supports multiple languages)")] string code)
         {
             try
             {

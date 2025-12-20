@@ -1,9 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using PoC1_LegacyAnalyzer_Web.Models;
+using PoC1_LegacyAnalyzer_Web.Services.Analysis;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Diagnostics;
@@ -12,7 +10,7 @@ using System.Collections.Concurrent;
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
     /// <summary>
-    /// Service for extracting metadata from code files using local Roslyn static analysis.
+    /// Service for extracting metadata from code files using unified analyzers (Roslyn for C#, TreeSitter for others).
     /// </summary>
     public class MetadataExtractionService : IMetadataExtractionService
     {
@@ -20,6 +18,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly IFileCacheManager _cacheManager;
         private readonly IPatternDetectionService _patternDetection;
         private readonly IComplexityCalculationService _complexityCalculation;
+        private readonly IAnalyzerRouter _analyzerRouter;
+        private readonly ILanguageDetector _languageDetector;
         private readonly FilePreProcessingOptions _options;
 
         public MetadataExtractionService(
@@ -27,16 +27,20 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             IFileCacheManager cacheManager,
             IPatternDetectionService patternDetection,
             IComplexityCalculationService complexityCalculation,
+            IAnalyzerRouter analyzerRouter,
+            ILanguageDetector languageDetector,
             IOptions<FilePreProcessingOptions> options)
         {
             _logger = logger;
             _cacheManager = cacheManager;
             _patternDetection = patternDetection;
             _complexityCalculation = complexityCalculation;
+            _analyzerRouter = analyzerRouter;
+            _languageDetector = languageDetector;
             _options = options?.Value ?? new FilePreProcessingOptions();
         }
 
-        public async Task<List<FileMetadata>> ExtractMetadataParallelAsync(List<IBrowserFile> files, string languageHint = "csharp", int maxConcurrency = 5)
+        public async Task<List<FileMetadata>> ExtractMetadataParallelAsync(List<IBrowserFile> files, string? languageHint = null, int maxConcurrency = 5)
         {
             var effectiveConcurrency = maxConcurrency == 5 ? _options.MaxConcurrentFiles : maxConcurrency;
 
@@ -57,7 +61,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 await semaphore.WaitAsync();
                 try
                 {
-                    var result = await ExtractMetadataAsync(file, languageHint);
+                    var result = await ExtractMetadataAsync(file, languageHint ?? null);
                     fileStopwatch.Stop();
                     individualTimings.Add(fileStopwatch.ElapsedMilliseconds);
                     return result;
@@ -70,7 +74,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                     {
                         FileName = file?.Name ?? "Unknown",
                         FileSize = file?.Size ?? 0,
-                        Language = languageHint,
+                        Language = languageHint ?? "unknown",
                         Status = "Error",
                         ErrorMessage = ex.Message
                     };
@@ -103,7 +107,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             return results.ToList();
         }
 
-        public async Task<FileMetadata> ExtractMetadataAsync(IBrowserFile file, string languageHint = "csharp")
+        public async Task<FileMetadata> ExtractMetadataAsync(IBrowserFile file, string? languageHint = null)
         {
             var stopwatch = Stopwatch.StartNew();
             var fileSize = file.Size;
@@ -118,14 +122,25 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 {
                     FileName = file.Name,
                     FileSize = fileSize,
-                    Language = languageHint,
+                    Language = languageHint ?? "unknown",
                     Status = "Error",
                     ErrorMessage = $"File size {fileSize} bytes exceeds maximum allowed size of {_options.MaxFileSizeMB}MB"
                 };
             }
 
-            // Generate cache key
-            var cacheKey = $"{file.Name}_{file.Size}_{file.LastModified.Ticks}_{languageHint}";
+            // Read file content
+            using var stream = file.OpenReadStream(maxAllowedSize: maxFileSizeBytes);
+            using var reader = new StreamReader(stream, Encoding.UTF8, true, 8192, leaveOpen: false);
+            var code = await reader.ReadToEndAsync();
+
+            // Detect language automatically (override hint if detection succeeds)
+            var detectedLanguage = _languageDetector.DetectLanguage(file.Name, code);
+            var actualLanguage = detectedLanguage != LanguageKind.Unknown 
+                ? detectedLanguage.ToString().ToLowerInvariant() 
+                : (languageHint ?? "unknown");
+
+            // Generate cache key with detected language
+            var cacheKey = $"{file.Name}_{file.Size}_{file.LastModified.Ticks}_{actualLanguage}";
 
             // Try to get from cache
             if (_cacheManager.TryGetCached(cacheKey, out var cachedMetadata) && cachedMetadata != null)
@@ -136,38 +151,43 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 return cachedMetadata;
             }
 
-            _logger?.LogDebug("Cache miss for file: {FileName} (Key: {CacheKey})", file.Name, cacheKey);
+            _logger?.LogDebug("Cache miss for file: {FileName} (Key: {CacheKey}, Detected Language: {Language})", 
+                file.Name, cacheKey, actualLanguage);
 
             var metadata = new FileMetadata
             {
                 FileName = file.Name,
                 FileSize = file.Size,
-                Language = languageHint
+                Language = actualLanguage
             };
 
             try
             {
-                using var stream = file.OpenReadStream(maxAllowedSize: maxFileSizeBytes);
-                using var reader = new StreamReader(stream, Encoding.UTF8, true, 8192, leaveOpen: false);
-                var code = await reader.ReadToEndAsync();
-
-                if (languageHint.Equals("csharp", StringComparison.OrdinalIgnoreCase))
+                // Use unified analyzer router (Roslyn for C#, TreeSitter for others)
+                var analyzable = new AnalyzableFile
                 {
-                    PopulateCSharpMetadata(code, metadata, _options.EnablePatternDetection);
+                    FileName = file.Name,
+                    Content = code,
+                    Language = detectedLanguage
+                };
+
+                var (codeStructure, codeAnalysisResult) = await _analyzerRouter.AnalyzeAsync(analyzable);
+
+                // Populate metadata from CodeStructure (works for all languages)
+                PopulateMetadataFromCodeStructure(codeStructure, codeAnalysisResult, metadata);
+
+                // Pattern detection (language-aware)
+                if (_options.EnablePatternDetection)
+                {
+                    metadata.Patterns = _patternDetection.DetectPatterns(code, actualLanguage);
                 }
                 else
                 {
-                    // Fallback lightweight parsing
-                    if (_options.EnablePatternDetection)
-                    {
-                        metadata.Patterns = _patternDetection.DetectPatterns(code, languageHint);
-                    }
-                    else
-                    {
-                        metadata.Patterns = new CodePatternAnalysis();
-                    }
-                    metadata.Complexity = _complexityCalculation.CalculateComplexity(code, languageHint);
+                    metadata.Patterns = new CodePatternAnalysis();
                 }
+
+                // Complexity calculation (language-aware)
+                metadata.Complexity = _complexityCalculation.CalculateComplexity(code, actualLanguage);
 
                 metadata.PatternSummary = BuildPatternSummary(metadata);
 
@@ -200,81 +220,116 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 _cacheManager.SetCached(cacheKey, metadata, _options.CacheTTLMinutes);
             }
 
-            _logger?.LogDebug("Extracted metadata for file: {FileName} in {Duration}ms (Size: {FileSize} bytes, Complexity: {ComplexityScore})",
-                file.Name, stopwatch.ElapsedMilliseconds, fileSize, complexityScore);
+            _logger?.LogDebug("Extracted metadata for file: {FileName} in {Duration}ms (Size: {FileSize} bytes, Complexity: {ComplexityScore}, Language: {Language})",
+                file.Name, stopwatch.ElapsedMilliseconds, fileSize, complexityScore, actualLanguage);
 
             return metadata;
         }
 
-        private void PopulateCSharpMetadata(string code, FileMetadata metadata, bool enablePatternDetection = true)
+        /// <summary>
+        /// Populates FileMetadata from CodeStructure and CodeAnalysisResult (works for all languages via unified analyzers).
+        /// </summary>
+        private void PopulateMetadataFromCodeStructure(CodeStructure structure, CodeAnalysisResult analysis, FileMetadata metadata)
         {
-            var tree = CSharpSyntaxTree.ParseText(code);
-            var root = tree.GetRoot();
-
-            metadata.UsingDirectives = root.DescendantNodes().OfType<UsingDirectiveSyntax>()
-                .Select(u => u.ToString())
-                .Distinct()
+            // Populate imports/using directives
+            metadata.UsingDirectives = structure.Imports
+                .Select(i => i.ModuleName + (i.ImportedSymbols.Any() ? $" ({string.Join(", ", i.ImportedSymbols)})" : ""))
                 .ToList();
 
-            metadata.Namespaces = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>()
-                .Select(n => n.Name.ToString())
-                .Distinct()
-                .ToList();
-
-            var classDecls = root.DescendantNodes().OfType<ClassDeclarationSyntax>().ToList();
-            foreach (var cls in classDecls)
+            // Populate namespaces/containers
+            if (!string.IsNullOrEmpty(structure.ContainerName))
             {
-                var modifiers = string.Join(" ", cls.Modifiers.Select(m => m.Text));
-                metadata.ClassSignatures.Add($"{modifiers} class {cls.Identifier}");
+                metadata.Namespaces.Add(structure.ContainerName);
+            }
 
-                foreach (var method in cls.Members.OfType<MethodDeclarationSyntax>())
+            // Populate class signatures
+            foreach (var cls in structure.Classes)
+            {
+                var accessMod = cls.AccessModifier != AccessModifier.Unknown ? cls.AccessModifier.ToString().ToLower() : "";
+                var baseTypes = cls.BaseTypes.Any() ? $" : {string.Join(", ", cls.BaseTypes)}" : "";
+                metadata.ClassSignatures.Add($"{accessMod} class {cls.Name}{baseTypes}");
+            }
+
+            // Populate method signatures
+            foreach (var cls in structure.Classes)
+            {
+                foreach (var method in cls.Methods)
                 {
-                    var mmods = string.Join(" ", method.Modifiers.Select(m => m.Text));
-                    var parameters = string.Join(", ", method.ParameterList.Parameters.Select(p => $"{p.Type} {p.Identifier}"));
-                    metadata.MethodSignatures.Add($"{mmods} {method.ReturnType} {cls.Identifier}.{method.Identifier}({parameters})");
+                    var accessMod = method.AccessModifier != AccessModifier.Unknown ? method.AccessModifier.ToString().ToLower() : "";
+                    var staticMod = method.IsStatic ? "static" : "";
+                    var asyncMod = method.IsAsync ? "async" : "";
+                    var returnType = !string.IsNullOrEmpty(method.ReturnType) ? method.ReturnType : "void";
+                    var parameters = string.Join(", ", method.Parameters.Select(p => 
+                        $"{(!string.IsNullOrEmpty(p.Type) ? p.Type : "var")} {p.Name}"));
+                    var mods = string.Join(" ", new[] { accessMod, staticMod, asyncMod }.Where(m => !string.IsNullOrEmpty(m)));
+                    metadata.MethodSignatures.Add($"{mods} {returnType} {cls.Name}.{method.Name}({parameters})");
                 }
+            }
 
-                foreach (var prop in cls.Members.OfType<PropertyDeclarationSyntax>())
+            // Populate top-level functions (not in classes)
+            foreach (var func in structure.Functions)
+            {
+                var accessMod = func.AccessModifier != AccessModifier.Unknown ? func.AccessModifier.ToString().ToLower() : "";
+                var staticMod = func.IsStatic ? "static" : "";
+                var asyncMod = func.IsAsync ? "async" : "";
+                var returnType = !string.IsNullOrEmpty(func.ReturnType) ? func.ReturnType : "void";
+                var parameters = string.Join(", ", func.Parameters.Select(p => 
+                    $"{(!string.IsNullOrEmpty(p.Type) ? p.Type : "var")} {p.Name}"));
+                var mods = string.Join(" ", new[] { accessMod, staticMod, asyncMod }.Where(m => !string.IsNullOrEmpty(m)));
+                metadata.MethodSignatures.Add($"{mods} {returnType} {func.Name}({parameters})");
+            }
+
+            // Populate property signatures
+            foreach (var cls in structure.Classes)
+            {
+                foreach (var prop in cls.Properties)
                 {
-                    var pmods = string.Join(" ", prop.Modifiers.Select(m => m.Text));
-                    metadata.PropertySignatures.Add($"{pmods} {prop.Type} {cls.Identifier}.{prop.Identifier}");
+                    var accessMod = prop.AccessModifier != AccessModifier.Unknown ? prop.AccessModifier.ToString().ToLower() : "";
+                    var propType = !string.IsNullOrEmpty(prop.Type) ? prop.Type : "var";
+                    var getter = prop.HasGetter ? "get; " : "";
+                    var setter = prop.HasSetter ? "set; " : "";
+                    metadata.PropertySignatures.Add($"{accessMod} {propType} {cls.Name}.{prop.Name} {{ {getter}{setter}}}");
                 }
             }
-
-            if (enablePatternDetection)
-            {
-                metadata.Patterns = _patternDetection.DetectPatterns(code, "csharp");
-            }
-            else
-            {
-                metadata.Patterns = new CodePatternAnalysis();
-            }
-            metadata.Complexity = _complexityCalculation.CalculateComplexity(code, "csharp");
         }
 
         private string BuildPatternSummary(FileMetadata m)
         {
             var sb = new StringBuilder();
-            sb.AppendLine($"File: {m.FileName} ({m.FileSize} bytes)");
+            sb.AppendLine($"File: {m.FileName} ({m.FileSize} bytes) | Language: {m.Language}");
+            
             if (m.UsingDirectives.Count > 0)
-                sb.AppendLine($"Usings: {string.Join(", ", m.UsingDirectives.Take(8))}{(m.UsingDirectives.Count > 8 ? ", ..." : string.Empty)}");
+                sb.AppendLine($"Imports/Dependencies: {string.Join(", ", m.UsingDirectives.Take(8))}{(m.UsingDirectives.Count > 8 ? ", ..." : string.Empty)}");
             if (m.Namespaces.Count > 0)
-                sb.AppendLine($"Namespaces: {string.Join(", ", m.Namespaces.Take(5))}{(m.Namespaces.Count > 5 ? ", ..." : string.Empty)}");
+                sb.AppendLine($"Namespaces/Modules: {string.Join(", ", m.Namespaces.Take(5))}{(m.Namespaces.Count > 5 ? ", ..." : string.Empty)}");
 
             if (m.ClassSignatures.Count > 0)
-                sb.AppendLine($"Classes: {string.Join(" | ", m.ClassSignatures.Take(6))}{(m.ClassSignatures.Count > 6 ? " | ..." : string.Empty)}");
+                sb.AppendLine($"Classes/Types: {string.Join(" | ", m.ClassSignatures.Take(6))}{(m.ClassSignatures.Count > 6 ? " | ..." : string.Empty)}");
 
             if (m.MethodSignatures.Count > 0)
-                sb.AppendLine($"Methods: {string.Join(" | ", m.MethodSignatures.Take(10))}{(m.MethodSignatures.Count > 10 ? " | ..." : string.Empty)}");
+                sb.AppendLine($"Methods/Functions: {string.Join(" | ", m.MethodSignatures.Take(10))}{(m.MethodSignatures.Count > 10 ? " | ..." : string.Empty)}");
 
-            var findings = new List<string>();
-            findings.AddRange(m.Patterns.SecurityFindings);
-            findings.AddRange(m.Patterns.PerformanceFindings);
-            findings.AddRange(m.Patterns.ArchitectureFindings);
-            if (findings.Count > 0)
-                sb.AppendLine($"Risks: {string.Join("; ", findings.Take(6))}{(findings.Count > 6 ? "; ..." : string.Empty)}");
+            // Include pattern findings prominently - these are critical for AI analysis
+            var securityFindings = m.Patterns?.SecurityFindings ?? new List<string>();
+            var performanceFindings = m.Patterns?.PerformanceFindings ?? new List<string>();
+            var architectureFindings = m.Patterns?.ArchitectureFindings ?? new List<string>();
+            
+            if (securityFindings.Count > 0)
+                sb.AppendLine($"Security Risks ({securityFindings.Count}): {string.Join("; ", securityFindings.Take(5))}{(securityFindings.Count > 5 ? "; ..." : string.Empty)}");
+            
+            if (performanceFindings.Count > 0)
+                sb.AppendLine($"Performance Issues ({performanceFindings.Count}): {string.Join("; ", performanceFindings.Take(5))}{(performanceFindings.Count > 5 ? "; ..." : string.Empty)}");
+            
+            if (architectureFindings.Count > 0)
+                sb.AppendLine($"Architecture Concerns ({architectureFindings.Count}): {string.Join("; ", architectureFindings.Take(5))}{(architectureFindings.Count > 5 ? "; ..." : string.Empty)}");
 
-            sb.AppendLine($"Complexity: CC={m.Complexity.CyclomaticComplexity}, LOC={m.Complexity.LinesOfCode}, Classes={m.Complexity.ClassCount}, Methods={m.Complexity.MethodCount}");
+            // If no specific findings, still show summary
+            if (securityFindings.Count == 0 && performanceFindings.Count == 0 && architectureFindings.Count == 0)
+            {
+                sb.AppendLine("Pattern Analysis: No critical patterns detected.");
+            }
+
+            sb.AppendLine($"Complexity: CC={m.Complexity?.CyclomaticComplexity ?? 0}, LOC={m.Complexity?.LinesOfCode ?? 0}, Classes={m.Complexity?.ClassCount ?? 0}, Methods={m.Complexity?.MethodCount ?? 0}");
             return sb.ToString();
         }
     }

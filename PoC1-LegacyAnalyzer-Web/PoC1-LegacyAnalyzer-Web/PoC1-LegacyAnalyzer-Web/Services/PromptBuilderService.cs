@@ -89,7 +89,7 @@ Code:
             }
 
             var batchPrompt = $@"
-Analyze {fileAnalyses.Count} C# files for {analysisType} assessment. Provide comprehensive analysis for EACH file.
+Analyze {fileAnalyses.Count} source files for {analysisType} assessment. Provide comprehensive analysis for EACH file.
 
 {string.Join("\n---\n", fileSections)}
 
