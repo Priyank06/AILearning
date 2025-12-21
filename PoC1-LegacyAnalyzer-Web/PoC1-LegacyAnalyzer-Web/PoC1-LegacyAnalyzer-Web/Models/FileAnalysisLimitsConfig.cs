@@ -123,8 +123,15 @@ namespace PoC1_LegacyAnalyzer_Web.Models
     public class TokenEstimationConfig
     {
         /// <summary>
+        /// Whether to use tiktoken (SharpToken) for accurate token counting.
+        /// If false, falls back to estimation based on character count.
+        /// </summary>
+        public bool? UseTiktoken { get; set; } = true;
+
+        /// <summary>
         /// Structure overhead percentage for code (default: 10%).
         /// Code has more tokens per character than plain text.
+        /// Only used when UseTiktoken is false.
         /// </summary>
         public double CodeStructureOverheadPercentage { get; set; } = 0.1;
 

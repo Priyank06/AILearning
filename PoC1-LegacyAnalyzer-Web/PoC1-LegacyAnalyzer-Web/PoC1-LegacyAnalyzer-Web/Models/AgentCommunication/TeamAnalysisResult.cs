@@ -13,6 +13,7 @@ namespace PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
         public int OverallConfidenceScore { get; set; }
         public string ExecutiveSummary { get; set; } = "";
         public TokenUsage? TokenUsage { get; set; }
-        public PerformanceMetrics PerformanceMetrics { get; set; } = new PerformanceMetrics();        
+        public PerformanceMetrics PerformanceMetrics { get; set; } = new PerformanceMetrics();
+        public CostMetrics? CostMetrics { get; set; }
     }
 }

@@ -7,6 +7,10 @@ using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using PoC1_LegacyAnalyzer_Web.Services;
+using PoC1_LegacyAnalyzer_Web.Middleware;
+using PoC1_LegacyAnalyzer_Web.Extensions;
+using PoC1_LegacyAnalyzer_Web.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 public class Program
 {
@@ -71,6 +75,14 @@ public class Program
         builder.Services.Configure<KeyVaultConfiguration>(builder.Configuration.GetSection("KeyVault"));
         builder.Services.Configure<KeyVaultClientOptions>(builder.Configuration.GetSection("KeyVault:Client"));
         builder.Services.Configure<FilePreProcessingOptions>(builder.Configuration.GetSection("FilePreProcessing"));
+        builder.Services.Configure<RetryPolicyConfiguration>(builder.Configuration.GetSection("RetryPolicy"));
+        builder.Services.Configure<RateLimitConfiguration>(builder.Configuration.GetSection("RateLimit"));
+        builder.Services.Configure<LogSanitizationConfiguration>(builder.Configuration.GetSection("LogSanitization"));
+        builder.Services.Configure<InputValidationConfiguration>(builder.Configuration.GetSection("InputValidation"));
+        builder.Services.Configure<ErrorHandlingConfiguration>(builder.Configuration.GetSection("ErrorHandling"));
+        builder.Services.Configure<RequestDeduplicationConfiguration>(builder.Configuration.GetSection("RequestDeduplication"));
+        builder.Services.Configure<CostTrackingConfiguration>(builder.Configuration.GetSection("CostTracking"));
+        builder.Services.Configure<TracingConfiguration>(builder.Configuration.GetSection("Tracing"));
 
         // Add services to the container.
         // Configure memory cache with size limits for FilePreProcessingService
@@ -96,6 +108,21 @@ public class Program
         builder.Services.AddRazorPages();
         builder.Services.AddServerSideBlazor();
         
+        // Add health checks
+        builder.Services.AddHealthChecks()
+            .AddCheck<AzureOpenAIHealthCheck>("azure-openai", tags: new[] { "external", "ai" })
+            .AddCheck("memory", () => 
+            {
+                var memory = GC.GetTotalMemory(false);
+                var maxMemory = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+                var memoryUsagePercent = (double)memory / maxMemory * 100;
+                
+                if (memoryUsagePercent > 90)
+                    return HealthCheckResult.Degraded($"High memory usage: {memoryUsagePercent:F1}%");
+                
+                return HealthCheckResult.Healthy($"Memory usage: {memoryUsagePercent:F1}%");
+            }, tags: new[] { "internal" });
+        
         // Configure logging to send exceptions and traces to Application Insights
         // Application Insights logging provider is automatically added by AddApplicationInsightsTelemetry()
         // Log levels are controlled by the "Logging" section in appsettings.json
@@ -104,11 +131,34 @@ public class Program
         builder.Logging.AddApplicationInsights();
 
         builder.Services.AddKeyVaultService();
+        
+        // Register sanitized logging (must be before other services that use logging)
+        builder.Services.AddSanitizedLogging();
+        
         // Register your AI services
         builder.Services.AddCodeAnalysisServices();
         builder.Services.AddMultiAgentOrchestration(builder.Configuration);
         builder.Services.AddSemanticKernel(builder.Configuration);
         builder.Services.AddScoped<ITeamReportService, TeamReportService>();
+        
+        // Register rate limiting service
+        builder.Services.AddSingleton<IRateLimitService, RateLimitService>();
+        
+        // Register input validation service
+        builder.Services.AddScoped<IInputValidationService, InputValidationService>();
+        
+        // Register error handling service
+        builder.Services.AddScoped<IErrorHandlingService, ErrorHandlingService>();
+        
+        // Register request deduplication service
+        builder.Services.AddMemoryCache();
+        builder.Services.AddScoped<IRequestDeduplicationService, RequestDeduplicationService>();
+        
+        // Register cost tracking service
+        builder.Services.AddScoped<ICostTrackingService, CostTrackingService>();
+        
+        // Register tracing service
+        builder.Services.AddSingleton<ITracingService, TracingService>();
 
         // Create logger using LoggerFactory with Application Insights support
         using var loggerFactory = LoggerFactory.Create(logging =>
@@ -267,7 +317,47 @@ public class Program
 
         app.UseHttpsRedirection();
         app.UseStaticFiles();
+        
+        // Add correlation ID middleware (first, to track all requests)
+        app.UseMiddleware<CorrelationIdMiddleware>();
+        
+        // Add rate limiting middleware (before routing to catch all requests)
+        app.UseMiddleware<RateLimitMiddleware>();
+        
         app.UseRouting();
+
+        // Map health check endpoints
+        app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+        {
+            ResponseWriter = async (context, report) =>
+            {
+                context.Response.ContentType = "application/json";
+                var result = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    status = report.Status.ToString(),
+                    checks = report.Entries.Select(e => new
+                    {
+                        name = e.Key,
+                        status = e.Value.Status.ToString(),
+                        description = e.Value.Description,
+                        data = e.Value.Data,
+                        duration = e.Value.Duration.TotalMilliseconds
+                    }),
+                    totalDuration = report.TotalDuration.TotalMilliseconds
+                });
+                await context.Response.WriteAsync(result);
+            }
+        });
+        
+        app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains("external")
+        });
+        
+        app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+        {
+            Predicate = _ => false // Liveness check - just returns OK if app is running
+        });
 
         app.MapRazorPages();
         app.MapBlazorHub();

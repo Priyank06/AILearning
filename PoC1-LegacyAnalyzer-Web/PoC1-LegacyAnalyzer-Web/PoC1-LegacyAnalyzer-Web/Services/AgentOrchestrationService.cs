@@ -24,6 +24,11 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly IRecommendationSynthesizer _synthesizer;
         private readonly IExecutiveSummaryGenerator _summaryGenerator;
         private readonly IFilePreProcessingService _preprocessing;
+        private readonly IInputValidationService _inputValidation;
+        private readonly IErrorHandlingService _errorHandling;
+        private readonly IRequestDeduplicationService? _deduplicationService;
+        private readonly ICostTrackingService? _costTracking;
+        private readonly ITracingService? _tracing;
 
         public AgentOrchestrationService(
             Kernel kernel,
@@ -34,7 +39,12 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             IConsensusCalculator consensusCalculator,
             IRecommendationSynthesizer synthesizer,
             IExecutiveSummaryGenerator summaryGenerator,
-            IFilePreProcessingService preprocessingService)
+            IFilePreProcessingService preprocessingService,
+            IInputValidationService inputValidation,
+            IErrorHandlingService errorHandling,
+            IRequestDeduplicationService? deduplicationService = null,
+            ICostTrackingService? costTracking = null,
+            ITracingService? tracing = null)
         {
             _kernel = kernel;
             _logger = logger;
@@ -44,6 +54,11 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             _preprocessing = preprocessingService;
             _synthesizer = synthesizer;
             _summaryGenerator = summaryGenerator;
+            _inputValidation = inputValidation ?? throw new ArgumentNullException(nameof(inputValidation));
+            _errorHandling = errorHandling ?? throw new ArgumentNullException(nameof(errorHandling));
+            _deduplicationService = deduplicationService;
+            _costTracking = costTracking;
+            _tracing = tracing;
 
             // Register orchestrator functions with kernel
             _kernel.Plugins.AddFromObject(this, "AgentOrchestrator");
@@ -83,7 +98,13 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             CancellationToken cancellationToken = default)
         {
             var orchestrationSw = System.Diagnostics.Stopwatch.StartNew();
-            _logger.LogInformation("[Orchestrator] Team analysis STARTED at {UtcNow}", DateTime.UtcNow);
+            
+            // Start distributed tracing activity
+            using var activity = _tracing?.StartActivity("TeamAnalysis.Orchestrate");
+            var correlationId = _tracing?.GetCorrelationId() ?? Guid.NewGuid().ToString();
+            
+            _logger.LogInformation("[Orchestrator] Team analysis STARTED at {UtcNow}, CorrelationId: {CorrelationId}", 
+                DateTime.UtcNow, correlationId);
 
             var conversationId = Guid.NewGuid().ToString();
             var teamResult = new TeamAnalysisResult
@@ -91,18 +112,94 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 ConversationId = conversationId
             };
 
+            // Add tracing tags
+            _tracing?.AddTag("analysis.conversationId", conversationId);
+            _tracing?.AddTag("analysis.businessObjective", businessObjective);
+            _tracing?.AddTag("analysis.agentCount", requiredSpecialties.Count.ToString());
+            _tracing?.AddTag("analysis.fileCount", files.Count.ToString());
+
+            // Initialize cost tracking
+            CostMetrics? costMetrics = null;
+            if (_costTracking != null)
+            {
+                costMetrics = _costTracking.CreateCostTracker(conversationId);
+                teamResult.CostMetrics = costMetrics;
+            }
+
             try
             {
+                // Request deduplication check
+                if (_deduplicationService != null)
+                {
+                    var fingerprint = _deduplicationService.GenerateRequestFingerprint(files, businessObjective, requiredSpecialties);
+                    if (!string.IsNullOrEmpty(fingerprint))
+                    {
+                        var isDuplicate = await _deduplicationService.IsDuplicateAsync(fingerprint);
+                        if (isDuplicate)
+                        {
+                            var cachedResult = await _deduplicationService.GetCachedResultAsync<TeamAnalysisResult>(fingerprint);
+                            if (cachedResult != null)
+                            {
+                                _logger.LogInformation("[Orchestrator] Returning cached result for duplicate request: {Fingerprint}", 
+                                    fingerprint.Substring(0, Math.Min(16, fingerprint.Length)));
+                                progress?.Report("Returning cached result from previous analysis...");
+                                return cachedResult;
+                            }
+                        }
+                    }
+                }
+
+                // Input validation phase
+                progress?.Report("Validating inputs...");
+                
+                // Validate business objective
+                var objectiveValidation = _inputValidation.ValidateBusinessObjective(businessObjective);
+                if (!objectiveValidation.IsValid)
+                {
+                    throw new ArgumentException($"Invalid business objective: {objectiveValidation.ErrorMessage}");
+                }
+                
+                // Sanitize business objective
+                businessObjective = _inputValidation.SanitizeBusinessObjective(objectiveValidation.SanitizedValue ?? businessObjective);
+                
+                // Validate files
+                var fileValidations = await _inputValidation.ValidateFilesAsync(files);
+                var invalidFiles = fileValidations.Where(v => !v.IsValid).ToList();
+                if (invalidFiles.Any())
+                {
+                    var errors = string.Join("; ", invalidFiles.Select(v => v.ErrorMessage));
+                    throw new ArgumentException($"File validation failed: {errors}");
+                }
+                
+                // Log warnings for files with warnings
+                foreach (var validation in fileValidations.Where(v => v.Warnings.Any()))
+                {
+                    var fileIndex = fileValidations.IndexOf(validation);
+                    if (fileIndex >= 0 && fileIndex < files.Count)
+                    {
+                        _logger.LogWarning("File {FileName} validation warnings: {Warnings}", 
+                            files[fileIndex].Name,
+                            string.Join(", ", validation.Warnings));
+                    }
+                }
+
                 var perfMetrics = new PerformanceMetrics();
                 int llmCalls = 0;
 
                 // Preprocessing phase - language detection happens automatically in ExtractMetadataParallelAsync
+                using var preprocessingActivity = _tracing?.StartActivity("Preprocessing.ExtractMetadata");
+                _tracing?.AddTag("preprocessing.fileCount", files.Count.ToString());
+                
                 var preprocessingSw = System.Diagnostics.Stopwatch.StartNew();
                 progress?.Report("Preprocessing files...");
                 // Language hint is now optional - metadata extraction will auto-detect language for each file
                 var metadata = await _preprocessing.ExtractMetadataParallelAsync(files);
                 preprocessingSw.Stop();
                 perfMetrics.PreprocessingTimeMs = preprocessingSw.ElapsedMilliseconds;
+                
+                _tracing?.AddTag("preprocessing.durationMs", preprocessingSw.ElapsedMilliseconds.ToString());
+                _tracing?.AddTag("preprocessing.metadataCount", metadata.Count.ToString());
+                _tracing?.AddEvent("Preprocessing.Completed");
 
                 _logger.LogInformation("[Orchestrator] Preprocessed {FileCount} files in {ElapsedMs}ms", files.Count, preprocessingSw.ElapsedMilliseconds);
                 progress?.Report($"Preprocessed {files.Count} files in {preprocessingSw.ElapsedMilliseconds}ms");
@@ -142,29 +239,143 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 // All agent tasks are started immediately above
                 _logger.LogInformation("[Orchestrator] All specialist agent tasks CREATED at {UtcNow}", agentTaskStartTime);
 
-                var specialistResults = (await Task.WhenAll(specialistTasks)).OfType<SpecialistAnalysisResult>().ToArray();
+                // Wait for all agent tasks to complete (some may fail)
+                var agentTaskResults = await Task.WhenAll(specialistTasks.Select(async task =>
+                {
+                    try
+                    {
+                        return new { Success = true, Result = await task, Exception = (Exception?)null };
+                    }
+                    catch (Exception ex)
+                    {
+                        return new { Success = false, Result = (SpecialistAnalysisResult?)null, Exception = ex };
+                    }
+                }));
+
                 agentAnalysisSw.Stop();
-                perfMetrics.AgentAnalysisTimeMs = agentAnalysisSw.ElapsedMilliseconds;                
+                perfMetrics.AgentAnalysisTimeMs = agentAnalysisSw.ElapsedMilliseconds;
 
-                // Assign individual analyses to team result
-                teamResult.IndividualAnalyses = specialistResults.ToList();
+                // Separate successful and failed results
+                var successfulResults = agentTaskResults
+                    .Where(r => r.Success && r.Result != null)
+                    .Select(r => r.Result!)
+                    .ToList();
 
-                // Step 3: Peer review discussion (starts after all agents complete)
+                var failedResults = agentTaskResults
+                    .Where(r => !r.Success)
+                    .Select((r, index) => new { Index = index, Exception = r.Exception })
+                    .ToList();
+
+                // Log failures with context
+                foreach (var failure in failedResults)
+                {
+                    var specialty = requiredSpecialties[failure.Index];
+                    var errorResult = _errorHandling.CreateAgentErrorResult(specialty, failure.Exception!);
+                    _logger.LogError(
+                        failure.Exception,
+                        "[Agent:{Specialty}] Analysis failed. ErrorCode: {ErrorCode}, Retryable: {IsRetryable}",
+                        specialty,
+                        errorResult.ErrorCode,
+                        errorResult.IsRetryable);
+                }
+
+                // Determine if we should return partial results
+                var totalAgents = requiredSpecialties.Count;
+                var successfulCount = successfulResults.Count;
+                var shouldReturnPartial = _errorHandling.ShouldReturnPartialResults(successfulCount, totalAgents);
+
+                if (!shouldReturnPartial && failedResults.Any())
+                {
+                    // Not enough successful agents - throw exception with actionable message
+                    var firstFailure = failedResults.First();
+                    var specialty = requiredSpecialties[firstFailure.Index];
+                    var errorMessage = _errorHandling.CreateActionableErrorMessage(
+                        firstFailure.Exception!,
+                        $"{failedResults.Count} of {totalAgents} agents failed. First failure in {specialty} agent");
+                    
+                    throw new InvalidOperationException(errorMessage);
+                }
+
+                // Create error results for failed agents
+                var errorAnalysisResults = failedResults.Select(failure =>
+                {
+                    var specialty = requiredSpecialties[failure.Index];
+                    var errorResult = _errorHandling.CreateAgentErrorResult(specialty, failure.Exception!);
+                    
+                    return new SpecialistAnalysisResult
+                    {
+                        AgentName = $"{specialty}Agent",
+                        Specialty = specialty,
+                        ConfidenceScore = 0,
+                        BusinessImpact = $"Analysis failed: {errorResult.ErrorMessage}",
+                        KeyFindings = new List<Finding>
+                        {
+                            new Finding
+                            {
+                                Category = "Analysis Error",
+                                Description = errorResult.ErrorDescription,
+                                Severity = "HIGH",
+                                Location = $"Agent: {specialty}",
+                                Evidence = errorResult.RemediationSteps
+                            }
+                        },
+                        Recommendations = errorResult.RemediationSteps.Select((step, idx) => new Recommendation
+                        {
+                            Title = $"Remediation Step {idx + 1}",
+                            Description = step,
+                            Priority = "HIGH",
+                            EstimatedHours = 0
+                        }).ToList()
+                    };
+                }).ToList();
+
+                // Combine successful and error results
+                var allResults = new List<SpecialistAnalysisResult>();
+                allResults.AddRange(successfulResults);
+                allResults.AddRange(errorAnalysisResults);
+
+                // Assign all analyses to team result (successful + error results)
+                teamResult.IndividualAnalyses = allResults;
+
+                // Log partial success if applicable
+                if (failedResults.Any() && shouldReturnPartial)
+                {
+                    _logger.LogWarning(
+                        "Partial success: {SuccessfulCount}/{TotalAgents} agents completed successfully. Continuing with partial results.",
+                        successfulCount,
+                        totalAgents);
+                    progress?.Report($"Warning: {failedResults.Count} agent(s) failed, but continuing with {successfulCount} successful analysis(es).");
+                }
+
+                // Use successful results for downstream processing
+                var specialistResults = successfulResults.ToArray();
+
+                // Step 3: Peer review discussion (starts after all agents complete, but only with successful ones)
                 var peerReviewSw = System.Diagnostics.Stopwatch.StartNew();
-                var discussion = await _communicationCoordinator.FacilitateAgentDiscussionAsync(
-                    $"Code Analysis for: {businessObjective}",
-                    specialistResults.ToList(),
-                    codeContext,
-                    cancellationToken);
-                peerReviewSw.Stop();
-                perfMetrics.PeerReviewTimeMs = peerReviewSw.ElapsedMilliseconds;
-                teamResult.TeamDiscussion = discussion.Messages;
+                AgentConversation? discussion = null;
+                if (successfulResults.Any())
+                {
+                    discussion = await _communicationCoordinator.FacilitateAgentDiscussionAsync(
+                        $"Code Analysis for: {businessObjective}",
+                        successfulResults.ToList(), // Only use successful results for discussion
+                        codeContext,
+                        cancellationToken);
+                    peerReviewSw.Stop();
+                    perfMetrics.PeerReviewTimeMs = peerReviewSw.ElapsedMilliseconds;
+                    teamResult.TeamDiscussion = discussion.Messages;
+                }
+                else
+                {
+                    peerReviewSw.Stop();
+                    perfMetrics.PeerReviewTimeMs = 0;
+                    _logger.LogWarning("[Orchestrator] Skipping peer review - no successful agent results");
+                }
 
                 // Step 4 & 6: Synthesis and executive summary in parallel (after agent results)
                 _logger.LogInformation("[Orchestrator] Starting synthesis and executive summary in parallel at {UtcNow}", DateTime.UtcNow);
                 var synthesisSw = System.Diagnostics.Stopwatch.StartNew();
                 var synthesisTask = _synthesizer.SynthesizeRecommendationsAsync(
-                    specialistResults.ToList(),
+                    successfulResults.ToList(), // Only use successful results for synthesis
                     businessObjective,
                     cancellationToken);
                 var summarySw = System.Diagnostics.Stopwatch.StartNew();
@@ -230,8 +441,16 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 else if (summaryEx != null)
                     _logger.LogError(summaryEx, "[Orchestrator] Summary failed, executive summary not set");
 
-                // Step 5: Calculate consensus metrics
-                teamResult.Consensus = _consensusCalculator.CalculateConsensusMetrics(discussion, specialistResults);
+                // Step 5: Calculate consensus metrics (only if discussion occurred)
+                if (discussion != null)
+                {
+                    teamResult.Consensus = _consensusCalculator.CalculateConsensusMetrics(discussion, specialistResults);
+                }
+                else
+                {
+                    // No discussion occurred, create empty consensus metrics
+                    teamResult.Consensus = new TeamConsensusMetrics();
+                }
 
                 // Step 7: Calculate overall confidence
                 teamResult.OverallConfidenceScore = _consensusCalculator.CalculateTeamConfidenceScore(specialistResults);
@@ -250,17 +469,49 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                     teamResult.ExecutiveSummary += $"\n\nAnalysis completed efficiently using parallel execution. Total time: {perfMetrics.TotalTimeMs}ms ({perfMetrics.ParallelSpeedup}x speedup vs sequential).";
                 }
 
+                // Finalize cost tracking
+                if (costMetrics != null && _costTracking != null)
+                {
+                    _costTracking.CalculateCost(costMetrics);
+                    _costTracking.LogCostMetrics(costMetrics);
+                    _logger.LogInformation(
+                        "Analysis cost - Total: {TotalCost}, InputTokens: {InputTokens}, OutputTokens: {OutputTokens}",
+                        _costTracking.FormatCost(costMetrics.TotalCost),
+                        costMetrics.InputTokens,
+                        costMetrics.OutputTokens);
+                }
+
                 // Performance metrics logging
                 var tokenReduction = "75-80%"; // Based on preprocessing design
                 _logger.LogInformation("Team analysis completed. Time saved: {ElapsedMs}ms, Tokens reduced: {TokenReduction}",
                     orchestrationSw.ElapsedMilliseconds, tokenReduction);
 
+                // Store result for deduplication
+                if (_deduplicationService != null)
+                {
+                    var fingerprint = _deduplicationService.GenerateRequestFingerprint(files, businessObjective, requiredSpecialties);
+                    if (!string.IsNullOrEmpty(fingerprint))
+                    {
+                        await _deduplicationService.StoreRequestAsync(fingerprint, teamResult);
+                    }
+                }
+
                 return teamResult;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[Orchestrator] Team analysis coordination failed");
-                throw;
+                var errorMessage = _errorHandling.CreateActionableErrorMessage(ex, "Team analysis coordination");
+                _logger.LogError(ex, "[Orchestrator] Team analysis coordination failed. {ErrorMessage}", errorMessage);
+                
+                // Create error result with partial information if available
+                if (teamResult.IndividualAnalyses.Any())
+                {
+                    _logger.LogWarning("[Orchestrator] Returning partial results from {Count} successful agents", teamResult.IndividualAnalyses.Count);
+                    teamResult.ExecutiveSummary = $"Analysis completed with errors. {errorMessage}";
+                    return teamResult;
+                }
+                
+                throw new InvalidOperationException(errorMessage, ex);
             }
         }
 
@@ -309,24 +560,42 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[Agent:{Specialty}] Failed to execute analysis", specialty);
+                // Create structured error result with remediation steps
+                var inputSummary = $"Metadata summary length: {filteredMetadataSummary?.Length ?? 0} chars, Objective: {businessObjective.Substring(0, Math.Min(50, businessObjective.Length))}...";
+                var errorResult = _errorHandling.CreateAgentErrorResult(specialty, ex, inputSummary);
+                
+                _logger.LogError(
+                    ex,
+                    "[Agent:{Specialty}] Failed to execute analysis. ErrorCode: {ErrorCode}, Retryable: {IsRetryable}",
+                    specialty,
+                    errorResult.ErrorCode,
+                    errorResult.IsRetryable);
 
-                // Return error result instead of failing completely
+                // Return error result with actionable information
                 return new SpecialistAnalysisResult
                 {
                     AgentName = $"{specialty}Agent",
                     Specialty = specialty,
                     ConfidenceScore = 0,
-                    BusinessImpact = $"Analysis failed: {ex.Message}",
+                    BusinessImpact = errorResult.ErrorMessage,
                     KeyFindings = new List<Finding>
                     {
                         new Finding
                         {
                             Category = "Analysis Error",
-                            Description = $"Failed to execute {specialty} analysis: {ex.Message}",
-                            Severity = "HIGH"
+                            Description = errorResult.ErrorDescription,
+                            Severity = "HIGH",
+                            Location = $"Agent: {specialty}",
+                            Evidence = errorResult.RemediationSteps
                         }
-                    }
+                    },
+                    Recommendations = errorResult.RemediationSteps.Select((step, index) => new Recommendation
+                    {
+                        Title = $"Remediation Step {index + 1}",
+                        Description = step,
+                        Priority = "HIGH",
+                        EstimatedHours = 0
+                    }).ToList()
                 };
             }
         }

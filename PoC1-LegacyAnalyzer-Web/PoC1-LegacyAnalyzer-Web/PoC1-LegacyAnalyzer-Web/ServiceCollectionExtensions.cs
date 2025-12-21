@@ -153,7 +153,7 @@ namespace PoC1_LegacyAnalyzer_Web
                     MaxConnectionsPerServer = maxConnectionsPerServer
                 });
 
-            // Register IChatCompletionService for AIAnalysisService (uses default client)
+            // Register IChatCompletionService with resilient wrapper (retry policies + circuit breaker)
             services.AddScoped<IChatCompletionService>(sp =>
             {
                 var config = sp.GetRequiredService<IConfiguration>();
@@ -174,29 +174,41 @@ namespace PoC1_LegacyAnalyzer_Web
                 var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
                 var httpClient = httpClientFactory.CreateClient();
 
-                return new AzureOpenAIChatCompletionService(
+                // Create inner service
+                var innerService = new AzureOpenAIChatCompletionService(
                     deploymentName: deployment,
                     endpoint: endpoint,
                     apiKey: apiKey,
                     httpClient: httpClient
                 );
+
+                // Wrap with resilient service (retry + circuit breaker)
+                var logger = sp.GetRequiredService<ILogger<ResilientChatCompletionService>>();
+                var retryConfig = sp.GetRequiredService<IOptions<Models.RetryPolicyConfiguration>>();
+                return new ResilientChatCompletionService(innerService, logger, retryConfig);
             });
 
             services.AddScoped<Kernel>(sp =>
             {
-                var endpoint = configuration["AzureOpenAI:Endpoint"]
-                    ?? throw new InvalidOperationException("Azure OpenAI endpoint not configured");
-                var apiKey = configuration["AzureOpenAI:ApiKey"]
-                    ?? throw new InvalidOperationException("Azure OpenAI API key not configured");
-                var deployment = configuration["AzureOpenAI:Deployment"]
-                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
-                    ?? throw new InvalidOperationException("Azure OpenAI deployment not configured");
-
-                var builder = Kernel.CreateBuilder();
-                builder.AddAzureOpenAIChatCompletion(deployment, endpoint, apiKey);
-                builder.Services.AddLogging();
-
-                return builder.Build();
+                // Create kernel using KernelBuilder (available in Semantic Kernel 1.x)
+                // This allows us to properly configure the kernel with services
+                var kernelBuilder = Kernel.CreateBuilder();
+                
+                // Get the resilient IChatCompletionService from DI (with retry policies and circuit breaker)
+                var chatCompletionService = sp.GetRequiredService<IChatCompletionService>();
+                
+                // Add the chat completion service to the kernel's service collection
+                kernelBuilder.Services.AddSingleton(chatCompletionService);
+                
+                // Also add logger factory so kernel can create loggers
+                var loggerFactory = sp.GetService<ILoggerFactory>();
+                if (loggerFactory != null)
+                {
+                    kernelBuilder.Services.AddSingleton(loggerFactory);
+                }
+                
+                // Build the kernel
+                return kernelBuilder.Build();
             });
 
             // Remove singleton HttpClient registration

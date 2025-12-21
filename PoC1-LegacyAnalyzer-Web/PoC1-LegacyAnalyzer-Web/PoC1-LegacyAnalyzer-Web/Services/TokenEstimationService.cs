@@ -1,43 +1,78 @@
 using Microsoft.Extensions.Options;
 using PoC1_LegacyAnalyzer_Web.Models;
+using SharpToken;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
     /// <summary>
-    /// Service for estimating token usage in AI operations.
+    /// Service for accurate token counting using tiktoken (SharpToken).
+    /// Provides accurate token counts instead of estimates.
     /// </summary>
     public class TokenEstimationService : ITokenEstimationService
     {
         private const int AVERAGE_CHARACTERS_PER_TOKEN = 4;
         private readonly TokenEstimationConfig _tokenEstimation;
         private readonly BatchProcessingConfig _batchConfig;
+        private readonly GptEncoding _encoding;
+        private readonly ILogger<TokenEstimationService>? _logger;
+        private readonly bool _useTiktoken;
 
         public TokenEstimationService(
             IOptions<TokenEstimationConfig> tokenEstimationOptions,
-            IOptions<BatchProcessingConfig> batchOptions)
+            IOptions<BatchProcessingConfig> batchOptions,
+            ILogger<TokenEstimationService>? logger = null)
         {
             _tokenEstimation = tokenEstimationOptions.Value ?? new TokenEstimationConfig();
             _batchConfig = batchOptions.Value ?? new BatchProcessingConfig();
+            _logger = logger;
+            
+            // Use tiktoken if enabled, otherwise fall back to estimation
+            _useTiktoken = _tokenEstimation.UseTiktoken ?? true;
+            
+            try
+            {
+                // Initialize SharpToken with cl100k_base encoding (used by GPT-4)
+                _encoding = GptEncoding.GetEncoding("cl100k_base");
+                _logger?.LogInformation("TokenEstimationService initialized with tiktoken (cl100k_base encoding)");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to initialize tiktoken, falling back to estimation");
+                _useTiktoken = false;
+                _encoding = null!; // Will not be used if _useTiktoken is false
+            }
         }
 
         /// <summary>
-        /// Estimates token count from text length.
-        /// Accounts for code structure (more tokens per character than plain text).
+        /// Counts tokens accurately using tiktoken, or estimates if tiktoken is disabled.
         /// </summary>
         /// <param name="text">Input text</param>
-        /// <returns>Estimated token count</returns>
+        /// <returns>Token count (accurate if tiktoken enabled, estimated otherwise)</returns>
         public int EstimateTokens(string text)
         {
             if (string.IsNullOrEmpty(text))
                 return 0;
 
-            // More accurate estimation: code has more tokens per character
-            // C# code typically has ~3-4 chars per token, but we use configurable value
+            // Use accurate tiktoken counting if enabled
+            if (_useTiktoken && _encoding != null)
+            {
+                try
+                {
+                    var tokens = _encoding.Encode(text);
+                    var count = tokens.Count;
+                    _logger?.LogDebug("Counted {Count} tokens using tiktoken (text length: {Length})", count, text.Length);
+                    return count;
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Tiktoken encoding failed, falling back to estimation");
+                    // Fall through to estimation
+                }
+            }
+
+            // Fallback to estimation (original logic)
             var baseEstimate = text.Length / _batchConfig.TokenEstimationCharsPerToken;
-            
-            // Add overhead for code structure (brackets, keywords, etc. increase token density)
             var structureOverhead = (int)(baseEstimate * _tokenEstimation.CodeStructureOverheadPercentage);
-            
             return baseEstimate + structureOverhead;
         }
 
