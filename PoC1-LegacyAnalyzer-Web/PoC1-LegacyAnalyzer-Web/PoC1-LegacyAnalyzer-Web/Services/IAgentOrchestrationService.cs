@@ -18,9 +18,10 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         /// <param name="businessObjective">The business objective guiding the analysis.</param>
         /// <param name="requiredSpecialties">A list of specialties required for the analysis.</param>
         /// <param name="progress">Optional progress reporter for preprocessing phase.</param>
+        /// <param name="detailedProgress">Optional detailed progress reporter for per-agent progress tracking.</param>
         /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
         /// <returns>A <see cref="TeamAnalysisResult"/> containing the results of the team analysis.</returns>
-        Task<TeamAnalysisResult> CoordinateTeamAnalysisAsync(List<IBrowserFile> files, string businessObjective, List<string> requiredSpecialties, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+        Task<TeamAnalysisResult> CoordinateTeamAnalysisAsync(List<IBrowserFile> files, string businessObjective, List<string> requiredSpecialties, IProgress<string>? progress = null, IProgress<Models.AnalysisProgress>? detailedProgress = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Facilitates a discussion among agents on a given topic, using initial analyses as input.

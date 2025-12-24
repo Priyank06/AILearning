@@ -4,6 +4,7 @@ using PoC1_LegacyAnalyzer_Web.Models;
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.ComponentModel;
 using System.Text.Json;
 
@@ -15,6 +16,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly ILogger<SecurityAnalystAgent> _logger;
         private readonly AgentConfiguration _agentConfig;
         private readonly IResultTransformerService _resultTransformer;
+        private readonly AgentLegacyIndicatorsConfiguration _legacyIndicators;
+        private readonly LegacyContextMessagesConfiguration _legacyContextMessages;
 
         public string AgentName => _agentConfig.AgentProfiles["security"].AgentName;
         public string Specialty => _agentConfig.AgentProfiles["security"].Specialty;
@@ -25,11 +28,15 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             Kernel kernel, 
             ILogger<SecurityAnalystAgent> logger, 
             IConfiguration configuration,
-            IResultTransformerService resultTransformer)
+            IResultTransformerService resultTransformer,
+            IOptions<AgentLegacyIndicatorsConfiguration> legacyIndicators,
+            IOptions<LegacyContextMessagesConfiguration> legacyContextMessages)
         {
             _kernel = kernel;
             _logger = logger;
             _resultTransformer = resultTransformer;
+            _legacyIndicators = legacyIndicators?.Value ?? new AgentLegacyIndicatorsConfiguration();
+            _legacyContextMessages = legacyContextMessages?.Value ?? new LegacyContextMessagesConfiguration();
             _kernel.Plugins.AddFromObject(this, "SecurityAnalyst");
 
             _agentConfig = new AgentConfiguration();
@@ -43,13 +50,55 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             [Description("Business context and risk tolerance")] string businessContext)
         {
             var template = _agentConfig.AgentPromptTemplates["security"].AnalysisPrompt;
+            
+            // Extract legacy context from code if available (check for legacy indicators in the metadata summary)
+            var legacyContext = ExtractLegacyContextFromCode(code);
+            
             var prompt = template
-                .Replace("{agentPersona}", AgentPersona).Replace("{code}", code)
-                .Replace("{complianceStandards}", complianceStandards).Replace("{businessContext}", businessContext);
+                .Replace("{agentPersona}", AgentPersona)
+                .Replace("{code}", code)
+                .Replace("{complianceStandards}", complianceStandards)
+                .Replace("{businessContext}", businessContext)
+                .Replace("{legacyContext}", legacyContext);
 
             var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);
-            return result.Content ?? _agentConfig.AgentPromptTemplates["security"].DefaultResponse;
+                return result.Content ?? _agentConfig.AgentPromptTemplates["security"].DefaultResponse;
+        }
+
+        private string ExtractLegacyContextFromCode(string code)
+        {
+            // Check if code contains legacy indicators (this is a metadata summary, not full code)
+            // The actual legacy context should come from metadata, but we can detect some patterns here
+            if (string.IsNullOrEmpty(code))
+                return "";
+
+            var legacyIndicators = new List<string>();
+
+            // Check for legacy framework patterns
+            if (code.Contains("System.Web.UI") || code.Contains("System.EnterpriseServices") || 
+                code.Contains("System.Runtime.Remoting") || code.Contains("System.Web.Services"))
+            {
+                legacyIndicators.Add(_legacyIndicators.Security.AncientFramework);
+            }
+
+            // Check for global state patterns
+            if (code.Contains("HttpContext.Current") || code.Contains("Application[") || code.Contains("Session["))
+            {
+                legacyIndicators.Add(_legacyIndicators.Security.GlobalState);
+            }
+
+            // Check for obsolete API patterns
+            if (code.Contains("DataSet") || code.Contains("DataTable") || code.Contains("BinaryFormatter"))
+            {
+                legacyIndicators.Add(_legacyIndicators.Security.ObsoleteApis);
+            }
+
+            if (!legacyIndicators.Any())
+                return "";
+
+            return _legacyContextMessages.LegacyContextHeaderSimple + string.Join("\n", legacyIndicators) +
+                   _legacyContextMessages.SecurityLegacyContextFooter;
         }
 
         [KernelFunction, Description("Review another agent's analysis from security perspective")]

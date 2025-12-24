@@ -19,6 +19,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly IFileFilteringService _fileFiltering;
         private readonly IFileCacheManager _cacheManager;
         private readonly FilePreProcessingOptions _options;
+        private readonly LegacyContextFormatter _legacyContextFormatter;
 
         public FilePreProcessingService(
             ILogger<FilePreProcessingService> logger,
@@ -27,7 +28,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             IComplexityCalculationService complexityCalculation,
             IFileFilteringService fileFiltering,
             IFileCacheManager cacheManager,
-            IOptions<FilePreProcessingOptions> options)
+            IOptions<FilePreProcessingOptions> options,
+            LegacyContextFormatter legacyContextFormatter)
         {
             _logger = logger;
             _metadataExtraction = metadataExtraction;
@@ -36,6 +38,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             _fileFiltering = fileFiltering;
             _cacheManager = cacheManager;
             _options = options?.Value ?? new FilePreProcessingOptions();
+            _legacyContextFormatter = legacyContextFormatter;
         }
 
         // Delegate to MetadataExtractionService
@@ -189,6 +192,13 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             else
             {
                 result = "Unsupported agent specialty.";
+            }
+
+            // Append legacy context information
+            var legacyContext = _legacyContextFormatter.ExtractLegacyContextFromMetadata(allMetadata);
+            if (!string.IsNullOrEmpty(legacyContext))
+            {
+                result += legacyContext;
             }
 
             // Estimate token count (rough: 1 token per 4 chars)

@@ -145,7 +145,8 @@
 
     private async Task HandleFileSelection(InputFileChangeEventArgs e)
     {
-        var newFiles = e.GetMultipleFiles(10); // Max 10 files
+        // NOTE: No file count limit - batching handles any number of files
+        var newFiles = e.GetMultipleFiles(10000); // Large number to allow multiple files, but no actual limit enforced
 
         // Filter for .cs files only
         var csFiles = newFiles.Where(f => f.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)).ToList();

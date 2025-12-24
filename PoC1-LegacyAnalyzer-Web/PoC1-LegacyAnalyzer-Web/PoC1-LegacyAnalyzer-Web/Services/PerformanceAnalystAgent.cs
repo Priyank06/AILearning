@@ -2,6 +2,7 @@
 using Microsoft.SemanticKernel.ChatCompletion;
 using PoC1_LegacyAnalyzer_Web.Models;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using System.ComponentModel;
 using System.Text.Json;
 
@@ -13,6 +14,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly ILogger<PerformanceAnalystAgent> _logger;
         private readonly AgentConfiguration _agentConfig;
         private readonly IResultTransformerService _resultTransformer;
+        private readonly AgentLegacyIndicatorsConfiguration _legacyIndicators;
+        private readonly LegacyContextMessagesConfiguration _legacyContextMessages;
 
         public string AgentName => _agentConfig.AgentProfiles["performance"].AgentName;
         public string Specialty => _agentConfig.AgentProfiles["performance"].Specialty;
@@ -23,11 +26,15 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             Kernel kernel, 
             ILogger<PerformanceAnalystAgent> logger, 
             IConfiguration configuration,
-            IResultTransformerService resultTransformer)
+            IResultTransformerService resultTransformer,
+            IOptions<AgentLegacyIndicatorsConfiguration> legacyIndicators,
+            IOptions<LegacyContextMessagesConfiguration> legacyContextMessages)
         {
             _kernel = kernel;
             _logger = logger;
             _resultTransformer = resultTransformer;
+            _legacyIndicators = legacyIndicators?.Value ?? new AgentLegacyIndicatorsConfiguration();
+            _legacyContextMessages = legacyContextMessages?.Value ?? new LegacyContextMessagesConfiguration();
             _kernel.Plugins.AddFromObject(this, "PerformanceAnalyst");
 
             _agentConfig = new AgentConfiguration();
@@ -41,15 +48,53 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             [Description("Scalability targets and constraints")] string scalabilityTargets)
         {
             var template = _agentConfig.AgentPromptTemplates["performance"].AnalysisPrompt;
+            
+            // Extract legacy context from code
+            var legacyContext = ExtractLegacyContextFromCode(code);
+            
             var prompt = template
                 .Replace("{agentPersona}", AgentPersona)
                 .Replace("{code}", code)
                 .Replace("{performanceRequirements}", performanceRequirements)
-                .Replace("{scalabilityTargets}", scalabilityTargets);
+                .Replace("{scalabilityTargets}", scalabilityTargets)
+                .Replace("{legacyContext}", legacyContext);
 
             var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
             var result = await chatCompletion.GetChatMessageContentAsync(prompt);
             return result.Content ?? _agentConfig.AgentPromptTemplates["performance"].DefaultResponse;
+        }
+
+        private string ExtractLegacyContextFromCode(string code)
+        {
+            if (string.IsNullOrEmpty(code))
+                return "";
+
+            var legacyIndicators = new List<string>();
+
+            // Check for legacy data access patterns (often performance bottlenecks)
+            if (code.Contains("DataSet") || code.Contains("DataTable") || code.Contains("SqlDataAdapter"))
+            {
+                legacyIndicators.Add(_legacyIndicators.Performance.LegacyDataAccess);
+            }
+
+            // Check for synchronous I/O patterns
+            if (code.Contains("File.ReadAllText") || code.Contains("File.WriteAllText") || 
+                code.Contains("HttpWebRequest") || code.Contains("WebClient"))
+            {
+                legacyIndicators.Add(_legacyIndicators.Performance.SynchronousIO);
+            }
+
+            // Check for legacy framework patterns
+            if (code.Contains("System.Web.UI") || code.Contains("ViewState"))
+            {
+                legacyIndicators.Add(_legacyIndicators.Performance.LegacyWebForms);
+            }
+
+            if (!legacyIndicators.Any())
+                return "";
+
+            return _legacyContextMessages.LegacyContextHeaderSimple + string.Join("\n", legacyIndicators) +
+                   _legacyContextMessages.PerformanceLegacyContextFooter;
         }
 
         public async Task<string> AnalyzeAsync(

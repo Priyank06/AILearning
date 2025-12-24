@@ -221,19 +221,11 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             var results = new List<ValidationResult>();
             var fileList = files.ToList();
 
-            // Check total file count
-            if (fileList.Count > _config.MaxFilesPerAnalysis)
-            {
-                var errorResult = new ValidationResult
-                {
-                    IsValid = false,
-                    ErrorMessage = $"Number of files ({fileList.Count}) exceeds maximum allowed ({_config.MaxFilesPerAnalysis})."
-                };
-                results.Add(errorResult);
-                return results;
-            }
+            // NOTE: File count limit removed - batching and preprocessing naturally handle any number of files
+            // Preprocessing filters files by priority, and batching processes them in groups of 10
+            // No need for hard limits that would prevent large project analysis
 
-            // Validate each file
+            // Validate each file (size, extension, etc. - but not count)
             foreach (var file in fileList)
             {
                 var result = await ValidateFileAsync(file);

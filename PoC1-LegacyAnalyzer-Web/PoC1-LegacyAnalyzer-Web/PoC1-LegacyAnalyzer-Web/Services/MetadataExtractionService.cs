@@ -17,10 +17,13 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly ILogger<MetadataExtractionService> _logger;
         private readonly IFileCacheManager _cacheManager;
         private readonly IPatternDetectionService _patternDetection;
+        private readonly ILegacyPatternDetectionService? _legacyPatternDetection;
         private readonly IComplexityCalculationService _complexityCalculation;
         private readonly IAnalyzerRouter _analyzerRouter;
         private readonly ILanguageDetector _languageDetector;
+        private readonly IHybridMultiLanguageAnalyzer? _hybridAnalyzer;
         private readonly FilePreProcessingOptions _options;
+        private readonly DefaultValuesConfiguration _defaultValues;
 
         public MetadataExtractionService(
             ILogger<MetadataExtractionService> logger,
@@ -29,15 +32,21 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             IComplexityCalculationService complexityCalculation,
             IAnalyzerRouter analyzerRouter,
             ILanguageDetector languageDetector,
-            IOptions<FilePreProcessingOptions> options)
+            IOptions<FilePreProcessingOptions> options,
+            IOptions<DefaultValuesConfiguration> defaultValues,
+            ILegacyPatternDetectionService? legacyPatternDetection = null,
+            IHybridMultiLanguageAnalyzer? hybridAnalyzer = null)
         {
             _logger = logger;
             _cacheManager = cacheManager;
             _patternDetection = patternDetection;
+            _legacyPatternDetection = legacyPatternDetection;
             _complexityCalculation = complexityCalculation;
             _analyzerRouter = analyzerRouter;
             _languageDetector = languageDetector;
+            _hybridAnalyzer = hybridAnalyzer;
             _options = options?.Value ?? new FilePreProcessingOptions();
+            _defaultValues = defaultValues?.Value ?? new DefaultValuesConfiguration();
         }
 
         public async Task<List<FileMetadata>> ExtractMetadataParallelAsync(List<IBrowserFile> files, string? languageHint = null, int maxConcurrency = 5)
@@ -72,10 +81,10 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                     _logger?.LogError(ex, "Error extracting metadata for file: {FileName}", file?.Name);
                     return new FileMetadata
                     {
-                        FileName = file?.Name ?? "Unknown",
+                        FileName = file?.Name ?? _defaultValues.FileNames.Unknown,
                         FileSize = file?.Size ?? 0,
-                        Language = languageHint ?? "unknown",
-                        Status = "Error",
+                        Language = languageHint ?? _defaultValues.Language.Unknown,
+                        Status = _defaultValues.Status.Error,
                         ErrorMessage = ex.Message
                     };
                 }
@@ -122,8 +131,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 {
                     FileName = file.Name,
                     FileSize = fileSize,
-                    Language = languageHint ?? "unknown",
-                    Status = "Error",
+                    Language = languageHint ?? _defaultValues.Language.Unknown,
+                    Status = _defaultValues.Status.Error,
                     ErrorMessage = $"File size {fileSize} bytes exceeds maximum allowed size of {_options.MaxFileSizeMB}MB"
                 };
             }
@@ -137,7 +146,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             var detectedLanguage = _languageDetector.DetectLanguage(file.Name, code);
             var actualLanguage = detectedLanguage != LanguageKind.Unknown 
                 ? detectedLanguage.ToString().ToLowerInvariant() 
-                : (languageHint ?? "unknown");
+                : (languageHint ?? _defaultValues.Language.Unknown);
 
             // Generate cache key with detected language
             var cacheKey = $"{file.Name}_{file.Size}_{file.LastModified.Ticks}_{actualLanguage}";
@@ -158,7 +167,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             {
                 FileName = file.Name,
                 FileSize = file.Size,
-                Language = actualLanguage
+                Language = actualLanguage,
+                Status = _defaultValues.Status.Success
             };
 
             try
@@ -186,8 +196,44 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                     metadata.Patterns = new CodePatternAnalysis();
                 }
 
+                // Legacy pattern detection
+                if (_legacyPatternDetection != null)
+                {
+                    var legacyContext = new Models.LegacyContext
+                    {
+                        FileName = file.Name,
+                        FileLastModified = file.LastModified.DateTime,
+                        Language = actualLanguage,
+                        LinesOfCode = metadata.LineCount
+                    };
+                    var legacyResult = _legacyPatternDetection.DetectLegacyPatterns(code, actualLanguage, legacyContext);
+                    metadata.LegacyPatternResult = legacyResult;
+                }
+
                 // Complexity calculation (language-aware)
                 metadata.Complexity = _complexityCalculation.CalculateComplexity(code, actualLanguage);
+
+                // Hybrid semantic analysis for non-C# languages
+                if (_hybridAnalyzer != null && detectedLanguage != LanguageKind.CSharp && detectedLanguage != LanguageKind.Unknown)
+                {
+                    try
+                    {
+                        metadata.SemanticAnalysis = await _hybridAnalyzer.AnalyzeAsync(
+                            code, 
+                            file.Name, 
+                            detectedLanguage, 
+                            null, 
+                            CancellationToken.None);
+                        
+                        _logger?.LogDebug("Semantic analysis completed for {FileName}: {IssueCount} issues found", 
+                            file.Name, metadata.SemanticAnalysis?.SemanticIssues?.Count ?? 0);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Semantic analysis failed for {FileName}, continuing without semantic analysis", file.Name);
+                        // Continue without semantic analysis - not critical
+                    }
+                }
 
                 metadata.PatternSummary = BuildPatternSummary(metadata);
 
@@ -206,7 +252,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             }
             catch (Exception ex)
             {
-                metadata.Status = "Error";
+                metadata.Status = _defaultValues.Status.Error;
                 metadata.ErrorMessage = ex.Message;
                 _logger?.LogError(ex, "Error extracting metadata for file: {FileName}", file.Name);
             }

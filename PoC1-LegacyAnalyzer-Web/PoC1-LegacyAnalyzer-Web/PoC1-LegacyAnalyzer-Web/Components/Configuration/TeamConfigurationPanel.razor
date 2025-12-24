@@ -116,10 +116,17 @@
 
     protected override void OnInitialized()
     {
+        Console.WriteLine($"[TeamConfigurationPanel] OnInitialized called. OnAnalysisStarted.HasDelegate={OnAnalysisStarted.HasDelegate}");
         statusMessage = "Multi-agent team ready! Select agents and provide code for comprehensive analysis.";
         // Initialize with default agents (all three are selected by default)
         selectedAgents = new List<string> { "security", "performance", "architecture" };
         ValidateConfiguration();
+    }
+    
+    protected override void OnParametersSet()
+    {
+        Console.WriteLine($"[TeamConfigurationPanel] OnParametersSet called. OnAnalysisStarted.HasDelegate={OnAnalysisStarted.HasDelegate}");
+        base.OnParametersSet();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -179,7 +186,19 @@
 
     private async Task StartAnalysis()
     {
-        if (!IsConfigurationValid()) return;
+        Console.WriteLine("[TeamConfigurationPanel] StartAnalysis called");
+
+        if (!IsConfigurationValid())
+        {
+            Console.WriteLine("[TeamConfigurationPanel] Configuration is NOT valid. Errors:");
+            foreach (var err in validationErrors)
+            {
+                Console.WriteLine($"[TeamConfigurationPanel]   - {err}");
+            }
+            return;
+        }
+
+        Console.WriteLine("[TeamConfigurationPanel] Configuration is valid. Proceeding to invoke OnAnalysisStarted...");
 
         isAnalyzing = true;
         currentPhase = 0;
@@ -194,10 +213,14 @@
 
         try
         {
+            Console.WriteLine($"[TeamConfigurationPanel] Invoking OnAnalysisStarted. HasDelegate={OnAnalysisStarted.HasDelegate}");
             await OnAnalysisStarted.InvokeAsync(config);
+            Console.WriteLine("[TeamConfigurationPanel] OnAnalysisStarted.InvokeAsync completed.");
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[TeamConfigurationPanel] ERROR during OnAnalysisStarted.InvokeAsync: {ex.GetType().Name}: {ex.Message}");
+            Console.WriteLine(ex.StackTrace);
             statusMessage = $"Analysis failed: {ex.Message}";
             isAnalyzing = false;
         }
@@ -207,7 +230,9 @@
 
     private bool IsConfigurationValid()
     {
+        Console.WriteLine("[TeamConfigurationPanel] IsConfigurationValid called");
         ValidateConfiguration();
+        Console.WriteLine($"[TeamConfigurationPanel] validationErrors.Count = {validationErrors.Count}");
         return !validationErrors.Any();
     }
 
@@ -224,6 +249,8 @@
         };
 
         validationErrors.AddRange(config.GetValidationErrors());
+
+        Console.WriteLine($"[TeamConfigurationPanel] ValidateConfiguration -> EffectiveObjective='{config.EffectiveObjective}', Agents={config.SelectedAgents.Count}, Files={config.Files.Count}");
     }
 
     /// <summary>

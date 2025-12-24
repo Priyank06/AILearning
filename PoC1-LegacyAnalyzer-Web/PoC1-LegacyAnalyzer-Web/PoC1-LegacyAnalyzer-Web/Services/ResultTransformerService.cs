@@ -20,14 +20,23 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly PerformanceAnalystConfig _performanceConfig;
         private readonly ArchitecturalAnalystConfig _architecturalConfig;
         private readonly IHostEnvironment? _env;
+        private readonly IFindingValidationService? _validationService;
+        private readonly IRobustJsonExtractor? _jsonExtractor;
+        private readonly IConfidenceValidationService? _confidenceValidationService;
 
         public ResultTransformerService(
             ILogger<ResultTransformerService> logger,
             IConfiguration configuration,
-            IHostEnvironment? env = null)
+            IHostEnvironment? env = null,
+            IFindingValidationService? validationService = null,
+            IRobustJsonExtractor? jsonExtractor = null,
+            IConfidenceValidationService? confidenceValidationService = null)
         {
             _logger = logger;
             _env = env;
+            _validationService = validationService;
+            _jsonExtractor = jsonExtractor;
+            _confidenceValidationService = confidenceValidationService;
 
             // Load configurations
             _securityConfig = new SecurityAnalystConfig();
@@ -49,14 +58,32 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
             try
             {
-                var cleanedJson = CleanPotentialJson(rawAnalysis);
-                var options = new JsonSerializerOptions
+                LLMStructuredResponse? structured = null;
+
+                // Use robust JSON extractor if available, otherwise fall back to legacy method
+                if (_jsonExtractor != null)
                 {
-                    PropertyNameCaseInsensitive = true,
-                    AllowTrailingCommas = true,
-                    ReadCommentHandling = JsonCommentHandling.Skip
-                };
-                var structured = JsonSerializer.Deserialize<LLMStructuredResponse>(cleanedJson, options);
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        AllowTrailingCommas = true,
+                        ReadCommentHandling = JsonCommentHandling.Skip
+                    };
+                    structured = _jsonExtractor.ExtractAndParse<LLMStructuredResponse>(rawAnalysis, options);
+                }
+                else
+                {
+                    // Legacy fallback for backward compatibility
+                    var cleanedJson = CleanPotentialJson(rawAnalysis);
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        AllowTrailingCommas = true,
+                        ReadCommentHandling = JsonCommentHandling.Skip
+                    };
+                    structured = JsonSerializer.Deserialize<LLMStructuredResponse>(cleanedJson, options);
+                }
+
                 if (structured != null && structured.ConfidenceScore > 0)
                 {
                     // --- PATCH START ---
@@ -73,6 +100,12 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                         });
                     }
                     // --- PATCH END ---
+
+                    // Validate findings if validation service is available
+                    ValidateFindings(findings);
+                    
+                    // Validate and normalize explainability for each finding
+                    ValidateExplainability(findings);
 
                     return new SpecialistAnalysisResult
                     {
@@ -118,7 +151,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             cleaned = Regex.Replace(cleaned, @",(\s*[\]}])", "$1");
 
             // Optionally normalize quotes (rarely needed)
-            // cleaned = cleaned.Replace("“", "\"").Replace("”", "\"").Replace("‘", "'").Replace("’", "'");
+            // cleaned = cleaned.Replace("ï¿½", "\"").Replace("ï¿½", "\"").Replace("ï¿½", "'").Replace("ï¿½", "'");
 
             return cleaned;
         }
@@ -129,6 +162,12 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             var findings = ExtractFindingsFromText(rawAnalysis, specialty);
             var recommendations = ExtractRecommendations(rawAnalysis, specialty);
 
+            // Validate findings if validation service is available
+            ValidateFindings(findings);
+            
+            // Validate explainability for findings
+            ValidateExplainability(findings);
+
             return new SpecialistAnalysisResult
             {
                 AgentName = agentName,
@@ -138,6 +177,33 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 KeyFindings = findings,
                 Recommendations = recommendations
             };
+        }
+
+        // Helper: Validate findings using validation service
+        private void ValidateFindings(List<Finding> findings)
+        {
+            if (_validationService == null || findings == null || !findings.Any())
+                return;
+
+            try
+            {
+                // Validate without file content (will still check severity consistency and contradictions)
+                var fileContents = new Dictionary<string, string>(); // Empty - validation will work with what it can
+                var validationResults = _validationService.ValidateFindings(findings, fileContents);
+
+                // Attach validation results to findings
+                for (int i = 0; i < findings.Count && i < validationResults.Count; i++)
+                {
+                    findings[i].Validation = validationResults[i];
+                }
+
+                _logger.LogDebug("Validated {Count} findings", findings.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error during finding validation");
+                // Don't fail the transformation if validation fails
+            }
         }
 
         // Improved findings extraction: parse LLM prose for findings
@@ -762,6 +828,35 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 return 0;
             
             return (text.Length - text.Replace(keyword, "", StringComparison.OrdinalIgnoreCase).Length) / keyword.Length;
+        }
+
+        /// <summary>
+        /// Validates and normalizes explainability for findings.
+        /// </summary>
+        private void ValidateExplainability(List<Finding> findings)
+        {
+            if (_confidenceValidationService == null || findings == null || !findings.Any())
+            {
+                _logger.LogDebug("ConfidenceValidationService not available or no findings to validate explainability.");
+                return;
+            }
+
+            try
+            {
+                foreach (var finding in findings)
+                {
+                    if (finding.Explainability != null)
+                    {
+                        finding.Explainability = _confidenceValidationService.ValidateAndNormalize(finding.Explainability);
+                    }
+                }
+                _logger.LogDebug("Validated explainability for {Count} findings.", findings.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error during explainability validation");
+                // Don't fail the transformation if validation fails
+            }
         }
     }
 }

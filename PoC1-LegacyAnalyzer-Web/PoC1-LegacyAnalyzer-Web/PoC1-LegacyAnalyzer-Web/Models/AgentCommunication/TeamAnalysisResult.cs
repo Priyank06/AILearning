@@ -15,5 +15,8 @@ namespace PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
         public TokenUsage? TokenUsage { get; set; }
         public PerformanceMetrics PerformanceMetrics { get; set; } = new PerformanceMetrics();
         public CostMetrics? CostMetrics { get; set; }
+        
+        // File-level semantic analysis results (for non-C# languages)
+        public Dictionary<string, SemanticAnalysisResult> FileSemanticAnalysis { get; set; } = new();
     }
 }

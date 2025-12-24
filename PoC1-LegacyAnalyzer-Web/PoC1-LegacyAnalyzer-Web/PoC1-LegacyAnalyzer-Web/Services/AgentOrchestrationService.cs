@@ -29,11 +29,14 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly IRequestDeduplicationService? _deduplicationService;
         private readonly ICostTrackingService? _costTracking;
         private readonly ITracingService? _tracing;
+        private readonly IAgentRateLimiter? _rateLimiter;
+        private readonly DefaultValuesConfiguration _defaultValues;
 
         public AgentOrchestrationService(
             Kernel kernel,
             ILogger<AgentOrchestrationService> logger,
             IOptions<AgentConfiguration> agentOptions,
+            IOptions<DefaultValuesConfiguration> defaultValues,
             IAgentRegistry agentRegistry,
             IAgentCommunicationCoordinator communicationCoordinator,
             IConsensusCalculator consensusCalculator,
@@ -44,7 +47,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             IErrorHandlingService errorHandling,
             IRequestDeduplicationService? deduplicationService = null,
             ICostTrackingService? costTracking = null,
-            ITracingService? tracing = null)
+            ITracingService? tracing = null,
+            IAgentRateLimiter? rateLimiter = null)
         {
             _kernel = kernel;
             _logger = logger;
@@ -59,6 +63,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             _deduplicationService = deduplicationService;
             _costTracking = costTracking;
             _tracing = tracing;
+            _rateLimiter = rateLimiter;
+            _defaultValues = defaultValues?.Value ?? new DefaultValuesConfiguration();
 
             // Register orchestrator functions with kernel
             _kernel.Plugins.AddFromObject(this, "AgentOrchestrator");
@@ -95,16 +101,21 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             string businessObjective,
             List<string> requiredSpecialties,
             IProgress<string>? progress = null,
+            IProgress<AnalysisProgress>? detailedProgress = null,
             CancellationToken cancellationToken = default)
         {
-            var orchestrationSw = System.Diagnostics.Stopwatch.StartNew();
+            Console.WriteLine($"[Orchestrator] CoordinateTeamAnalysisAsync CALLED with {files?.Count ?? 0} files, objective: {businessObjective}, specialties: [{string.Join(", ", requiredSpecialties ?? new List<string>())}]");
             
+            var orchestrationSw = System.Diagnostics.Stopwatch.StartNew();
+
             // Start distributed tracing activity
             using var activity = _tracing?.StartActivity("TeamAnalysis.Orchestrate");
             var correlationId = _tracing?.GetCorrelationId() ?? Guid.NewGuid().ToString();
+
+            _logger.LogInformation("[Orchestrator] Team analysis STARTED at {UtcNow}, CorrelationId: {CorrelationId}, Files: {FileCount}, Objective: {Objective}",
+                DateTime.UtcNow, correlationId, files?.Count ?? 0, businessObjective);
             
-            _logger.LogInformation("[Orchestrator] Team analysis STARTED at {UtcNow}, CorrelationId: {CorrelationId}", 
-                DateTime.UtcNow, correlationId);
+            Console.WriteLine($"[Orchestrator] Logging initialized, proceeding with analysis...");
 
             var conversationId = Guid.NewGuid().ToString();
             var teamResult = new TeamAnalysisResult
@@ -140,7 +151,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                             var cachedResult = await _deduplicationService.GetCachedResultAsync<TeamAnalysisResult>(fingerprint);
                             if (cachedResult != null)
                             {
-                                _logger.LogInformation("[Orchestrator] Returning cached result for duplicate request: {Fingerprint}", 
+                                _logger.LogInformation("[Orchestrator] Returning cached result for duplicate request: {Fingerprint}",
                                     fingerprint.Substring(0, Math.Min(16, fingerprint.Length)));
                                 progress?.Report("Returning cached result from previous analysis...");
                                 return cachedResult;
@@ -150,18 +161,21 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 }
 
                 // Input validation phase
+                Console.WriteLine($"[Orchestrator] Starting input validation phase...");
                 progress?.Report("Validating inputs...");
-                
+
                 // Validate business objective
+                Console.WriteLine($"[Orchestrator] Validating business objective: {businessObjective}");
                 var objectiveValidation = _inputValidation.ValidateBusinessObjective(businessObjective);
+                Console.WriteLine($"[Orchestrator] Objective validation result: IsValid={objectiveValidation.IsValid}, Error={objectiveValidation.ErrorMessage}");
                 if (!objectiveValidation.IsValid)
                 {
                     throw new ArgumentException($"Invalid business objective: {objectiveValidation.ErrorMessage}");
                 }
-                
+
                 // Sanitize business objective
                 businessObjective = _inputValidation.SanitizeBusinessObjective(objectiveValidation.SanitizedValue ?? businessObjective);
-                
+
                 // Validate files
                 var fileValidations = await _inputValidation.ValidateFilesAsync(files);
                 var invalidFiles = fileValidations.Where(v => !v.IsValid).ToList();
@@ -170,14 +184,14 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                     var errors = string.Join("; ", invalidFiles.Select(v => v.ErrorMessage));
                     throw new ArgumentException($"File validation failed: {errors}");
                 }
-                
+
                 // Log warnings for files with warnings
                 foreach (var validation in fileValidations.Where(v => v.Warnings.Any()))
                 {
                     var fileIndex = fileValidations.IndexOf(validation);
                     if (fileIndex >= 0 && fileIndex < files.Count)
                     {
-                        _logger.LogWarning("File {FileName} validation warnings: {Warnings}", 
+                        _logger.LogWarning("File {FileName} validation warnings: {Warnings}",
                             files[fileIndex].Name,
                             string.Join(", ", validation.Warnings));
                     }
@@ -186,23 +200,40 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 var perfMetrics = new PerformanceMetrics();
                 int llmCalls = 0;
 
+                // Dictionary to store semantic analysis results
+                var semanticAnalysisResults = new Dictionary<string, SemanticAnalysisResult>();
+
                 // Preprocessing phase - language detection happens automatically in ExtractMetadataParallelAsync
                 using var preprocessingActivity = _tracing?.StartActivity("Preprocessing.ExtractMetadata");
                 _tracing?.AddTag("preprocessing.fileCount", files.Count.ToString());
-                
+
                 var preprocessingSw = System.Diagnostics.Stopwatch.StartNew();
                 progress?.Report("Preprocessing files...");
                 // Language hint is now optional - metadata extraction will auto-detect language for each file
                 var metadata = await _preprocessing.ExtractMetadataParallelAsync(files);
                 preprocessingSw.Stop();
                 perfMetrics.PreprocessingTimeMs = preprocessingSw.ElapsedMilliseconds;
-                
+
                 _tracing?.AddTag("preprocessing.durationMs", preprocessingSw.ElapsedMilliseconds.ToString());
                 _tracing?.AddTag("preprocessing.metadataCount", metadata.Count.ToString());
                 _tracing?.AddEvent("Preprocessing.Completed");
 
                 _logger.LogInformation("[Orchestrator] Preprocessed {FileCount} files in {ElapsedMs}ms", files.Count, preprocessingSw.ElapsedMilliseconds);
                 progress?.Report($"Preprocessed {files.Count} files in {preprocessingSw.ElapsedMilliseconds}ms");
+
+                // Collect semantic analysis results from metadata
+                foreach (var meta in metadata)
+                {
+                    if (meta.SemanticAnalysis != null)
+                    {
+                        semanticAnalysisResults[meta.FileName] = meta.SemanticAnalysis;
+                    }
+                }
+
+                if (semanticAnalysisResults.Any())
+                {
+                    _logger.LogInformation("[Orchestrator] Collected semantic analysis results for {FileCount} files", semanticAnalysisResults.Count);
+                }
 
                 // Step 1: Create analysis plan
                 var codeContext = $"Preprocessed {metadata.Count} files, token-optimized for agent routing.";
@@ -211,28 +242,115 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 llmCalls++;
                 analysisPlanSw.Stop();
 
-                // Step 2: Execute specialist analyses in parallel
-                var agentAnalysisSw = System.Diagnostics.Stopwatch.StartNew();                
+                // Step 2: Execute specialist analyses in parallel with per-agent progress tracking
+                var agentAnalysisSw = System.Diagnostics.Stopwatch.StartNew();
                 var agentTaskStartTime = DateTime.UtcNow;
+
+                // Initialize per-agent progress tracking
+                var agentProgressDict = new Dictionary<string, AgentProgress>();
+                foreach (var specialty in requiredSpecialties.Where(s => _agentRegistry.IsRegistered(s)))
+                {
+                    var agent = _agentRegistry.GetAgent(specialty);
+                    agentProgressDict[specialty] = new AgentProgress
+                    {
+                        AgentName = agent?.AgentName ?? $"{specialty}Agent",
+                        Specialty = specialty,
+                        ProgressPercentage = 0,
+                        Status = _defaultValues.Status.Initializing
+                    };
+                }
+
+                // Report initial progress
+                ReportAgentProgress(detailedProgress, agentProgressDict);
 
                 var specialistTasks = requiredSpecialties
                     .Where(specialty => _agentRegistry.IsRegistered(specialty))
                     .Select(async specialty =>
                     {
-                        var taskCreatedAt = DateTime.UtcNow;
-                        _logger.LogInformation("[Agent:{Specialty}] TASK CREATED at {UtcNow}", specialty, taskCreatedAt);
+                        try
+                        {
+                            // Update progress: Starting
+                            if (agentProgressDict.ContainsKey(specialty))
+                            {
+                                agentProgressDict[specialty].Status = _defaultValues.Status.PreparingData;
+                                agentProgressDict[specialty].ProgressPercentage = 10;
+                                ReportAgentProgress(detailedProgress, agentProgressDict);
+                            }
 
-                        var agentData = await _preprocessing.GetAgentSpecificData(metadata, specialty);
-                        var filteredCount = agentData.Split('\n').Length;
-                        var reduction = metadata.Count > 0 ? 100 - (filteredCount * 100 / metadata.Count) : 0;
-                        _logger.LogInformation("[Agent:{Specialty}] Filtered {Total} files to {Filtered} ({Reduction}% reduction)", specialty, metadata.Count, filteredCount, reduction);
-                        progress?.Report($"Filtered {metadata.Count} files to {filteredCount} for {specialty} agent ({reduction}% reduction)");
+                            var taskCreatedAt = DateTime.UtcNow;
+                            _logger.LogInformation("[Agent:{Specialty}] TASK CREATED at {UtcNow}", specialty, taskCreatedAt);
 
-                        var sw = System.Diagnostics.Stopwatch.StartNew();
-                        var result = await ExecuteSpecialistAnalysisAsync(specialty, agentData, businessObjective, cancellationToken);
-                        sw.Stop();                        
+                            // Apply rate limiting if configured
+                            if (_rateLimiter != null)
+                            {
+                                await _rateLimiter.WaitIfNeededAsync(specialty, cancellationToken);
+                            }
 
-                        return result;
+                            // Update progress: Filtering data
+                            if (agentProgressDict.ContainsKey(specialty))
+                            {
+                                agentProgressDict[specialty].Status = _defaultValues.Status.FilteringMetadata;
+                                agentProgressDict[specialty].ProgressPercentage = 20;
+                                ReportAgentProgress(detailedProgress, agentProgressDict);
+                            }
+
+                            var agentData = await _preprocessing.GetAgentSpecificData(metadata, specialty);
+                            var filteredCount = agentData.Split('\n').Length;
+                            var reduction = metadata.Count > 0 ? 100 - (filteredCount * 100 / metadata.Count) : 0;
+                            _logger.LogInformation("[Agent:{Specialty}] Filtered {Total} files to {Filtered} ({Reduction}% reduction)", specialty, metadata.Count, filteredCount, reduction);
+                            progress?.Report($"Filtered {metadata.Count} files to {filteredCount} for {specialty} agent ({reduction}% reduction)");
+
+                            // Update progress: Analyzing
+                            if (agentProgressDict.ContainsKey(specialty))
+                            {
+                                agentProgressDict[specialty].Status = _defaultValues.Status.AnalyzingCode;
+                                agentProgressDict[specialty].ProgressPercentage = 40;
+                                ReportAgentProgress(detailedProgress, agentProgressDict);
+                            }
+
+                            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+                            // Record API call for rate limiting
+                            if (_rateLimiter != null)
+                            {
+                                _rateLimiter.RecordApiCall(specialty);
+                            }
+
+                            // Update progress: Processing AI response
+                            if (agentProgressDict.ContainsKey(specialty))
+                            {
+                                agentProgressDict[specialty].Status = _defaultValues.Status.ProcessingAIResponse;
+                                agentProgressDict[specialty].ProgressPercentage = 60;
+                                ReportAgentProgress(detailedProgress, agentProgressDict);
+                            }
+
+                            var result = await ExecuteSpecialistAnalysisAsync(specialty, agentData, businessObjective, cancellationToken);
+                            sw.Stop();
+
+                            // Update progress: Complete
+                            if (agentProgressDict.ContainsKey(specialty))
+                            {
+                                agentProgressDict[specialty].Status = _defaultValues.Status.Complete;
+                                agentProgressDict[specialty].ProgressPercentage = 100;
+                                agentProgressDict[specialty].IsComplete = true;
+                                ReportAgentProgress(detailedProgress, agentProgressDict);
+                            }
+
+                            _logger.LogInformation("[Agent:{Specialty}] Completed in {ElapsedMs}ms", specialty, sw.ElapsedMilliseconds);
+                            return result;
+                        }
+                        catch (Exception ex)
+                        {
+                            // Update progress: Error
+                            if (agentProgressDict.ContainsKey(specialty))
+                            {
+                                agentProgressDict[specialty].Status = _defaultValues.Status.Error;
+                                agentProgressDict[specialty].HasError = true;
+                                agentProgressDict[specialty].ErrorMessage = ex.Message;
+                                ReportAgentProgress(detailedProgress, agentProgressDict);
+                            }
+                            throw;
+                        }
                     })
                     .ToList();
 
@@ -240,17 +358,20 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 _logger.LogInformation("[Orchestrator] All specialist agent tasks CREATED at {UtcNow}", agentTaskStartTime);
 
                 // Wait for all agent tasks to complete (some may fail)
-                var agentTaskResults = await Task.WhenAll(specialistTasks.Select(async task =>
+                var agentTaskWrappers = specialistTasks.Select(async task =>
                 {
                     try
                     {
-                        return new { Success = true, Result = await task, Exception = (Exception?)null };
+                        var result = await task;
+                        return new { Success = true, Result = result, Exception = (Exception?)null };
                     }
                     catch (Exception ex)
                     {
                         return new { Success = false, Result = (SpecialistAnalysisResult?)null, Exception = ex };
                     }
-                }));
+                });
+
+                var agentTaskResults = await Task.WhenAll(agentTaskWrappers);
 
                 agentAnalysisSw.Stop();
                 perfMetrics.AgentAnalysisTimeMs = agentAnalysisSw.ElapsedMilliseconds;
@@ -292,7 +413,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                     var errorMessage = _errorHandling.CreateActionableErrorMessage(
                         firstFailure.Exception!,
                         $"{failedResults.Count} of {totalAgents} agents failed. First failure in {specialty} agent");
-                    
+
                     throw new InvalidOperationException(errorMessage);
                 }
 
@@ -301,7 +422,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 {
                     var specialty = requiredSpecialties[failure.Index];
                     var errorResult = _errorHandling.CreateAgentErrorResult(specialty, failure.Exception!);
-                    
+
                     return new SpecialistAnalysisResult
                     {
                         AgentName = $"{specialty}Agent",
@@ -336,6 +457,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
                 // Assign all analyses to team result (successful + error results)
                 teamResult.IndividualAnalyses = allResults;
+
+                // Add semantic analysis results to team result
+                teamResult.FileSemanticAnalysis = semanticAnalysisResults;
 
                 // Log partial success if applicable
                 if (failedResults.Any() && shouldReturnPartial)
@@ -502,7 +626,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             {
                 var errorMessage = _errorHandling.CreateActionableErrorMessage(ex, "Team analysis coordination");
                 _logger.LogError(ex, "[Orchestrator] Team analysis coordination failed. {ErrorMessage}", errorMessage);
-                
+
                 // Create error result with partial information if available
                 if (teamResult.IndividualAnalyses.Any())
                 {
@@ -510,7 +634,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                     teamResult.ExecutiveSummary = $"Analysis completed with errors. {errorMessage}";
                     return teamResult;
                 }
-                
+
                 throw new InvalidOperationException(errorMessage, ex);
             }
         }
@@ -563,7 +687,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 // Create structured error result with remediation steps
                 var inputSummary = $"Metadata summary length: {filteredMetadataSummary?.Length ?? 0} chars, Objective: {businessObjective.Substring(0, Math.Min(50, businessObjective.Length))}...";
                 var errorResult = _errorHandling.CreateAgentErrorResult(specialty, ex, inputSummary);
-                
+
                 _logger.LogError(
                     ex,
                     "[Agent:{Specialty}] Failed to execute analysis. ErrorCode: {ErrorCode}, Retryable: {IsRetryable}",
@@ -871,19 +995,35 @@ Specialist Agent Findings:
                 codeContext,
                 cancellationToken);
         }
-    }
 
-    // Helper for atomic max update
-    internal static class InterlockedExtensions
-    {
-        public static void UpdateMax(ref int target, int value)
+        /// <summary>
+        /// Reports per-agent progress to the detailed progress reporter.
+        /// </summary>
+        private void ReportAgentProgress(IProgress<AnalysisProgress>? detailedProgress, Dictionary<string, AgentProgress> agentProgressDict)
         {
-            int initialValue, newValue;
-            do
+            if (detailedProgress == null) return;
+
+            var progress = new AnalysisProgress
             {
-                initialValue = target;
-                newValue = Math.Max(initialValue, value);
-            } while (initialValue != Interlocked.CompareExchange(ref target, newValue, initialValue));
+                Status = _defaultValues.Status.AnalysisInProgress,
+                AgentProgress = agentProgressDict
+            };
+
+            detailedProgress.Report(progress);
         }
+    }
+}
+
+// Helper for atomic max update
+internal static class InterlockedExtensions
+{
+    public static void UpdateMax(ref int target, int value)
+    {
+        int initialValue, newValue;
+        do
+        {
+            initialValue = target;
+            newValue = Math.Max(initialValue, value);
+        } while (initialValue != Interlocked.CompareExchange(ref target, newValue, initialValue));
     }
 }

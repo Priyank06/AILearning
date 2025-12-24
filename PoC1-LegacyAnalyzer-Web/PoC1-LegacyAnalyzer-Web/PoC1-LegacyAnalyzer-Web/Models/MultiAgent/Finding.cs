@@ -1,4 +1,6 @@
-﻿namespace PoC1_LegacyAnalyzer_Web.Models.MultiAgent
+﻿using PoC1_LegacyAnalyzer_Web.Models;
+
+namespace PoC1_LegacyAnalyzer_Web.Models.MultiAgent
 {
     public class Finding
     {
@@ -7,27 +9,30 @@
         public string Severity { get; set; } = "";
         public string Location { get; set; } = "";
         public List<string> Evidence { get; set; } = new();
+        
+        // Validation properties
+        public FindingValidationResult? Validation { get; set; }
+        
+        // Dependency impact analysis
+        public DependencyImpact? DependencyImpact { get; set; }
+        
+        // Explainability: confidence scores and reasoning
+        public ExplainableFinding? Explainability { get; set; }
     }
 
-    public class FileMetadata
+    public enum FindingValidationStatus
     {
-        public string FileName { get; set; } = "";
-        public string Language { get; set; } = "csharp";
-        public long FileSize { get; set; }
-        public int LineCount { get; set; }
-        public int NonEmptyLineCount { get; set; }
-        public int CommentLineCount { get; set; }
-        public List<string> Classes { get; set; } = new();
-        public List<string> Methods { get; set; } = new();
-        public List<string> Properties { get; set; } = new();
-        public List<string> Interfaces { get; set; } = new();
-        public List<string> Dependencies { get; set; } = new();
-        public ComplexityMetrics Complexity { get; set; } = new();
-        public CodePatternAnalysis CodePatternAnalysis { get; set; } = new();
-        // Compact AI Ready Summary
-        public string CompactSummary { get; set; } = "";
-        // Original Code Snippet
-        public string? OriginalCodeSnippet { get; set; }
+        Validated,      // ✅ All checks passed
+        LowConfidence,  // ⚠️ Some warnings but no critical errors
+        Failed          // ❌ Critical validation errors found
+    }
+
+    public class FindingValidationResult
+    {
+        public FindingValidationStatus Status { get; set; } = FindingValidationStatus.Validated;
+        public List<string> Errors { get; set; } = new();
+        public List<string> Warnings { get; set; } = new();
+        public Dictionary<string, bool> Checks { get; set; } = new();
     }
 
     public class ProjectSummary
@@ -51,56 +56,8 @@
         // Structured summary for AI (optimized format - ~500 tokens total)
         public string StructuredSummary { get; set; } = string.Empty;
 
-        // File summaries (compact versions only)
+        // File summaries (compact versions only) - using main Models.FileMetadata
         public List<FileMetadata> FileSummaries { get; set; } = new();
-    }
-
-    public class ComplexityMetrics
-    {
-        public int CyclomaticComplexity { get; set; }
-        public int CognitiveComplexity { get; set; }
-        public int MaxNestingDepth { get; set; }
-        public int NumberOfParameters { get; set; }
-        public double MaintainabilityIndex { get; set; }
-        public string ComplexityLevel { get; set; } = "Low"; // Low, Medium, High, VeryHigh
-    }
-
-    public class CodePatternAnalysis
-    {
-        // Security patterns
-        public bool HasSqlInjectionRisk { get; set; }
-        public bool HasHardcodedSecrets { get; set; }
-        public bool HasWeakCryptography { get; set; }
-        public bool HasPathTraversalRisk { get; set; }
-        public bool HasCommandInjectionRisk { get; set; }
-
-        // Legacy patterns
-        public bool UsesDeprecatedApis { get; set; }
-        public bool HasLegacyDataAccess { get; set; }
-        public bool UsesOutdatedFrameworks { get; set; }
-
-        // Code quality patterns
-        public bool HasLongMethods { get; set; }
-        public bool HasDeepNesting { get; set; }
-        public bool HasMagicNumbers { get; set; }
-        public bool HasEmptyCatchBlocks { get; set; }
-        public bool HasTodoComments { get; set; }
-
-        // Architecture patterns
-        public bool UsesDesignPatterns { get; set; }
-        public List<string> DetectedPatterns { get; set; } = new();
-        public List<string> AntiPatterns { get; set; } = new();
-
-        // Specific code smells with locations
-        public List<CodeSmell> CodeSmells { get; set; } = new();
-    }
-
-    public class CodeSmell
-    {
-        public string SmellType { get; set; } = string.Empty;
-        public string Location { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public int LineNumber { get; set; }
     }
     
     public class CodeIssue

@@ -5,6 +5,12 @@ using PoC1_LegacyAnalyzer_Web.Services.Analysis;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
+    /// <summary>
+    /// Orchestrates batch processing of files for analysis.
+    /// Handles any number of files by processing them in sequential batches of 10.
+    /// Files are intelligently grouped by module/namespace to keep related files together.
+    /// No hard file count limits are enforced - batching naturally handles large projects.
+    /// </summary>
     public class BatchAnalysisOrchestrator : IBatchAnalysisOrchestrator
     {
         private readonly ICodeAnalysisService _codeAnalysisService;
@@ -52,7 +58,6 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             IProgress<AnalysisProgress> progress)
         {
             var fileResults = new List<FileAnalysisResult>();
-            var semaphore = new SemaphoreSlim(_batchConfig.MaxConcurrentBatches, _batchConfig.MaxConcurrentBatches);
 
             // Step 1: Perform static analysis on all files first (fast, no API calls)
             var fileData = await PrepareFileDataAsync(files, analysisProgress, progress);
@@ -63,8 +68,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 return fileResults;
             }
 
-            // Step 2: Group files into batches based on token limits and file count
-            var batches = GroupFilesIntoBatches(fileData);
+            // Step 2: Group files intelligently by module/namespace, then into batches of 10
+            var batches = GroupFilesIntelligentlyIntoBatches(fileData);
 
             var originalApiCalls = fileData.Count;
             var optimizedApiCalls = batches.Count;
@@ -72,69 +77,79 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 ? Math.Round((1.0 - (double)optimizedApiCalls / originalApiCalls) * 100, 1) 
                 : 0;
 
-            _logger.LogInformation("Grouped {FileCount} files into {BatchCount} batches. API call reduction: {Reduction}% ({Original} → {Optimized})", 
+            _logger.LogInformation("Grouped {FileCount} files into {BatchCount} batches (10 files per batch). API call reduction: {Reduction}% ({Original} → {Optimized})", 
                 fileData.Count, batches.Count, reductionPercentage, originalApiCalls, optimizedApiCalls);
 
-            // Step 3: Process batches in parallel with concurrency control and error isolation
-            analysisProgress.Status = $"Processing {batches.Count} batches in parallel (optimized from {originalApiCalls} individual calls, ~{reductionPercentage}% reduction)...";
+            // Step 3: Process batches SEQUENTIALLY (not in parallel) to avoid API limits
+            analysisProgress.TotalBatches = batches.Count;
+            analysisProgress.Status = $"Processing {batches.Count} batches sequentially (optimized from {originalApiCalls} individual calls, ~{reductionPercentage}% reduction)...";
             progress?.Report(analysisProgress);
 
-            var completedBatches = 0;
             var totalFilesProcessed = 0;
-            var batchTasks = batches.Select(async (batch, batchIndex) =>
+            var batchStartTime = DateTime.Now;
+            
+            for (int batchIndex = 0; batchIndex < batches.Count; batchIndex++)
             {
-                await semaphore.WaitAsync();
+                var batch = batches[batchIndex];
+                var batchNumber = batchIndex + 1;
+                
+                // Update batch progress
+                analysisProgress.CurrentBatch = batchNumber;
+                analysisProgress.FilesInCurrentBatch = batch.Count;
+                analysisProgress.BatchStatus = $"Analyzing batch {batchNumber} of {batches.Count}...";
+                analysisProgress.Status = $"Batch {batchNumber}/{batches.Count}: Processing {batch.Count} files...";
+                
+                // Calculate estimated time remaining
+                if (batchNumber > 1)
+                {
+                    var elapsedTime = DateTime.Now - batchStartTime;
+                    var avgTimePerBatch = elapsedTime.TotalMilliseconds / (batchNumber - 1);
+                    var remainingBatches = batches.Count - batchNumber;
+                    analysisProgress.EstimatedTimeRemaining = TimeSpan.FromMilliseconds(avgTimePerBatch * remainingBatches);
+                }
+                
+                progress?.Report(analysisProgress);
+
                 try
                 {
-                    var batchNumber = batchIndex + 1;
-                    analysisProgress.Status = $"Batch {batchNumber}/{batches.Count}: Processing {batch.Count} files (API call {batchNumber} of {batches.Count}, ~{reductionPercentage}% fewer calls)...";
-                    progress?.Report(analysisProgress);
-
                     var batchResult = await ProcessBatchAsync(batch, analysisType, analysisProgress, progress);
+                    fileResults.AddRange(batchResult);
+                    totalFilesProcessed += batchResult.Count;
                     
-                    Interlocked.Increment(ref completedBatches);
-                    Interlocked.Add(ref totalFilesProcessed, batchResult.Count);
-                    analysisProgress.Status = $"Completed {completedBatches}/{batches.Count} batches ({totalFilesProcessed} files processed)...";
+                    analysisProgress.CompletedFiles = totalFilesProcessed;
+                    analysisProgress.Status = $"Completed batch {batchNumber}/{batches.Count} ({totalFilesProcessed}/{fileData.Count} files processed)...";
                     progress?.Report(analysisProgress);
-
-                    return batchResult;
+                    
+                    _logger.LogInformation("Completed batch {BatchNumber}/{TotalBatches} with {FileCount} files", 
+                        batchNumber, batches.Count, batch.Count);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Critical error in batch {BatchIndex}, falling back to individual processing", batchIndex);
+                    _logger.LogError(ex, "Critical error in batch {BatchNumber}, falling back to individual processing", batchNumber);
                     // Isolated error handling - process batch files individually as fallback
                     var fallbackResult = await ProcessBatchWithFallbackAsync(batch, analysisType, analysisProgress, progress);
+                    fileResults.AddRange(fallbackResult);
+                    totalFilesProcessed += fallbackResult.Count;
                     
-                    Interlocked.Increment(ref completedBatches);
-                    Interlocked.Add(ref totalFilesProcessed, fallbackResult.Count);
-                    analysisProgress.Status = $"Completed {completedBatches}/{batches.Count} batches ({totalFilesProcessed} files processed, fallback mode)...";
+                    analysisProgress.CompletedFiles = totalFilesProcessed;
+                    analysisProgress.Status = $"Completed batch {batchNumber}/{batches.Count} ({totalFilesProcessed}/{fileData.Count} files processed, fallback mode)...";
                     progress?.Report(analysisProgress);
-                    
-                    return fallbackResult;
                 }
-                finally
-                {
-                    semaphore.Release();
-                }
-            });
-
-            var batchResults = await Task.WhenAll(batchTasks);
-
-            // Step 4: Flatten batch results and merge with file results
-            foreach (var batchResult in batchResults)
-            {
-                fileResults.AddRange(batchResult);
             }
+
+            analysisProgress.BatchStatus = $"All {batches.Count} batches completed";
+            analysisProgress.EstimatedTimeRemaining = TimeSpan.Zero;
+            progress?.Report(analysisProgress);
 
             return fileResults;
         }
 
-        private async Task<List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)>> PrepareFileDataAsync(
+        private async Task<List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)>> PrepareFileDataAsync(
             List<IBrowserFile> files,
             AnalysisProgress analysisProgress = null,
             IProgress<AnalysisProgress> progress = null)
         {
-            var fileData = new List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)>();
+            var fileData = new List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)>();
             
             if (analysisProgress != null)
             {
@@ -179,7 +194,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                         ? metadata.PatternSummary 
                         : $"File: {file.Name} | Language: {metadata.Language} | Classes: {metadata.Complexity.ClassCount} | Methods: {metadata.Complexity.MethodCount}";
 
-                    fileData.Add((file, metadataSummary, staticAnalysis));
+                    // Store metadata for module grouping
+                    fileData.Add((file, metadataSummary, staticAnalysis, metadata));
                     _logger.LogDebug("Prepared file {FileName} with metadata summary (token optimized)", file.Name);
                 }
                 catch (Exception ex)
@@ -192,59 +208,162 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             return fileData;
         }
 
-        private List<List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)>> GroupFilesIntoBatches(
-            List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)> fileData)
+        /// <summary>
+        /// Intelligently groups files by module/namespace, then creates batches of 10 files.
+        /// Related files (same namespace/module) are kept together in the same batch.
+        /// </summary>
+        private List<List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)>> GroupFilesIntelligentlyIntoBatches(
+            List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)> fileData)
         {
-            var batches = new List<List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)>>();
-            var currentBatch = new List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)>();
-            var currentBatchTokens = 0;
+            const int FilesPerBatch = 10;
+            var batches = new List<List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)>>();
+
+            // Step 1: Group files by module/namespace (extract from file path or metadata)
+            var fileGroups = GroupFilesByModule(fileData);
             
-            // Calculate available tokens (reserve space for response and prompt overhead)
-            var basePromptTokens = _tokenEstimation.EstimateBatchPromptOverhead(0);
-            var availableTokens = _batchConfig.MaxTokensPerBatch - _batchConfig.ReserveTokensForResponse - basePromptTokens;
+            _logger.LogInformation("Grouped {FileCount} files into {GroupCount} modules/namespaces", 
+                fileData.Count, fileGroups.Count);
 
-            foreach (var fileInfo in fileData)
+            // Step 2: Create batches of 10 files, trying to keep related files together
+            var currentBatch = new List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)>();
+            
+            foreach (var moduleGroup in fileGroups)
             {
-                // Estimate tokens for metadata summary (much smaller than full code)
-                var metadataTokens = _tokenEstimation.EstimateTokens(fileInfo.metadataSummary);
-                var batchPromptOverhead = _tokenEstimation.EstimateBatchPromptOverhead(currentBatch.Count);
-                var totalTokensIfAdded = currentBatchTokens + metadataTokens + batchPromptOverhead;
-
-                // Check if adding this file would exceed limits
-                bool exceedsFileLimit = currentBatch.Count >= _batchConfig.MaxFilesPerBatch;
-                bool exceedsTokenLimit = totalTokensIfAdded > availableTokens;
-
-                if (exceedsFileLimit || exceedsTokenLimit)
+                foreach (var fileInfo in moduleGroup.Value)
                 {
-                    // Start a new batch if current batch has files
-                    if (currentBatch.Any())
+                    // If current batch is full (10 files), start a new batch
+                    if (currentBatch.Count >= FilesPerBatch)
                     {
-                        batches.Add(currentBatch);
-                        _logger.LogDebug("Created batch with {FileCount} files, {TokenCount} tokens (using metadata summaries)", 
-                            currentBatch.Count, currentBatchTokens);
+                        batches.Add(new List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)>(currentBatch));
+                        _logger.LogDebug("Created batch with {FileCount} files", currentBatch.Count);
+                        currentBatch.Clear();
                     }
-                    currentBatch = new List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)>();
-                    currentBatchTokens = 0;
-                }
 
-                // Add file to current batch
-                currentBatch.Add(fileInfo);
-                currentBatchTokens += metadataTokens;
+                    currentBatch.Add(fileInfo);
+                }
             }
 
             // Add the last batch if it has files
             if (currentBatch.Any())
             {
                 batches.Add(currentBatch);
-                _logger.LogDebug("Created final batch with {FileCount} files, {TokenCount} tokens (using metadata summaries)", 
-                    currentBatch.Count, currentBatchTokens);
+                _logger.LogDebug("Created final batch with {FileCount} files", currentBatch.Count);
             }
 
             return batches;
         }
 
+        /// <summary>
+        /// Groups files by module/namespace based on file path and namespace information from metadata.
+        /// </summary>
+        private Dictionary<string, List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)>> GroupFilesByModule(
+            List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)> fileData)
+        {
+            var groups = new Dictionary<string, List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)>>();
+
+            foreach (var fileInfo in fileData)
+            {
+                // Try to extract module/namespace from metadata first (more accurate)
+                var module = "";
+                
+                // Check if metadata has namespace information
+                if (fileInfo.metadata.Namespaces != null && fileInfo.metadata.Namespaces.Any())
+                {
+                    // Use the first namespace, extract the module part (e.g., "Company.Project.Models" -> "Models")
+                    var namespaceParts = fileInfo.metadata.Namespaces.First().Split('.');
+                    if (namespaceParts.Length > 0)
+                    {
+                        module = namespaceParts.Last(); // Use last part as module name
+                    }
+                }
+                
+                // Fallback to path-based extraction if no namespace in metadata
+                if (string.IsNullOrEmpty(module))
+                {
+                    module = ExtractModuleFromPath(fileInfo.file.Name);
+                }
+                
+                // If still no module found, use "Other" as default
+                if (string.IsNullOrEmpty(module))
+                {
+                    module = "Other";
+                }
+
+                if (!groups.ContainsKey(module))
+                {
+                    groups[module] = new List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)>();
+                }
+
+                groups[module].Add(fileInfo);
+            }
+
+            // Sort groups by size (larger groups first) to optimize batching
+            return groups.OrderByDescending(g => g.Value.Count)
+                .ToDictionary(g => g.Key, g => g.Value);
+        }
+
+        /// <summary>
+        /// Extracts module name from file path.
+        /// Tries to identify common folder structures like Models, Services, Controllers, etc.
+        /// </summary>
+        private string ExtractModuleFromPath(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath))
+                return "";
+
+            // Normalize path separators
+            var normalizedPath = filePath.Replace('\\', '/');
+            
+            // Common module patterns in .NET projects
+            var modulePatterns = new[]
+            {
+                "Models", "Model",
+                "Services", "Service",
+                "Controllers", "Controller",
+                "Views", "View",
+                "Data", "DataAccess", "DAL",
+                "Business", "BusinessLogic", "BLL",
+                "Common", "Shared", "Utilities", "Utils",
+                "Infrastructure", "Infra",
+                "Domain", "Entities", "Entity",
+                "Repositories", "Repository", "Repo",
+                "Interfaces", "Contracts",
+                "Helpers", "Extensions"
+            };
+
+            // Check for module patterns in path
+            foreach (var pattern in modulePatterns)
+            {
+                if (normalizedPath.Contains($"/{pattern}/", StringComparison.OrdinalIgnoreCase) ||
+                    normalizedPath.Contains($"\\{pattern}\\", StringComparison.OrdinalIgnoreCase))
+                {
+                    return pattern;
+                }
+            }
+
+            // If no pattern found, try to extract folder name before file
+            var parts = normalizedPath.Split('/', '\\');
+            if (parts.Length >= 2)
+            {
+                // Return second-to-last part (folder containing the file)
+                return parts[parts.Length - 2];
+            }
+
+            return "";
+        }
+
+        /// <summary>
+        /// Legacy method for backward compatibility - uses token-based batching.
+        /// </summary>
+        private List<List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)>> GroupFilesIntoBatches(
+            List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)> fileData)
+        {
+            // Use intelligent grouping by default
+            return GroupFilesIntelligentlyIntoBatches(fileData);
+        }
+
         private async Task<List<FileAnalysisResult>> ProcessBatchAsync(
-            List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)> batch,
+            List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)> batch,
             string analysisType,
             AnalysisProgress analysisProgress,
             IProgress<AnalysisProgress> progress)
@@ -275,6 +394,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                             StaticAnalysis = fileInfo.staticAnalysis,
                             AIInsight = aiInsight,
                             ComplexityScore = _complexityCalculator.CalculateFileComplexity(fileInfo.staticAnalysis),
+                            LegacyPatternResult = fileInfo.metadata.LegacyPatternResult,
                             Status = "Analysis Completed"
                         };
 
@@ -284,6 +404,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                         if (analysisProgress != null)
                         {
                             analysisProgress.CompletedFiles++;
+                            analysisProgress.Status = $"Batch {analysisProgress.CurrentBatch}/{analysisProgress.TotalBatches}: Processed {analysisProgress.CompletedFiles}/{analysisProgress.TotalFiles} files...";
                             progress?.Report(analysisProgress);
                         }
                     }
@@ -318,7 +439,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         }
 
         private async Task<List<FileAnalysisResult>> ProcessBatchWithFallbackAsync(
-            List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis)> batch,
+            List<(IBrowserFile file, string metadataSummary, CodeAnalysisResult staticAnalysis, FileMetadata metadata)> batch,
             string analysisType,
             AnalysisProgress analysisProgress,
             IProgress<AnalysisProgress> progress)
@@ -342,6 +463,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                         StaticAnalysis = fileInfo.staticAnalysis,
                         AIInsight = aiInsight,
                         ComplexityScore = _complexityCalculator.CalculateFileComplexity(fileInfo.staticAnalysis),
+                        LegacyPatternResult = fileInfo.metadata.LegacyPatternResult,
                         Status = "Analysis Completed (Individual Fallback)"
                     });
 
@@ -363,7 +485,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                         ErrorMessage = $"Batch and individual processing failed: {fallbackEx.Message}",
                         StaticAnalysis = fileInfo.staticAnalysis,
                         AIInsight = GenerateFallbackAssessment(fileInfo.staticAnalysis, analysisType),
-                        ComplexityScore = _complexityCalculator.CalculateFileComplexity(fileInfo.staticAnalysis)
+                        ComplexityScore = _complexityCalculator.CalculateFileComplexity(fileInfo.staticAnalysis),
+                        LegacyPatternResult = fileInfo.metadata.LegacyPatternResult
                     });
                 }
             }

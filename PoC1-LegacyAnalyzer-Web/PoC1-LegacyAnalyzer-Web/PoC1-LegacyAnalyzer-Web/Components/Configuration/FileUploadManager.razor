@@ -112,8 +112,8 @@ else
     private bool hasError = false;
 
     [Parameter] public List<IBrowserFile> SelectedFiles { get; set; } = new();
-    [Parameter] public int MaxFiles { get; set; } = 50;
-    [Parameter] public int MaxFileSizeMB { get; set; } = 10;
+    [Parameter] public int MaxFiles { get; set; } = 50; // UI hint only - no actual limit enforced (batching handles any number)
+    [Parameter] public int MaxFileSizeMB { get; set; } = 10; // 10MB file size limit
     // Default: enable common code file types for multi-language analysis
     [Parameter] public string AcceptedTypes { get; set; } = ".cs,.py,.js,.ts,.java,.go";
     [Parameter] public string DisplayMode { get; set; } = "standard"; // "standard" or "compact"
@@ -127,12 +127,14 @@ else
 
     private async Task HandleFolderSelection(InputFileChangeEventArgs e)
     {
-        await ProcessFileSelection(e.GetMultipleFiles(MaxFiles), true);
+        // Use a large number to allow folder selection - batching handles any number of files
+        await ProcessFileSelection(e.GetMultipleFiles(10000), true);
     }
 
     private async Task HandleIndividualFileSelection(InputFileChangeEventArgs e)
     {
-        await ProcessFileSelection(e.GetMultipleFiles(MaxFiles), false);
+        // Use a large number - batching handles any number of files
+        await ProcessFileSelection(e.GetMultipleFiles(10000), false);
     }
 
     private async Task ProcessFileSelection(IEnumerable<IBrowserFile> newFiles, bool isFolder)
@@ -153,7 +155,9 @@ else
         var oversizedFiles = sourceFiles.Where(f => f.Size > maxFileSizeBytes).ToList();
 
         selectedFiles.Clear();
-        selectedFiles.AddRange(validFiles.Take(MaxFiles));
+        // NOTE: File count limit removed - batching handles any number of files
+        // MaxFiles parameter is kept for UI hint only, but no actual limit enforced
+        selectedFiles.AddRange(validFiles);
 
         if (oversizedFiles.Any())
         {

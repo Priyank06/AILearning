@@ -1,5 +1,6 @@
 @using PoC1_LegacyAnalyzer_Web.Components.Shared
 @using PoC1_LegacyAnalyzer_Web.Models.MultiAgent
+@using PoC1_LegacyAnalyzer_Web.Models
 @using PoC1_LegacyAnalyzer_Web.Helpers
 @using Microsoft.AspNetCore.Components
 
@@ -38,11 +39,234 @@
                         <ul class="list-unstyled mt-2">
                             @foreach (var finding in Analysis.KeyFindings)
                             {
-                                <li class="mb-1">
-                                    <BadgeWithIcon 
-                                        Text="@finding.Severity"
-                                        Color="@GetSeverityColor(finding.Severity)" />
-                                    <strong>@finding.Category:</strong> @finding.Description
+                                var findingId = $"finding-{Analysis.AgentName}-{finding.GetHashCode()}";
+                                <li class="mb-2">
+                                    <div class="d-flex align-items-start gap-2">
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                                <BadgeWithIcon 
+                                                    Text="@finding.Severity"
+                                                    Color="@GetSeverityColor(finding.Severity)" />
+                                                @* Confidence Badge *@
+                                                @if (finding.Explainability != null)
+                                                {
+                                                    <span class="badge @GetConfidenceBadgeClass(finding.Explainability.ConfidenceScore)" 
+                                                          title="Confidence: @finding.Explainability.ConfidenceScore%">
+                                                        <i class="bi @GetConfidenceIcon(finding.Explainability.ConfidenceLevel)"></i> 
+                                                        @finding.Explainability.ConfidenceScore%
+                                                    </span>
+                                                }
+                                                @if (finding.Validation != null)
+                                                {
+                                                    <span class="badge @GetValidationBadgeClass(finding.Validation.Status)" 
+                                                          title="@GetValidationTooltip(finding.Validation)">
+                                                        @GetValidationBadgeIcon(finding.Validation.Status) @GetValidationStatusLabel(finding.Validation.Status)
+                                                    </span>
+                                                }
+                                            </div>
+                                            <div>
+                                                <strong>@finding.Category:</strong> @finding.Description
+                                                @if (!string.IsNullOrEmpty(finding.Location))
+                                                {
+                                                    <br><small class="text-muted"><i class="bi bi-geo-alt"></i> @finding.Location</small>
+                                                }
+                                            </div>
+                                            
+                                            @* Explainability Section *@
+                                            @if (finding.Explainability != null)
+                                            {
+                                                var explainabilityId = $"explainability-{Analysis.AgentName}-{finding.GetHashCode()}";
+                                                <div class="mt-2">
+                                                    <button class="btn btn-sm btn-link p-0 text-decoration-none" 
+                                                            type="button" 
+                                                            data-bs-toggle="collapse" 
+                                                            data-bs-target="#@explainabilityId"
+                                                            aria-expanded="false"
+                                                            @onclick:stopPropagation="true">
+                                                        <small class="text-info">
+                                                            <i class="bi bi-chevron-right"></i> 
+                                                            <i class="bi bi-lightbulb"></i> Reasoning & Confidence
+                                                        </small>
+                                                    </button>
+                                                    <div class="collapse mt-2" id="@explainabilityId">
+                                                        <div class="card card-body bg-light p-3">
+                                                            @* Confidence Breakdown *@
+                                                            <div class="mb-3">
+                                                                <h6 class="mb-2">
+                                                                    <i class="bi bi-graph-up"></i> Confidence Breakdown
+                                                                </h6>
+                                                                <div class="row g-2">
+                                                                    <div class="col-12">
+                                                                        <small class="text-muted">Evidence Clarity</small>
+                                                                        <div class="progress" style="height: 20px;">
+                                                                            <div class="progress-bar @GetConfidenceProgressColor(finding.Explainability.ConfidenceBreakdown.EvidenceClarity)" 
+                                                                                 style="width: @finding.Explainability.ConfidenceBreakdown.EvidenceClarity%">
+                                                                                @finding.Explainability.ConfidenceBreakdown.EvidenceClarity%
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-12">
+                                                                        <small class="text-muted">Pattern Match</small>
+                                                                        <div class="progress" style="height: 20px;">
+                                                                            <div class="progress-bar @GetConfidenceProgressColor(finding.Explainability.ConfidenceBreakdown.PatternMatch)" 
+                                                                                 style="width: @finding.Explainability.ConfidenceBreakdown.PatternMatch%">
+                                                                                @finding.Explainability.ConfidenceBreakdown.PatternMatch%
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-12">
+                                                                        <small class="text-muted">Context Understanding</small>
+                                                                        <div class="progress" style="height: 20px;">
+                                                                            <div class="progress-bar @GetConfidenceProgressColor(finding.Explainability.ConfidenceBreakdown.ContextUnderstanding)" 
+                                                                                 style="width: @finding.Explainability.ConfidenceBreakdown.ContextUnderstanding%">
+                                                                                @finding.Explainability.ConfidenceBreakdown.ContextUnderstanding%
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-12">
+                                                                        <small class="text-muted">Consistency</small>
+                                                                        <div class="progress" style="height: 20px;">
+                                                                            <div class="progress-bar @GetConfidenceProgressColor(finding.Explainability.ConfidenceBreakdown.Consistency)" 
+                                                                                 style="width: @finding.Explainability.ConfidenceBreakdown.Consistency%">
+                                                                                @finding.Explainability.ConfidenceBreakdown.Consistency%
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            @* Reasoning Chain *@
+                                                            @if (finding.Explainability.ReasoningChain != null && finding.Explainability.ReasoningChain.Any())
+                                                            {
+                                                                <div class="mb-3">
+                                                                    <h6 class="mb-2">
+                                                                        <i class="bi bi-diagram-3"></i> Reasoning Chain
+                                                                    </h6>
+                                                                    <ol class="mb-0">
+                                                                        @foreach (var step in finding.Explainability.ReasoningChain)
+                                                                        {
+                                                                            <li class="mb-2">
+                                                                                <strong>@step.Description</strong>
+                                                                                @if (!string.IsNullOrEmpty(step.Evidence))
+                                                                                {
+                                                                                    <br><small class="text-muted">Evidence: @step.Evidence</small>
+                                                                                }
+                                                                                @if (!string.IsNullOrEmpty(step.Conclusion))
+                                                                                {
+                                                                                    <br><small class="text-info">Conclusion: @step.Conclusion</small>
+                                                                                }
+                                                                            </li>
+                                                                        }
+                                                                    </ol>
+                                                                </div>
+                                                            }
+                                                            
+                                                            @* Supporting Evidence *@
+                                                            @if (finding.Explainability.SupportingEvidence != null && finding.Explainability.SupportingEvidence.Any())
+                                                            {
+                                                                <div class="mb-2">
+                                                                    <h6 class="mb-2 text-success">
+                                                                        <i class="bi bi-check-circle"></i> Supporting Evidence (@finding.Explainability.SupportingEvidence.Count)
+                                                                    </h6>
+                                                                    <ul class="list-unstyled mb-0">
+                                                                        @foreach (var evidence in finding.Explainability.SupportingEvidence)
+                                                                        {
+                                                                            <li class="mb-1">
+                                                                                <small>
+                                                                                    <span class="badge bg-success">@evidence.Type</span>
+                                                                                    @evidence.Description
+                                                                                    @if (!string.IsNullOrEmpty(evidence.Location))
+                                                                                    {
+                                                                                        <span class="text-muted">(@evidence.Location)</span>
+                                                                                    }
+                                                                                    <span class="badge bg-light text-dark">Strength: @evidence.Strength%</span>
+                                                                                </small>
+                                                                            </li>
+                                                                        }
+                                                                    </ul>
+                                                                </div>
+                                                            }
+                                                            
+                                                            @* Contradictory Evidence *@
+                                                            @if (finding.Explainability.ContradictoryEvidence != null && finding.Explainability.ContradictoryEvidence.Any())
+                                                            {
+                                                                <div>
+                                                                    <h6 class="mb-2 text-warning">
+                                                                        <i class="bi bi-exclamation-triangle"></i> Contradictory Evidence (@finding.Explainability.ContradictoryEvidence.Count)
+                                                                    </h6>
+                                                                    <ul class="list-unstyled mb-0">
+                                                                        @foreach (var evidence in finding.Explainability.ContradictoryEvidence)
+                                                                        {
+                                                                            <li class="mb-1">
+                                                                                <small>
+                                                                                    <span class="badge bg-warning text-dark">@evidence.Type</span>
+                                                                                    @evidence.Description
+                                                                                    @if (!string.IsNullOrEmpty(evidence.Location))
+                                                                                    {
+                                                                                        <span class="text-muted">(@evidence.Location)</span>
+                                                                                    }
+                                                                                    <span class="badge bg-light text-dark">Strength: @evidence.Strength%</span>
+                                                                                </small>
+                                                                            </li>
+                                                                        }
+                                                                    </ul>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                            @if (finding.Validation != null && (finding.Validation.Errors.Any() || finding.Validation.Warnings.Any()))
+                                            {
+                                                <button class="btn btn-sm btn-link p-0 mt-1 text-decoration-none" 
+                                                        type="button" 
+                                                        data-bs-toggle="collapse" 
+                                                        data-bs-target="#@findingId"
+                                                        aria-expanded="false"
+                                                        @onclick:stopPropagation="true">
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-chevron-right"></i> Validation Details
+                                                        @if (finding.Validation.Errors.Any())
+                                                        {
+                                                            <span class="badge bg-danger ms-1">@finding.Validation.Errors.Count</span>
+                                                        }
+                                                        @if (finding.Validation.Warnings.Any())
+                                                        {
+                                                            <span class="badge bg-warning ms-1">@finding.Validation.Warnings.Count</span>
+                                                        }
+                                                    </small>
+                                                </button>
+                                                <div class="collapse mt-2" id="@findingId">
+                                                    <div class="card card-body bg-light p-2">
+                                                        @if (finding.Validation.Errors.Any())
+                                                        {
+                                                            <div class="mb-2">
+                                                                <strong class="text-danger"><i class="bi bi-x-circle"></i> Errors:</strong>
+                                                                <ul class="mb-0 small">
+                                                                    @foreach (var error in finding.Validation.Errors)
+                                                                    {
+                                                                        <li class="text-danger">@error</li>
+                                                                    }
+                                                                </ul>
+                                                            </div>
+                                                        }
+                                                        @if (finding.Validation.Warnings.Any())
+                                                        {
+                                                            <div>
+                                                                <strong class="text-warning"><i class="bi bi-exclamation-triangle"></i> Warnings:</strong>
+                                                                <ul class="mb-0 small">
+                                                                    @foreach (var warning in finding.Validation.Warnings)
+                                                                    {
+                                                                        <li class="text-warning">@warning</li>
+                                                                    }
+                                                                </ul>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
                                 </li>
                             }
                         </ul>
@@ -159,6 +383,76 @@
             "LOW" => "secondary",
             _ => "light"
         };
+    }
+
+    private string GetValidationBadgeClass(FindingValidationStatus status)
+    {
+        return status switch
+        {
+            FindingValidationStatus.Validated => "bg-success",
+            FindingValidationStatus.LowConfidence => "bg-warning",
+            FindingValidationStatus.Failed => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetValidationBadgeIcon(FindingValidationStatus status)
+    {
+        return status switch
+        {
+            FindingValidationStatus.Validated => "✅",
+            FindingValidationStatus.LowConfidence => "⚠️",
+            FindingValidationStatus.Failed => "❌",
+            _ => "❓"
+        };
+    }
+
+    private string GetValidationStatusLabel(FindingValidationStatus status)
+    {
+        return status switch
+        {
+            FindingValidationStatus.Validated => "Validated",
+            // Use a different term to avoid clashing with the numeric confidence score
+            FindingValidationStatus.LowConfidence => "Validation Warning",
+            FindingValidationStatus.Failed => "Failed Validation",
+            _ => status.ToString()
+        };
+    }
+
+    private string GetValidationTooltip(FindingValidationResult validation)
+    {
+        var parts = new List<string>();
+        if (validation.Errors.Any())
+            parts.Add($"{validation.Errors.Count} error(s)");
+        if (validation.Warnings.Any())
+            parts.Add($"{validation.Warnings.Count} warning(s)");
+        return parts.Any() ? string.Join(", ", parts) : "Validation passed";
+    }
+
+    private string GetConfidenceBadgeClass(int confidenceScore)
+    {
+        return confidenceScore >= 90 ? "bg-success" :
+               confidenceScore >= 60 ? "bg-warning text-dark" :
+               "bg-danger";
+    }
+
+    private string GetConfidenceIcon(ConfidenceLevel level)
+    {
+        return level switch
+        {
+            ConfidenceLevel.High => "bi-check-circle-fill",
+            ConfidenceLevel.Medium => "bi-exclamation-circle-fill",
+            ConfidenceLevel.Low => "bi-x-circle-fill",
+            _ => "bi-question-circle-fill"
+        };
+    }
+
+    private string GetConfidenceProgressColor(int value)
+    {
+        return value >= 80 ? "bg-success" :
+               value >= 60 ? "bg-warning" :
+               value >= 40 ? "bg-info" :
+               "bg-danger";
     }
 }
 

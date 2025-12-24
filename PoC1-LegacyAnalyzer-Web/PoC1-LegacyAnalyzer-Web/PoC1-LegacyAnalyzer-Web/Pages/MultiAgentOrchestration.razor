@@ -7,6 +7,8 @@
 @using PoC1_LegacyAnalyzer_Web.Components.Analysis
 @using PoC1_LegacyAnalyzer_Web.Components.Shared
 @inject IJSRuntime JSRuntime
+@inject IConfiguration Configuration
+@inject IServiceProvider ServiceProvider
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components.Web
 @inject IAgentOrchestrationService OrchestrationService
@@ -35,10 +37,10 @@
         <!-- Configuration Section (full width) -->
         <div class="col-12">
             <TeamConfigurationPanel @ref="configPanel"
-                MaxFiles="50"
-                MaxFileSizeMB="@(PreProcessingOptions.Value.MaxFileSizeMB)"
-                OnAnalysisStarted="@HandleAnalysisStarted"
-                OnPhaseChanged="@HandlePhaseChanged" />
+                MaxFiles="10000"
+                MaxFileSizeMB="10"
+                OnAnalysisStarted="HandleAnalysisStarted"
+                OnPhaseChanged="HandlePhaseChanged" />
         </div>
 
         <!-- Results Section with right sidebar -->
@@ -114,16 +116,41 @@
     private int currentPhase = 0;
     private int lastAiInputCharCount = 0;
     private bool showMobileNav = false;
+    private AnalysisProgress? agentProgress = null;
     
     // Store last analysis parameters for results display
     private string lastBusinessObjective = "";
     private string? lastCustomObjective;
     private List<string> lastSelectedAgents = new();
 
-    private async Task HandleAnalysisStarted(AnalysisConfiguration config)
+    protected override void OnInitialized()
     {
+        // Temporary debug: try to bind AgentAnalysisConfiguration and log detailed errors if it fails.
         try
         {
+            var agentAnalysisConfig = Configuration.GetSection("AgentAnalysisConfiguration").Get<PoC1_LegacyAnalyzer_Web.Models.AgentAnalysisConfiguration>();
+            Console.WriteLine("AgentAnalysisConfiguration bound successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("AgentAnalysisConfiguration binding FAILED:");
+            Console.WriteLine(ex.ToString());
+        }
+
+        base.OnInitialized();
+    }
+
+    private async Task HandleAnalysisStarted(AnalysisConfiguration config)
+    {
+        Console.WriteLine($"[MultiAgentOrchestration] HandleAnalysisStarted called with {config.Files.Count} files, {config.SelectedAgents.Count} agents");
+        Console.WriteLine($"[MultiAgentOrchestration] BusinessObjective: {config.BusinessObjective}, EffectiveObjective: {config.EffectiveObjective}");
+        
+        try
+        {
+            Console.WriteLine("[MultiAgentOrchestration] Resolving IAgentOrchestrationService from ServiceProvider...");
+            var orchestrator = ServiceProvider.GetRequiredService<IAgentOrchestrationService>();
+            Console.WriteLine("[MultiAgentOrchestration] Orchestrator resolved successfully.");
+
             isAnalyzing = true;
             currentPhase = 0;
             
@@ -133,31 +160,47 @@
             lastSelectedAgents = new List<string>(config.SelectedAgents);
             lastAiInputCharCount = config.Files.Sum(f => (int)f.Size);
 
+            Console.WriteLine($"[MultiAgentOrchestration] State updated, calling StateHasChanged()");
             StateHasChanged();
 
-            // Start the team analysis
-            teamResult = await OrchestrationService.CoordinateTeamAnalysisAsync(
+            Console.WriteLine($"[MultiAgentOrchestration] Calling orchestrator.CoordinateTeamAnalysisAsync...");
+            
+            // Start the team analysis with both simple and detailed progress tracking
+            teamResult = await orchestrator.CoordinateTeamAnalysisAsync(
                 config.Files,
                 config.EffectiveObjective,
                 config.SelectedAgents,
                 new Progress<string>(msg => {
+                    Console.WriteLine($"[MultiAgentOrchestration] Progress update: {msg}");
                     // Update progress through the config panel
                     configPanel?.UpdatePhase(++currentPhase);
                     StateHasChanged();
                 }),
+                new Progress<AnalysisProgress>(progress => {
+                    Console.WriteLine($"[MultiAgentOrchestration] Detailed progress: {progress.ProgressPercentage}%, Status: {progress.Status}");
+                    // Update detailed per-agent progress
+                    agentProgress = progress;
+                    InvokeAsync(StateHasChanged);
+                }),
                 CancellationToken.None);
 
+            Console.WriteLine($"[MultiAgentOrchestration] Analysis completed successfully. Results: {teamResult?.IndividualAnalyses?.Count ?? 0} analyses");
+            
             // Analysis completed successfully
             configPanel?.CompleteAnalysis();
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[MultiAgentOrchestration] ERROR in HandleAnalysisStarted: {ex.GetType().Name}: {ex.Message}");
+            Console.WriteLine($"[MultiAgentOrchestration] Stack trace: {ex.StackTrace}");
+            
             // Handle error through config panel
             configPanel?.SetError($"Analysis failed: {ex.Message}");
         }
         finally
         {
             isAnalyzing = false;
+            Console.WriteLine($"[MultiAgentOrchestration] Finally block: isAnalyzing = false");
             StateHasChanged();
         }
     }

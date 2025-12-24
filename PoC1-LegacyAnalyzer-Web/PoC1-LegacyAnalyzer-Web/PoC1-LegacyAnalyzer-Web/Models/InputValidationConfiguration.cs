@@ -47,8 +47,12 @@ namespace PoC1_LegacyAnalyzer_Web.Models
         public long MaxFileSizeBytes { get; set; } = 5 * 1024 * 1024; // 5MB
 
         /// <summary>
-        /// Maximum number of files allowed per analysis.
+        /// [DEPRECATED] Maximum number of files allowed per analysis.
+        /// NOTE: This limit is no longer enforced. Batching and preprocessing naturally handle any number of files.
+        /// Files are processed in batches of 10, and preprocessing filters by priority, so there's no need for hard limits.
+        /// Kept for backward compatibility only.
         /// </summary>
+        [Obsolete("File count limits are no longer enforced. Batching handles any number of files.")]
         public int MaxFilesPerAnalysis { get; set; } = 50;
 
         /// <summary>

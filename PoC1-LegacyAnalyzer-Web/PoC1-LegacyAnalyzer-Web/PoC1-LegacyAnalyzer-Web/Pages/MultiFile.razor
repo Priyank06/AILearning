@@ -21,210 +21,264 @@
         </div>
     </div>
 
-    <div class="row">
-        <!-- Upload Section -->
-        <div class="col-lg-4">
+    <!-- Single-column layout for file upload and configuration -->
+    <div class="row mb-3">
+        <div class="col-12">
             <div class="card shadow">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Project File Upload</h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label">Analysis Type:</label>
-                        <select class="form-select" @bind="selectedAnalysisType">
-                            <option value="general">General Code Assessment</option>
-                            <option value="security">Security Analysis</option>
-                            <option value="performance">Performance Review</option>
-                            <option value="migration">Migration Readiness</option>
-                        </select>
-                    </div>
-
-                    <div class="upload-area mb-3" @ondragover="HandleDragOver" @ondragover:preventDefault="true"
-                         @ondrop="HandleFileDrop" @ondrop:preventDefault="true">
-                        <div class="text-center p-4">
-                            <div style="font-size: 3rem;" class="text-muted mb-3">
-                                <i class="bi bi-folder2-open"></i>
-                            </div>
-                            <h6>Upload Source Code Files</h6>
-                            <p class="text-muted mb-3">Select multiple source code files from your project folder (C#, Python, JavaScript, TypeScript, Java, Go)</p>
-
-                            <!-- Enhanced file input to allow folder-like selection -->
-                            <InputFile id="fileInput" OnChange="HandleFileSelection" multiple accept=".cs" class="d-none" webkitdirectory />
-                            <label for="fileInput" class="btn btn-primary me-2">
-                                <i class="bi bi-folder-plus"></i> Select Project Folder
-                            </label>
-
-                            <!-- Alternative individual file selection -->
-                            <InputFile id="individualFiles" OnChange="HandleIndividualFileSelection" multiple accept=".cs" class="d-none" />
-                            <label for="individualFiles" class="btn btn-outline-secondary">
-                                <i class="bi bi-file-plus"></i> Select Individual Files
-                            </label>
-
-                            <div class="mt-2">
-                                <small class="text-muted">
-                                    <strong>Folder:</strong> Automatically finds all .cs files in project<br>
-                                    <strong>Individual:</strong> Select specific files manually
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-
                     @if (selectedFiles.Any())
                     {
-                        <div class="mb-3">
-                            <h6>Selected Files (@selectedFiles.Count):</h6>
-                            <div style="max-height: 200px; overflow-y: auto;">
-                                @foreach (var file in selectedFiles)
+                        <span class="badge bg-light text-dark">
+                            <i class="bi bi-files"></i> @selectedFiles.Count file(s) selected
+                        </span>
+                    }
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Analysis Type Selection -->
+                        <div class="col-md-3 mb-3 mb-md-0">
+                            <label class="form-label fw-bold">Analysis Type:</label>
+                            <select class="form-select" @bind="selectedAnalysisType">
+                                <option value="general">General Code Assessment</option>
+                                <option value="security">Security Analysis</option>
+                                <option value="performance">Performance Review</option>
+                                <option value="migration">Migration Readiness</option>
+                            </select>
+                        </div>
+
+                        <!-- File Upload Buttons -->
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <label class="form-label fw-bold">Upload Files:</label>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <InputFile id="fileInput" OnChange="HandleFileSelection" multiple accept=".cs,.py,.js,.ts,.java,.go" class="d-none" webkitdirectory />
+                                <label for="fileInput" class="btn btn-primary">
+                                    <i class="bi bi-folder-plus"></i> Select Project Folder
+                                </label>
+
+                                <InputFile id="individualFiles" OnChange="HandleIndividualFileSelection" multiple accept=".cs,.py,.js,.ts,.java,.go" class="d-none" />
+                                <label for="individualFiles" class="btn btn-outline-secondary">
+                                    <i class="bi bi-file-plus"></i> Select Individual Files
+                                </label>
+                            </div>
+                            @if (selectedFiles.Any())
+                            {
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle"></i> Total size: @FormatFileSize(selectedFiles.Sum(f => f.Size))
+                                    </small>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold d-block">&nbsp;</label>
+                            <div class="d-flex gap-2">
+                                @if (selectedFiles.Any())
                                 {
-                                    <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-1">
-                                        <span><i class="bi bi-file-earmark-code"></i> @file.Name</span>
-                                        <div>
-                                            <small class="text-muted me-2">@FormatFileSize(file.Size)</small>
-                                            <button class="btn btn-sm btn-outline-danger" @onclick="@(() => RemoveFile(file))">
-                                                <i class="bi bi-x-circle"></i>
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <button class="btn btn-success flex-fill" @onclick="AnalyzeProject" disabled="@isAnalyzing">
+                                        @if (isAnalyzing)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                            <text>Analyzing...</text>
+                                        }
+                                        else
+                                        {
+                                            <text><i class="bi bi-play-circle"></i> Analyze</text>
+                                        }
+                                    </button>
+                                    <button class="btn btn-outline-danger" @onclick="ClearFiles" title="Clear all files">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
                                 }
                             </div>
                         </div>
-
-                        <div class="text-center">
-                            <button class="btn btn-success me-2" @onclick="AnalyzeProject" disabled="@isAnalyzing">
-                                @if (isAnalyzing)
-                                {
-                                    <span class="spinner-border spinner-border-sm me-2"></span>
-                                    <text>Processing @selectedFiles.Count files...</text>
-                                }
-                                else
-                                {
-                                    <text><i class="bi bi-play-circle"></i> Analyze Project (@selectedFiles.Count files)</text>
-                                }
-                            </button>
-                            <button class="btn btn-outline-secondary" @onclick="ClearFiles">
-                                <i class="bi bi-trash"></i> Clear All
-                            </button>
-                        </div>
-                    }
+                    </div>
 
                     @if (analysisResult != null)
                     {
-                        <div class="mt-3">
-                            <button class="btn btn-outline-info btn-sm me-2" @onclick="TestSimpleCharts">
-                                Validate Dashboard
-                            </button>
-                            <button class="btn btn-outline-warning btn-sm" @onclick="DebugChartElements">
-                                System Diagnostics
-                            </button>
+                        <div class="mt-3 pt-3 border-top">
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-info btn-sm" @onclick="TestSimpleCharts">
+                                    <i class="bi bi-check-circle"></i> Validate Dashboard
+                                </button>
+                                <button class="btn btn-outline-warning btn-sm" @onclick="DebugChartElements">
+                                    <i class="bi bi-gear"></i> System Diagnostics
+                                </button>
+                            </div>
                         </div>
                     }
                 </div>
             </div>
         </div>
+    </div>
 
-        @if (isAnalyzing)
-        {
-            <!-- Modal Overlay for Progress -->
-            <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-                <div class="modal-dialog modal-dialog-centered modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title">
-                                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                                AI-Powered Enterprise Analysis in Progress
-                            </h5>
-                        </div>
-                        <div class="modal-body p-4">
-                            @if (analysisProgress != null)
-                            {
-                                <!-- Executive Progress Display -->
-                                <div class="text-center mb-4">
-                                    <h4 class="text-primary">Analyzing Your Legacy Codebase</h4>
-                                    <p class="text-muted">AI-powered insights generating in real-time</p>
+    @if (isAnalyzing)
+    {
+        <!-- Modal Overlay for Progress -->
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">
+                            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                            AI-Powered Enterprise Analysis in Progress
+                        </h5>
+                    </div>
+                    <div class="modal-body p-4">
+                        @if (analysisProgress != null)
+                        {
+                            <!-- Executive Progress Display -->
+                            <div class="text-center mb-4">
+                                <h4 class="text-primary">Analyzing Your Legacy Codebase</h4>
+                                <p class="text-muted">AI-powered insights generating in real-time</p>
+                            </div>
+
+                            <!-- Main Progress Bar -->
+                            <div class="mb-4">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="fw-bold">Overall Progress</span>
+                                    <span class="fw-bold text-primary">@($"{analysisProgress.ProgressPercentage:F1}")%</span>
                                 </div>
+                                <div class="progress" style="height: 25px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                                         style="width: @($"{analysisProgress.ProgressPercentage:F1}")%">
+                                    </div>
+                                </div>
+                            </div>
 
-                                <!-- Main Progress Bar -->
+                            <!-- Batch Progress Indicator -->
+                            @if (analysisProgress.TotalBatches > 0)
+                            {
                                 <div class="mb-4">
                                     <div class="d-flex justify-content-between mb-2">
-                                        <span class="fw-bold">Overall Progress</span>
-                                        <span class="fw-bold text-primary">@($"{analysisProgress.ProgressPercentage:F1}")%</span>
+                                        <span class="fw-bold">
+                                            <i class="bi bi-stack"></i> Batch Progress
+                                        </span>
+                                        <span class="fw-bold text-info">
+                                            Batch @analysisProgress.CurrentBatch of @analysisProgress.TotalBatches
+                                        </span>
                                     </div>
-                                    <div class="progress" style="height: 25px;">
-                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
-                                             style="width: @($"{analysisProgress.ProgressPercentage:F1}")%">
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                                             style="width: @($"{((analysisProgress.TotalBatches > 0) ? ((double)analysisProgress.CurrentBatch / analysisProgress.TotalBatches * 100) : 0):F1}")%">
+                                            @analysisProgress.CurrentBatch / @analysisProgress.TotalBatches
+                                        </div>
+                                    </div>
+                                    @if (analysisProgress.EstimatedTimeRemaining.HasValue && analysisProgress.EstimatedTimeRemaining.Value.TotalSeconds > 0)
+                                    {
+                                        <div class="text-center mt-2">
+                                            <small class="text-muted">
+                                                <i class="bi bi-clock"></i> Estimated time remaining:
+                                                @if (analysisProgress.EstimatedTimeRemaining.Value.TotalMinutes >= 1)
+                                                {
+                                                    <text>@((int)analysisProgress.EstimatedTimeRemaining.Value.TotalMinutes) min @((int)analysisProgress.EstimatedTimeRemaining.Value.Seconds) sec</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>@((int)analysisProgress.EstimatedTimeRemaining.Value.TotalSeconds) sec</text>
+                                                }
+                                            </small>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            <!-- Current Analysis Status -->
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6">
+                                    <div class="card border-primary">
+                                        <div class="card-body text-center">
+                                            <i class="bi bi-file-earmark-code fs-2 text-primary mb-2"></i>
+                                            <h6 class="card-title">Current File</h6>
+                                            <p class="card-text fw-bold">@(string.IsNullOrEmpty(analysisProgress.CurrentFile) ? "Preparing..." : analysisProgress.CurrentFile)</p>
                                         </div>
                                     </div>
                                 </div>
+                                <div class="col-md-6">
+                                    <div class="card border-success">
+                                        <div class="card-body text-center">
+                                            <i class="bi bi-graph-up fs-2 text-success mb-2"></i>
+                                            <h6 class="card-title">Files Completed</h6>
+                                            <p class="card-text fw-bold">@analysisProgress.CompletedFiles of @analysisProgress.TotalFiles</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                                <!-- Current Analysis Status -->
+                            @if (analysisProgress.TotalBatches > 0)
+                            {
                                 <div class="row g-3 mb-4">
                                     <div class="col-md-6">
-                                        <div class="card border-primary">
+                                        <div class="card border-info">
                                             <div class="card-body text-center">
-                                                <i class="bi bi-file-earmark-code fs-2 text-primary mb-2"></i>
-                                                <h6 class="card-title">Current File</h6>
-                                                <p class="card-text fw-bold">@analysisProgress.CurrentFile</p>
+                                                <i class="bi bi-stack fs-2 text-info mb-2"></i>
+                                                <h6 class="card-title">Files in Current Batch</h6>
+                                                <p class="card-text fw-bold">@analysisProgress.FilesInCurrentBatch files</p>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col-md-6">
-                                        <div class="card border-success">
+                                        <div class="card border-warning">
                                             <div class="card-body text-center">
-                                                <i class="bi bi-graph-up fs-2 text-success mb-2"></i>
-                                                <h6 class="card-title">Files Completed</h6>
-                                                <p class="card-text fw-bold">@analysisProgress.CompletedFiles of @analysisProgress.TotalFiles</p>
+                                                <i class="bi bi-info-circle fs-2 text-warning mb-2"></i>
+                                                <h6 class="card-title">Batch Status</h6>
+                                                <p class="card-text fw-bold small">@analysisProgress.BatchStatus</p>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-
-                                <!-- AI Status Banner -->
-                                <div class="alert alert-info d-flex align-items-center">
-                                    <i class="bi bi-cpu-fill fs-4 me-3"></i>
-                                    <div>
-                                        <strong>AI Analysis Status:</strong><br>
-                                        <span>@analysisProgress.Status</span>
-                                    </div>
-                                </div>
-
-                                <!-- Time and Performance Metrics -->
-                                <div class="row text-center">
-                                    <div class="col-4">
-                                        <div class="border-end">
-                                            <h6 class="text-muted mb-1">Analysis Type</h6>
-                                            <strong class="text-primary">@analysisProgress.CurrentAnalysisType.ToUpper()</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="border-end">
-                                            <h6 class="text-muted mb-1">Elapsed Time</h6>
-                                            <strong class="text-success">@($"{analysisProgress.ElapsedTime.TotalSeconds:F0}s")</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-4">
-                                        <h6 class="text-muted mb-1">Remaining</h6>
-                                        <strong class="text-warning">@(analysisProgress.TotalFiles - analysisProgress.CompletedFiles) files</strong>
-                                    </div>
-                                </div>
                             }
-                            else
-                            {
-                                <div class="text-center">
-                                    <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
-                                    <h5>Initializing AI Analysis Engine</h5>
-                                    <p class="text-muted">Preparing intelligent code assessment...</p>
+
+                            <!-- AI Status Banner -->
+                            <div class="alert alert-info d-flex align-items-center">
+                                <i class="bi bi-cpu-fill fs-4 me-3"></i>
+                                <div>
+                                    <strong>AI Analysis Status:</strong><br>
+                                    <span>@analysisProgress.Status</span>
                                 </div>
-                            }
-                        </div>
+                            </div>
+
+                            <!-- Time and Performance Metrics -->
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="border-end">
+                                        <h6 class="text-muted mb-1">Analysis Type</h6>
+                                        <strong class="text-primary">@analysisProgress.CurrentAnalysisType.ToUpper()</strong>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="border-end">
+                                        <h6 class="text-muted mb-1">Elapsed Time</h6>
+                                        <strong class="text-success">@($"{analysisProgress.ElapsedTime.TotalSeconds:F0}s")</strong>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <h6 class="text-muted mb-1">Remaining</h6>
+                                    <strong class="text-warning">@(analysisProgress.TotalFiles - analysisProgress.CompletedFiles) files</strong>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center">
+                                <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
+                                <h5>Initializing AI Analysis Engine</h5>
+                                <p class="text-muted">Preparing intelligent code assessment...</p>
+                            </div>
+                        }
                     </div>
                 </div>
             </div>
-        }
+        </div>
+    }
 
-        <!-- Results Section -->
-        <div class="col-lg-8">
-            @if (analysisResult != null)
-            {
+    <!-- Results Section - Single Column Layout -->
+    @if (analysisResult != null)
+    {
+        <div class="row">
+            <div class="col-12">
                 <!-- Project Summary Cards -->
                 <div class="card shadow mb-3">
                     <div class="card-header bg-success text-white">
@@ -593,7 +647,7 @@
                         </div>
                     </div>
                 }
-                                
+
 
                 <div class="card shadow mb-4">
                     <div class="card-header bg-primary text-white">
@@ -780,6 +834,181 @@
                                                         </div>
                                                     </div>
                                                 }
+
+                                                @* Dependency Impact Section *@
+                                                @if (fileResult.DependencyImpact != null)
+                                                {
+                                                    <div class="bg-info bg-opacity-10 p-3 rounded mt-2 border border-info">
+                                                        <h6 class="text-info mb-2">
+                                                            <i class="bi bi-diagram-3"></i> Dependency Impact
+                                                        </h6>
+                                                        <div class="d-flex flex-wrap gap-2 mb-2">
+                                                            @if (fileResult.DependencyImpact.AffectedFilesCount > 0)
+                                                            {
+                                                                <span class="badge bg-warning text-dark">
+                                                                    <i class="bi bi-file-earmark"></i> Affects @fileResult.DependencyImpact.AffectedFilesCount file(s)
+                                                                </span>
+                                                            }
+                                                            @if (fileResult.DependencyImpact.AffectedClassesCount > 0)
+                                                            {
+                                                                <span class="badge bg-primary">
+                                                                    <i class="bi bi-box"></i> @fileResult.DependencyImpact.AffectedClassesCount class(es)
+                                                                </span>
+                                                            }
+                                                            @if (fileResult.DependencyImpact.AffectedMethodsCount > 0)
+                                                            {
+                                                                <span class="badge bg-secondary">
+                                                                    <i class="bi bi-code-square"></i> @fileResult.DependencyImpact.AffectedMethodsCount method(s)
+                                                                </span>
+                                                            }
+                                                            @if (fileResult.DependencyImpact.IsGodObject)
+                                                            {
+                                                                <span class="badge bg-danger">
+                                                                    <i class="bi bi-exclamation-triangle-fill"></i> God Object
+                                                                </span>
+                                                            }
+                                                            @if (fileResult.DependencyImpact.IsInCycle)
+                                                            {
+                                                                <span class="badge bg-danger">
+                                                                    <i class="bi bi-arrow-repeat"></i> Cyclic Dependency
+                                                                </span>
+                                                            }
+                                                            <span class="badge @GetRiskBadgeClass(fileResult.DependencyImpact.RiskLevel)">
+                                                                Risk: @fileResult.DependencyImpact.RiskLevel
+                                                            </span>
+                                                        </div>
+                                                        @if (fileResult.DependencyImpact.AffectedFiles.Any())
+                                                        {
+                                                            <div class="mt-2">
+                                                                <small class="text-muted"><strong>Affected Files:</strong></small>
+                                                                <div class="mt-1">
+                                                                    @foreach (var affectedFile in fileResult.DependencyImpact.AffectedFiles.Take(5))
+                                                                    {
+                                                                        <span class="badge bg-light text-dark me-1 mb-1">@affectedFile</span>
+                                                                    }
+                                                                    @if (fileResult.DependencyImpact.AffectedFiles.Count > 5)
+                                                                    {
+                                                                        <span class="text-muted">+@(fileResult.DependencyImpact.AffectedFiles.Count - 5) more</span>
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+
+                                                @* Semantic Analysis Section (for non-C# languages) *@
+                                                @if (fileResult.SemanticAnalysis != null)
+                                                {
+                                                    <div class="mt-3 p-3 bg-light rounded border-start border-3 border-info">
+                                                        <h6 class="text-info mb-2">
+                                                            <i class="bi bi-brain"></i> Semantic Analysis
+                                                            <span class="badge bg-info ms-2">@fileResult.StaticAnalysis.Language.ToUpper()</span>
+                                                        </h6>
+
+                                                        @* Semantic Quality Score *@
+                                                        <div class="mb-3">
+                                                            <small class="text-muted">Semantic Quality Score</small>
+                                                            <div class="progress" style="height: 25px;">
+                                                                <div class="progress-bar @GetSemanticQualityColor(fileResult.SemanticAnalysis.SemanticQualityScore)"
+                                                                     style="width: @fileResult.SemanticAnalysis.SemanticQualityScore%">
+                                                                    @fileResult.SemanticAnalysis.SemanticQualityScore%
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        @* Semantic Issues *@
+                                                        @if (fileResult.SemanticAnalysis.SemanticIssues.Any())
+                                                        {
+                                                            <div class="mb-3">
+                                                                <h6 class="text-danger mb-2">
+                                                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                                                    Semantic Issues (@fileResult.SemanticAnalysis.SemanticIssues.Count)
+                                                                </h6>
+                                                                <div class="table-responsive">
+                                                                    <table class="table table-sm table-hover">
+                                                                        <thead class="table-light">
+                                                                            <tr>
+                                                                                <th>Type</th>
+                                                                                <th>Category</th>
+                                                                                <th>Location</th>
+                                                                                <th>Description</th>
+                                                                                <th>Recommendation</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            @foreach (var issue in fileResult.SemanticAnalysis.SemanticIssues.OrderByDescending(i => i.Severity))
+                                                                            {
+                                                                                <tr>
+                                                                                    <td>
+                                                                                        <span class="badge @GetSemanticIssueTypeBadge(issue.IssueType)">@issue.IssueType</span>
+                                                                                    </td>
+                                                                                    <td>
+                                                                                        <span class="badge @GetCategoryBadge(issue.Category)">@issue.Category</span>
+                                                                                    </td>
+                                                                                    <td>
+                                                                                        <small>@issue.Location</small>
+                                                                                        @if (issue.LineNumber > 0)
+                                                                                        {
+                                                                                            <br>
+                                                                    
+                                                                                            <small class="text-muted">Line @issue.LineNumber</small>
+                                                                                        }
+                                                                                    </td>
+                                                                                    <td>
+                                                                                        <small>@issue.Description</small>
+                                                                                    </td>
+                                                                                    <td>
+                                                                                        <small class="text-muted">@issue.Recommendation</small>
+                                                                                    </td>
+                                                                                </tr>
+                                                                            }
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
+                                                        }
+
+                                                        @* Language-Specific Patterns *@
+                                                        @if (fileResult.SemanticAnalysis.DetectedPatterns.Any())
+                                                        {
+                                                            <div>
+                                                                <h6 class="text-warning mb-2">
+                                                                    <i class="bi bi-code-slash"></i>
+                                                                    Language-Specific Patterns (@fileResult.SemanticAnalysis.DetectedPatterns.Count)
+                                                                </h6>
+                                                                <div class="d-flex flex-wrap gap-2 mb-2">
+                                                                    @foreach (var pattern in fileResult.SemanticAnalysis.DetectedPatterns)
+                                                                    {
+                                                                        <div class="card border-warning" style="min-width: 200px;">
+                                                                            <div class="card-body p-2">
+                                                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                                                    <span class="badge @(pattern.IsDeprecated ? "bg-danger" : "bg-warning text-dark")">
+                                                                                        @pattern.PatternType
+                                                                                    </span>
+                                                                                    @if (pattern.IsDeprecated)
+                                                                                    {
+                                                                                        <span class="badge bg-danger">Deprecated</span>
+                                                                                    }
+                                                                                </div>
+                                                                                <small class="d-block mb-1"><strong>@pattern.Description</strong></small>
+                                                                                @if (!string.IsNullOrEmpty(pattern.ModernAlternative))
+                                                                                {
+                                                                                    <small class="text-success d-block mb-1">
+                                                                                        <i class="bi bi-arrow-right"></i> @pattern.ModernAlternative
+                                                                                    </small>
+                                                                                }
+                                                                                @if (!string.IsNullOrEmpty(pattern.MigrationGuidance))
+                                                                                {
+                                                                                    <small class="text-muted d-block">@pattern.MigrationGuidance</small>
+                                                                                }
+                                                                            </div>
+                                                                        </div>
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
                                             </div>
                                             <div class="ms-3">
                                                 <span class="badge @GetComplexityBadgeClass(fileResult.ComplexityScore)">
@@ -793,6 +1022,121 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Legacy Issues Section -->
+                @if (analysisResult.FileResults.Any(f => f.LegacyPatternResult != null && (f.LegacyPatternResult.Issues.Any() || f.LegacyPatternResult.Indicators.IsVeryOldCode || f.LegacyPatternResult.Indicators.IsAncientFramework || f.LegacyPatternResult.Indicators.HasGlobalState)))
+                {
+                    <div class="card shadow mt-3">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Legacy Issues</h5>
+                        </div>
+                        <div class="card-body">
+                            @foreach (var fileResult in analysisResult.FileResults.Where(f => f.LegacyPatternResult != null && (f.LegacyPatternResult.Issues.Any() || f.LegacyPatternResult.Indicators.IsVeryOldCode || f.LegacyPatternResult.Indicators.IsAncientFramework || f.LegacyPatternResult.Indicators.HasGlobalState)))
+                            {
+                                var legacy = fileResult.LegacyPatternResult!;
+                                <div class="card mb-3 border-warning">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0">
+                                            <i class="bi bi-file-earmark-code"></i> @fileResult.FileName
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <!-- Legacy Indicators -->
+                                        @if (legacy.Indicators != null)
+                                        {
+                                            <div class="mb-3">
+                                                <strong>Legacy Indicators:</strong>
+                                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                                    @if (legacy.Indicators.IsVeryOldCode)
+                                                    {
+                                                        <span class="badge bg-danger">
+                                                            ⚠️ Very Old Code
+                                                            @if (legacy.Indicators.EstimatedFileAgeYears.HasValue)
+                                                            {
+                                                                <text> (~@legacy.Indicators.EstimatedFileAgeYears years)</text>
+                                                            }
+                                                        </span>
+                                                    }
+                                                    @if (legacy.Indicators.IsAncientFramework)
+                                                    {
+                                                        <span class="badge bg-danger">
+                                                            🏛️ Ancient .NET Framework
+                                                            @if (!string.IsNullOrEmpty(legacy.Indicators.FrameworkVersion))
+                                                            {
+                                                                <text> (@legacy.Indicators.FrameworkVersion)</text>
+                                                            }
+                                                        </span>
+                                                    }
+                                                    @if (legacy.Indicators.HasGlobalState)
+                                                    {
+                                                        <span class="badge bg-warning text-dark">🌐 Global State Detected</span>
+                                                    }
+                                                    @if (legacy.Indicators.HasLegacyDataAccess)
+                                                    {
+                                                        <span class="badge bg-info">📊 Legacy Data Access</span>
+                                                    }
+                                                    @if (legacy.Indicators.UsesObsoleteApis)
+                                                    {
+                                                        <span class="badge bg-danger">🔴 Obsolete APIs</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+
+                                        <!-- Legacy Issues -->
+                                        @if (legacy.Issues.Any())
+                                        {
+                                            <div>
+                                                <strong>Detected Issues (@legacy.Issues.Count):</strong>
+                                                <div class="table-responsive mt-2">
+                                                    <table class="table table-sm table-hover">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th>Type</th>
+                                                                <th>Severity</th>
+                                                                <th>Location</th>
+                                                                <th>Description</th>
+                                                                <th>Recommendation</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var issue in legacy.Issues.OrderByDescending(i => i.Severity == "Critical" ? 4 : i.Severity == "High" ? 3 : i.Severity == "Medium" ? 2 : 1))
+                                                            {
+                                                                <tr>
+                                                                    <td>
+                                                                        <span class="badge bg-secondary">@issue.PatternType</span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="badge @GetSeverityBadgeClass(issue.Severity)">@issue.Severity</span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <small>@issue.Location</small>
+                                                                        @if (issue.LineNumber > 0)
+                                                                        {
+                                                                            <br>
+                                                    
+                                                                            <small class="text-muted">Line @issue.LineNumber</small>
+                                                                        }
+                                                                    </td>
+                                                                    <td>
+                                                                        <small>@issue.Description</small>
+                                                                    </td>
+                                                                    <td>
+                                                                        <small class="text-muted">@issue.Recommendation</small>
+                                                                    </td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
 
                 <!-- Executive Actions -->
                 <div class="card shadow mt-3">
@@ -817,9 +1161,10 @@
                         </div>
                     </div>
                 </div>
-            }
+                }
+            </div>
         </div>
-    </div>
+    }
 </div>
 
 <style>
@@ -919,7 +1264,9 @@
 
     private async Task HandleFileSelection(InputFileChangeEventArgs e)
     {
-        var newFiles = e.GetMultipleFiles(50); // Allow more files for folder selection
+        // NOTE: No file count limit - batching handles any number of files
+        // Using a large number for GetMultipleFiles to allow folder selection, but no actual limit enforced
+        var newFiles = e.GetMultipleFiles(10000); // Large number to allow folder selection
         var csFiles = newFiles.Where(f => f.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)).ToList();
 
         // Filter out generated/designer files that aren't useful for analysis
@@ -944,13 +1291,9 @@
         }
 
         // Clear existing and add new files
+        // NOTE: No file count limit - batching handles any number of files
         selectedFiles.Clear();
-        selectedFiles.AddRange(sourceFiles.Take(20)); // Limit to 20 for performance
-
-        if (sourceFiles.Count > 20)
-        {
-            statusMessage += $" Limited to first 20 files for performance.";
-        }
+        selectedFiles.AddRange(sourceFiles);
 
         StateHasChanged();
     }
@@ -1491,6 +1834,62 @@
         if (score < ComplexityLowThreshold) return "Low Risk";
         if (score < ComplexityMediumThreshold) return "Medium Risk";
         return "High Risk";
+    }
+
+    private string GetSeverityBadgeClass(string severity)
+    {
+        return severity?.ToUpper() switch
+        {
+            "CRITICAL" => "bg-danger",
+            "HIGH" => "bg-warning text-dark",
+            "MEDIUM" => "bg-info",
+            "LOW" => "bg-secondary",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private string GetRiskBadgeClass(string riskLevel)
+    {
+        return riskLevel?.ToUpper() switch
+        {
+            "CRITICAL" => "bg-danger",
+            "HIGH" => "bg-warning text-dark",
+            "MEDIUM" => "bg-info text-white",
+            "LOW" => "bg-success",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetSemanticQualityColor(int score)
+    {
+        return score >= 80 ? "bg-success" :
+               score >= 60 ? "bg-warning" :
+               score >= 40 ? "bg-info" :
+               "bg-danger";
+    }
+
+    private string GetSemanticIssueTypeBadge(string issueType)
+    {
+        return issueType.ToUpper() switch
+        {
+            var t when t.Contains("TYPE") => "bg-danger",
+            var t when t.Contains("UNINITIALIZED") => "bg-warning text-dark",
+            var t when t.Contains("CONTROL") => "bg-info",
+            var t when t.Contains("DEPRECATED") => "bg-danger",
+            var t when t.Contains("RUNTIME") => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetCategoryBadge(string category)
+    {
+        return category?.ToUpper() switch
+        {
+            "ERROR" => "bg-danger",
+            "WARNING" => "bg-warning text-dark",
+            "INFO" => "bg-info",
+            _ => "bg-secondary"
+        };
     }
 
     private string GetTimelineColorClass()

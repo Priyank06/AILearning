@@ -8,14 +8,17 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly PromptConfiguration _promptConfig;
         private readonly FileAnalysisLimitsConfig _fileLimits;
         private readonly ILogger<PromptBuilderService> _logger;
+        private readonly PromptTemplatesConfiguration _promptTemplates;
 
         public PromptBuilderService(
             IOptions<PromptConfiguration> promptOptions,
             IOptions<FileAnalysisLimitsConfig> fileLimitOptions,
+            IOptions<PromptTemplatesConfiguration> promptTemplates,
             ILogger<PromptBuilderService> logger)
         {
             _promptConfig = promptOptions.Value ?? new PromptConfiguration();
             _fileLimits = fileLimitOptions.Value ?? new FileAnalysisLimitsConfig();
+            _promptTemplates = promptTemplates?.Value ?? new PromptTemplatesConfiguration();
             _logger = logger;
 
             if (_promptConfig.SystemPrompts == null || _promptConfig.SystemPrompts.Count == 0)
@@ -88,25 +91,12 @@ Code:
 ");
             }
 
-            var batchPrompt = $@"
-Analyze {fileAnalyses.Count} source files for {analysisType} assessment. Provide comprehensive analysis for EACH file.
-
-{string.Join("\n---\n", fileSections)}
-
-Return ONLY valid JSON (no markdown, no explanations):
-{{
-  ""analyses"": [
-    {{""fileName"": ""File1.cs"", ""assessment"": ""{_fileLimits.MinAnalysisWordCount}-{_fileLimits.MaxAnalysisWordCount} word analysis covering all {analysisType} aspects""}},
-    {{""fileName"": ""File2.cs"", ""assessment"": ""{_fileLimits.MinAnalysisWordCount}-{_fileLimits.MaxAnalysisWordCount} word analysis covering all {analysisType} aspects""}}
-  ]
-}}
-
-Requirements:
-- Every file must have exactly one entry
-- Assessments must be comprehensive ({_fileLimits.MinAnalysisWordCount}-{_fileLimits.MaxAnalysisWordCount} words)
-- Focus on {analysisType}-specific insights
-- Include actionable recommendations
-";
+            var batchPrompt = _promptTemplates.BatchAnalysisPrompt
+                .Replace("{fileCount}", fileAnalyses.Count.ToString())
+                .Replace("{analysisType}", analysisType)
+                .Replace("{fileSections}", string.Join("\n---\n", fileSections))
+                .Replace("{minWords}", _fileLimits.MinAnalysisWordCount.ToString())
+                .Replace("{maxWords}", _fileLimits.MaxAnalysisWordCount.ToString());
 
             return batchPrompt;
         }
@@ -120,24 +110,14 @@ Requirements:
 
             return _promptConfig.SystemPrompts.GetValueOrDefault(
                 "general",
-                "You are a senior software architect providing comprehensive code analysis."
+                _promptTemplates.DefaultSystemPrompt
             );
         }
 
         public string GetBatchSystemPrompt(string analysisType)
         {
             var basePrompt = GetSystemPrompt(analysisType);
-            return basePrompt + 
-                "\n\nCRITICAL: You MUST return ONLY valid JSON. No markdown, no explanations, just JSON.\n" +
-                "Required JSON structure:\n" +
-                "{\n" +
-                "  \"analyses\": [\n" +
-                "    {\"fileName\": \"File1.cs\", \"assessment\": \"Your detailed analysis here...\"},\n" +
-                "    {\"fileName\": \"File2.cs\", \"assessment\": \"Your detailed analysis here...\"}\n" +
-                "  ]\n" +
-                "}\n" +
-                "Every file in the input MUST have exactly one entry in the analyses array. " +
-                "The assessment should be comprehensive (200-500 words) covering all aspects of the analysis type.";
+            return basePrompt + _promptTemplates.BatchSystemPromptSuffix;
         }
     }
 }

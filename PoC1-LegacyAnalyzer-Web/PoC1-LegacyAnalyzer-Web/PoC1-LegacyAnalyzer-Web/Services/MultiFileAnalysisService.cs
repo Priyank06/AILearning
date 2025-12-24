@@ -18,8 +18,12 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         private readonly IAnalyzerRouter _analyzerRouter;
         private readonly ILanguageDetector _languageDetector;
         private readonly IFilePreProcessingService _preprocessing;
+        private readonly ICrossFileAnalyzer? _crossFileAnalyzer;
+        private readonly IDependencyGraphService? _dependencyGraphService;
+        private readonly IHybridMultiLanguageAnalyzer? _hybridAnalyzer;
         private readonly BatchProcessingConfig _batchConfig;
         private readonly FileAnalysisLimitsConfig _fileLimits;
+        private readonly DefaultValuesConfiguration _defaultValues;
 
         public MultiFileAnalysisService(
             ICodeAnalysisService codeAnalysisService,
@@ -32,9 +36,13 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             ILogger<MultiFileAnalysisService> logger,
             IOptions<BatchProcessingConfig> batchOptions,
             IOptions<FileAnalysisLimitsConfig> fileLimitOptions,
+            IOptions<DefaultValuesConfiguration> defaultValues,
             IAnalyzerRouter analyzerRouter,
             ILanguageDetector languageDetector,
-            IFilePreProcessingService preprocessing)
+            IFilePreProcessingService preprocessing,
+            ICrossFileAnalyzer? crossFileAnalyzer = null,
+            IDependencyGraphService? dependencyGraphService = null,
+            IHybridMultiLanguageAnalyzer? hybridAnalyzer = null)
         {
             _codeAnalysisService = codeAnalysisService;
             _aiAnalysisService = aiAnalysisService;
@@ -46,9 +54,13 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             _logger = logger;
             _batchConfig = batchOptions.Value ?? new BatchProcessingConfig();
             _fileLimits = fileLimitOptions.Value ?? new FileAnalysisLimitsConfig();
+            _defaultValues = defaultValues?.Value ?? new DefaultValuesConfiguration();
             _analyzerRouter = analyzerRouter;
             _languageDetector = languageDetector;
             _preprocessing = preprocessing;
+            _crossFileAnalyzer = crossFileAnalyzer;
+            _dependencyGraphService = dependencyGraphService;
+            _hybridAnalyzer = hybridAnalyzer;
         }
 
         public async Task<MultiFileAnalysisResult> AnalyzeMultipleFilesAsync(List<IBrowserFile> files, string analysisType)
@@ -61,7 +73,9 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 TotalFiles = files.Count
             };
 
-            var filesToProcess = files.Take(_fileLimits.MaxFilesPerAnalysis).ToList(); // Performance limit: maximum 10 files
+            // NOTE: File count limit removed - batching handles any number of files
+            // Files are processed in batches of 10, so there's no need to limit total file count
+            var filesToProcess = files.ToList();
             var fileResults = new List<FileAnalysisResult>();
 
             // Use batch processing by default for efficiency (60-80% reduction in API calls)
@@ -77,6 +91,30 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 };
 
                 fileResults = await _batchOrchestrator.AnalyzeFilesInBatchesAsync(filesToProcess, analysisType, analysisProgress, null);
+                
+                // Build dependency graph for C# files after analysis
+                if (_crossFileAnalyzer != null && _dependencyGraphService != null)
+                {
+                    try
+                    {
+                        // Process all files (not just C#) for dependency analysis
+                        var filesForDependencyAnalysis = filesToProcess.ToList();
+                        if (filesForDependencyAnalysis.Count > 1)
+                        {
+                            _logger.LogInformation("Building dependency graph for {FileCount} files", filesForDependencyAnalysis.Count);
+                            var dependencyGraph = await _crossFileAnalyzer.BuildDependencyGraphAsync(filesForDependencyAnalysis);
+                            var analysisId = Guid.NewGuid().ToString();
+                            await _dependencyGraphService.StoreDependencyGraphAsync(analysisId, dependencyGraph);
+                            
+                            // Enrich file results with dependency impact
+                            await EnrichResultsWithDependencyImpact(fileResults, dependencyGraph, analysisId);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to build dependency graph, continuing without dependency analysis");
+                    }
+                }
             }
             else
             {
@@ -105,7 +143,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                         {
                             FileName = file.Name,
                             FileSize = file.Size,
-                            Status = "Analysis Failed",
+                            Status = _defaultValues.Status.AnalysisFailed,
                             ErrorMessage = $"Processing error: {ex.Message}",
                             StaticAnalysis = new CodeAnalysisResult()
                         });
@@ -162,6 +200,21 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             staticAnalysis.LanguageKind = languageKind;
             staticAnalysis.Language = languageKind.ToString().ToLowerInvariant();
 
+            // Perform hybrid semantic analysis for non-C# languages
+            SemanticAnalysisResult? semanticAnalysis = null;
+            if (_hybridAnalyzer != null && languageKind != LanguageKind.CSharp)
+            {
+                try
+                {
+                    semanticAnalysis = await _hybridAnalyzer.AnalyzeAsync(content, file.Name, languageKind, analysisType);
+                    _logger.LogDebug("Hybrid semantic analysis completed for {FileName}", file.Name);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Hybrid semantic analysis failed for {FileName}, continuing with syntax-only", file.Name);
+                }
+            }
+
             // Generate professional assessment using metadata summary instead of full code
             string professionalAssessment;
             try
@@ -192,8 +245,10 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 FileSize = file.Size,
                 StaticAnalysis = staticAnalysis,
                 AIInsight = professionalAssessment,
+                LegacyPatternResult = metadata.LegacyPatternResult,
+                SemanticAnalysis = semanticAnalysis, // Hybrid semantic analysis for non-C# languages
                 ComplexityScore = _complexityCalculator.CalculateFileComplexity(staticAnalysis),
-                Status = "Analysis Completed"
+                Status = _defaultValues.Status.AnalysisCompleted
             };
         }
 
@@ -215,7 +270,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 StartTime = DateTime.Now
             };
 
-            var filesToProcess = files.Take(_fileLimits.MaxFilesPerAnalysis).ToList();
+            // NOTE: File count limit removed - batching handles any number of files
+            var filesToProcess = files.ToList();
 
             // Use batch processing if enabled
             if (_batchConfig.Enabled && filesToProcess.Count > 1)
@@ -263,7 +319,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                         {
                             FileName = file.Name,
                             FileSize = file.Size,
-                            Status = "Analysis Failed",
+                            Status = _defaultValues.Status.AnalysisFailed,
                             ErrorMessage = $"Processing error: {ex.Message}",
                             StaticAnalysis = new CodeAnalysisResult()
                         });
@@ -276,7 +332,7 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
             // Final progress update
             analysisProgress.CompletedFiles = fileResults.Count;
-            analysisProgress.Status = "Analysis completed - generating insights...";
+            analysisProgress.Status = _defaultValues.Status.AnalysisCompletedGeneratingInsights;
             progress?.Report(analysisProgress);
 
             // Aggregate metrics from all file results
@@ -303,6 +359,106 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         public BusinessMetrics CalculateBusinessMetrics(MultiFileAnalysisResult result)
         {
             return _businessMetricsCalculator.CalculateBusinessMetrics(result);
+        }
+
+        /// <summary>
+        /// Enriches file results with dependency impact information.
+        /// </summary>
+        private async Task EnrichResultsWithDependencyImpact(
+            List<FileAnalysisResult> fileResults,
+            DependencyGraph dependencyGraph,
+            string analysisId)
+        {
+            if (_dependencyGraphService == null) return;
+
+            foreach (var fileResult in fileResults)
+            {
+                try
+                {
+                    // Find nodes for this file
+                    var fileNodes = dependencyGraph.Nodes
+                        .Where(n => n.FileName == fileResult.FileName)
+                        .ToList();
+
+                    if (!fileNodes.Any())
+                    {
+                        continue;
+                    }
+
+                    // Calculate aggregate impact for the file
+                    var totalAffectedFiles = new HashSet<string>();
+                    var totalAffectedClasses = new HashSet<string>();
+                    var totalAffectedMethods = new HashSet<string>();
+                    var maxConnectivity = 0;
+                    var isInCycle = false;
+
+                    foreach (var node in fileNodes)
+                    {
+                        var impact = await _dependencyGraphService.GetImpactAsync(analysisId, node.Id);
+                        if (impact != null)
+                        {
+                            foreach (var file in impact.AffectedFiles)
+                            {
+                                totalAffectedFiles.Add(file);
+                            }
+                            foreach (var cls in impact.AffectedClasses)
+                            {
+                                totalAffectedClasses.Add(cls);
+                            }
+                            foreach (var method in impact.AffectedMethods)
+                            {
+                                totalAffectedMethods.Add(method);
+                            }
+                            if (node.Connectivity > maxConnectivity)
+                            {
+                                maxConnectivity = node.Connectivity;
+                            }
+                            if (impact.IsInCycle)
+                            {
+                                isInCycle = true;
+                            }
+                        }
+                    }
+
+                    // Create file-level impact
+                    fileResult.DependencyImpact = new DependencyImpact
+                    {
+                        ElementId = fileResult.FileName,
+                        ElementName = fileResult.FileName,
+                        FileName = fileResult.FileName,
+                        AffectedFilesCount = totalAffectedFiles.Count,
+                        AffectedFiles = totalAffectedFiles.ToList(),
+                        AffectedClassesCount = totalAffectedClasses.Count,
+                        AffectedClasses = totalAffectedClasses.ToList(),
+                        AffectedMethodsCount = totalAffectedMethods.Count,
+                        AffectedMethods = totalAffectedMethods.ToList(),
+                        IsGodObject = maxConnectivity > 20,
+                        IsInCycle = isInCycle,
+                        RiskLevel = DetermineRiskLevel(totalAffectedFiles.Count, maxConnectivity, isInCycle)
+                    };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to enrich file {FileName} with dependency impact", fileResult.FileName);
+                }
+            }
+        }
+
+        private string DetermineRiskLevel(int affectedFilesCount, int connectivity, bool isInCycle)
+        {
+            if (affectedFilesCount > 10 || connectivity > 30 || isInCycle)
+            {
+                return "Critical";
+            }
+            if (affectedFilesCount > 5 || connectivity > 20)
+            {
+                return "High";
+            }
+            if (affectedFilesCount > 2 || connectivity > 10)
+            {
+                return "Medium";
+            }
+            return "Low";
         }
     }
 }

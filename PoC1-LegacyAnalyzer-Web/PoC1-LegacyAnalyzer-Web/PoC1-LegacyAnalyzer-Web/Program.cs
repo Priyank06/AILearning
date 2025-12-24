@@ -65,7 +65,25 @@ public class Program
 
         // Bind configuration sections to options for IOptions pattern
         builder.Services.Configure<PromptConfiguration>(builder.Configuration.GetSection("PromptConfiguration"));
-        builder.Services.Configure<AgentConfiguration>(builder.Configuration.GetSection("AgentConfiguration"));
+        
+        // Configure AgentConfiguration with validation
+        try
+        {
+            builder.Services.Configure<AgentConfiguration>(builder.Configuration.GetSection("AgentConfiguration"));
+            var magentConfig = builder.Configuration.GetSection("AgentConfiguration").Get<AgentConfiguration>();
+            if (magentConfig == null)
+            {
+                throw new InvalidOperationException("AgentConfiguration section is missing or invalid in appsettings.json");
+            }
+        }
+        catch (Exception ex)
+        {
+            var validationLoggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
+            var startupLogger = validationLoggerFactory.CreateLogger<Program>();
+            startupLogger.LogError(ex, "AgentConfiguration binding failed: {ErrorMessage}", ex.Message);
+            throw new InvalidOperationException($"AgentConfiguration binding failed: {ex.Message}", ex);
+        }
+        
         builder.Services.Configure<BusinessCalculationRules>(builder.Configuration.GetSection("BusinessCalculationRules"));
         builder.Services.Configure<FileAnalysisLimitsConfig>(builder.Configuration.GetSection("FileAnalysisLimits"));
         builder.Services.Configure<BatchProcessingConfig>(builder.Configuration.GetSection("AzureOpenAI:BatchProcessing"));
@@ -83,6 +101,27 @@ public class Program
         builder.Services.Configure<RequestDeduplicationConfiguration>(builder.Configuration.GetSection("RequestDeduplication"));
         builder.Services.Configure<CostTrackingConfiguration>(builder.Configuration.GetSection("CostTracking"));
         builder.Services.Configure<TracingConfiguration>(builder.Configuration.GetSection("Tracing"));
+        // Configure with validation - catch binding errors early
+        try
+        {
+            builder.Services.Configure<DefaultValuesConfiguration>(builder.Configuration.GetSection("DefaultValues"));
+            builder.Services.Configure<LegacyContextMessagesConfiguration>(builder.Configuration.GetSection("LegacyContextMessages"));
+            builder.Services.Configure<AgentLegacyIndicatorsConfiguration>(builder.Configuration.GetSection("AgentLegacyIndicators"));
+            builder.Services.Configure<PromptTemplatesConfiguration>(builder.Configuration.GetSection("PromptTemplates"));
+            
+            // Validate configuration binding immediately
+            var defaultValuesConfig = builder.Configuration.GetSection("DefaultValues").Get<DefaultValuesConfiguration>();
+            var legacyContextConfig = builder.Configuration.GetSection("LegacyContextMessages").Get<LegacyContextMessagesConfiguration>();
+            var agentLegacyConfig = builder.Configuration.GetSection("AgentLegacyIndicators").Get<AgentLegacyIndicatorsConfiguration>();
+            var promptTemplatesConfig = builder.Configuration.GetSection("PromptTemplates").Get<PromptTemplatesConfiguration>();
+        }
+        catch (Exception ex)
+        {
+            var validationLoggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
+            var startupLogger = validationLoggerFactory.CreateLogger<Program>();
+            startupLogger.LogError(ex, "Configuration binding failed: {ErrorMessage}", ex.Message);
+            throw new InvalidOperationException($"Configuration binding failed: {ex.Message}", ex);
+        }
 
         // Add services to the container.
         // Configure memory cache with size limits for FilePreProcessingService
