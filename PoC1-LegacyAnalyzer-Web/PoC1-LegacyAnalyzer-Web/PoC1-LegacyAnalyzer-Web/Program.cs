@@ -208,6 +208,10 @@ public class Program
         builder.Services.AddSingleton<PoC1_LegacyAnalyzer_Web.Services.Caching.IAgentResponseCacheService,
             PoC1_LegacyAnalyzer_Web.Services.Caching.AgentResponseCacheService>();
 
+        // Register determinism measurement service
+        builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.Determinism.IDeterminismMeasurementService,
+            PoC1_LegacyAnalyzer_Web.Services.Determinism.DeterminismMeasurementService>();
+
         // Create logger using LoggerFactory with Application Insights support
         using var loggerFactory = LoggerFactory.Create(logging =>
         {
