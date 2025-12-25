@@ -1,0 +1,250 @@
+@using PoC1_LegacyAnalyzer_Web.Models
+@using PoC1_LegacyAnalyzer_Web.Helpers
+
+<div class="card shadow">
+    <div class="card-header bg-dark text-white">
+        <h5 class="mb-0"><i class="bi bi-list-ul"></i> Detailed File Analysis</h5>
+    </div>
+    <div class="card-body">
+        <div style="max-height: 400px; overflow-y: auto;">
+            @foreach (var fileResult in FileResults.OrderByDescending(f => f.ComplexityScore))
+            {
+                <div class="card mb-2">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="card-title mb-1">
+                                    <i class="bi bi-file-earmark-code"></i> @fileResult.FileName
+                                </h6>
+                                <div class="row mb-2">
+                                    <div class="col-3">
+                                        <small class="text-muted">Classes:</small>
+                                        <strong class="d-block">@fileResult.StaticAnalysis.ClassCount</strong>
+                                    </div>
+                                    <div class="col-3">
+                                        <small class="text-muted">Methods:</small>
+                                        <strong class="d-block">@fileResult.StaticAnalysis.MethodCount</strong>
+                                    </div>
+                                    <div class="col-3">
+                                        <small class="text-muted">Properties:</small>
+                                        <strong class="d-block">@fileResult.StaticAnalysis.PropertyCount</strong>
+                                    </div>
+                                    <div class="col-3">
+                                        <small class="text-muted">Complexity:</small>
+                                        <strong class="d-block @MultiFileHelpers.GetComplexityTextColor(fileResult.ComplexityScore, ComplexityMediumThreshold, ComplexityHighThreshold)">
+                                            @fileResult.ComplexityScore/100
+                                        </strong>
+                                    </div>
+                                </div>
+                                @if (!string.IsNullOrEmpty(fileResult.AIInsight))
+                                {
+                                    <div class="bg-light p-3 rounded mt-2">
+                                        <h6 class="text-muted mb-2">
+                                            <i class="bi bi-cpu"></i> Assessment Summary
+                                        </h6>
+                                        <div class="text-dark" style="line-height: 1.6;">
+                                            @((MarkupString)MultiFileHelpers.FormatAIInsight(fileResult.AIInsight))
+                                        </div>
+                                    </div>
+                                }
+
+                                @* Dependency Impact Section *@
+                                @if (fileResult.DependencyImpact != null)
+                                {
+                                    <div class="bg-info bg-opacity-10 p-3 rounded mt-2 border border-info">
+                                        <h6 class="text-info mb-2">
+                                            <i class="bi bi-diagram-3"></i> Dependency Impact
+                                        </h6>
+                                        <div class="d-flex flex-wrap gap-2 mb-2">
+                                            @if (fileResult.DependencyImpact.AffectedFilesCount > 0)
+                                            {
+                                                <span class="badge bg-warning text-dark">
+                                                    <i class="bi bi-file-earmark"></i> Affects @fileResult.DependencyImpact.AffectedFilesCount file(s)
+                                                </span>
+                                            }
+                                            @if (fileResult.DependencyImpact.AffectedClassesCount > 0)
+                                            {
+                                                <span class="badge bg-primary">
+                                                    <i class="bi bi-box"></i> @fileResult.DependencyImpact.AffectedClassesCount class(es)
+                                                </span>
+                                            }
+                                            @if (fileResult.DependencyImpact.AffectedMethodsCount > 0)
+                                            {
+                                                <span class="badge bg-secondary">
+                                                    <i class="bi bi-code-square"></i> @fileResult.DependencyImpact.AffectedMethodsCount method(s)
+                                                </span>
+                                            }
+                                            @if (fileResult.DependencyImpact.IsGodObject)
+                                            {
+                                                <span class="badge bg-danger">
+                                                    <i class="bi bi-exclamation-triangle-fill"></i> God Object
+                                                </span>
+                                            }
+                                            @if (fileResult.DependencyImpact.IsInCycle)
+                                            {
+                                                <span class="badge bg-danger">
+                                                    <i class="bi bi-arrow-repeat"></i> Cyclic Dependency
+                                                </span>
+                                            }
+                                            <span class="badge @MultiFileHelpers.GetRiskBadgeClass(fileResult.DependencyImpact.RiskLevel)">
+                                                Risk: @fileResult.DependencyImpact.RiskLevel
+                                            </span>
+                                        </div>
+                                        @if (fileResult.DependencyImpact.AffectedFiles.Any())
+                                        {
+                                            <div class="mt-2">
+                                                <small class="text-muted"><strong>Affected Files:</strong></small>
+                                                <div class="mt-1">
+                                                    @foreach (var affectedFile in fileResult.DependencyImpact.AffectedFiles.Take(5))
+                                                    {
+                                                        <span class="badge bg-light text-dark me-1 mb-1">@affectedFile</span>
+                                                    }
+                                                    @if (fileResult.DependencyImpact.AffectedFiles.Count > 5)
+                                                    {
+                                                        <span class="text-muted">+@(fileResult.DependencyImpact.AffectedFiles.Count - 5) more</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+
+                                @* Semantic Analysis Section *@
+                                @if (fileResult.SemanticAnalysis != null)
+                                {
+                                    <div class="mt-3 p-3 bg-light rounded border-start border-3 border-info">
+                                        <h6 class="text-info mb-2">
+                                            <i class="bi bi-brain"></i> Semantic Analysis
+                                            <span class="badge bg-info ms-2">@fileResult.StaticAnalysis.Language.ToUpper()</span>
+                                        </h6>
+
+                                        @* Semantic Quality Score *@
+                                        <div class="mb-3">
+                                            <small class="text-muted">Semantic Quality Score</small>
+                                            <div class="progress" style="height: 25px;">
+                                                <div class="progress-bar @MultiFileHelpers.GetSemanticQualityColor(fileResult.SemanticAnalysis.SemanticQualityScore)"
+                                                     style="width: @fileResult.SemanticAnalysis.SemanticQualityScore%">
+                                                    @fileResult.SemanticAnalysis.SemanticQualityScore%
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        @* Semantic Issues *@
+                                        @if (fileResult.SemanticAnalysis.SemanticIssues.Any())
+                                        {
+                                            <div class="mb-3">
+                                                <h6 class="text-danger mb-2">
+                                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                                    Semantic Issues (@fileResult.SemanticAnalysis.SemanticIssues.Count)
+                                                </h6>
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm table-hover">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th>Type</th>
+                                                                <th>Category</th>
+                                                                <th>Location</th>
+                                                                <th>Description</th>
+                                                                <th>Recommendation</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var issue in fileResult.SemanticAnalysis.SemanticIssues.OrderByDescending(i => i.Severity))
+                                                            {
+                                                                <tr>
+                                                                    <td>
+                                                                        <span class="badge @MultiFileHelpers.GetSemanticIssueTypeBadge(issue.IssueType)">@issue.IssueType</span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="badge @MultiFileHelpers.GetCategoryBadge(issue.Category)">@issue.Category</span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <small>@issue.Location</small>
+                                                                        @if (issue.LineNumber > 0)
+                                                                        {
+                                                                            <br>
+                                                                            <small class="text-muted">Line @issue.LineNumber</small>
+                                                                        }
+                                                                    </td>
+                                                                    <td>
+                                                                        <small>@issue.Description</small>
+                                                                    </td>
+                                                                    <td>
+                                                                        <small class="text-muted">@issue.Recommendation</small>
+                                                                    </td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        }
+
+                                        @* Language-Specific Patterns *@
+                                        @if (fileResult.SemanticAnalysis.DetectedPatterns.Any())
+                                        {
+                                            <div>
+                                                <h6 class="text-warning mb-2">
+                                                    <i class="bi bi-code-slash"></i>
+                                                    Language-Specific Patterns (@fileResult.SemanticAnalysis.DetectedPatterns.Count)
+                                                </h6>
+                                                <div class="d-flex flex-wrap gap-2 mb-2">
+                                                    @foreach (var pattern in fileResult.SemanticAnalysis.DetectedPatterns)
+                                                    {
+                                                        <div class="card border-warning" style="min-width: 200px;">
+                                                            <div class="card-body p-2">
+                                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                                    <span class="badge @(pattern.IsDeprecated ? "bg-danger" : "bg-warning text-dark")">
+                                                                        @pattern.PatternType
+                                                                    </span>
+                                                                    @if (pattern.IsDeprecated)
+                                                                    {
+                                                                        <span class="badge bg-danger">Deprecated</span>
+                                                                    }
+                                                                </div>
+                                                                <small class="d-block mb-1"><strong>@pattern.Description</strong></small>
+                                                                @if (!string.IsNullOrEmpty(pattern.ModernAlternative))
+                                                                {
+                                                                    <small class="text-success d-block mb-1">
+                                                                        <i class="bi bi-arrow-right"></i> @pattern.ModernAlternative
+                                                                    </small>
+                                                                }
+                                                                @if (!string.IsNullOrEmpty(pattern.MigrationGuidance))
+                                                                {
+                                                                    <small class="text-muted d-block">@pattern.MigrationGuidance</small>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            <div class="ms-3">
+                                <span class="badge @MultiFileHelpers.GetComplexityBadgeClass(fileResult.ComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold)">
+                                    @MultiFileHelpers.GetComplexityLabel(fileResult.ComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold)
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public List<FileAnalysisResult> FileResults { get; set; } = new();
+
+    [Parameter]
+    public int ComplexityLowThreshold { get; set; } = 30;
+
+    [Parameter]
+    public int ComplexityMediumThreshold { get; set; } = 50;
+
+    [Parameter]
+    public int ComplexityHighThreshold { get; set; } = 70;
+}

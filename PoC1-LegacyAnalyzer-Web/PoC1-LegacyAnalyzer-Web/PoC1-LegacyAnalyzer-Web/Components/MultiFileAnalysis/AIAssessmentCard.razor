@@ -1,0 +1,18 @@
+@using PoC1_LegacyAnalyzer_Web.Models
+
+@if (!string.IsNullOrEmpty(AssessmentText))
+{
+    <div class="card shadow mb-3">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="bi bi-cpu"></i> Intelligent Assessment Summary</h5>
+        </div>
+        <div class="card-body">
+            <p class="mb-0">@AssessmentText</p>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string AssessmentText { get; set; } = string.Empty;
+}

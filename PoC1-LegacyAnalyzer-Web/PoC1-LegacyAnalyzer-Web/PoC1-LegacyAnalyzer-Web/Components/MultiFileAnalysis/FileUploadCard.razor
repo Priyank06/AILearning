@@ -1,0 +1,147 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using PoC1_LegacyAnalyzer_Web.Helpers
+
+<div class="card shadow">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Project File Upload</h5>
+        @if (SelectedFiles.Any())
+        {
+            <span class="badge bg-light text-dark">
+                <i class="bi bi-files"></i> @SelectedFiles.Count file(s) selected
+            </span>
+        }
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <!-- Analysis Type Selection -->
+            <div class="col-md-3 mb-3 mb-md-0">
+                <label class="form-label fw-bold">Analysis Type:</label>
+                <select class="form-select" @bind="selectedAnalysisType" @bind:after="OnAnalysisTypeChanged">
+                    <option value="general">General Code Assessment</option>
+                    <option value="security">Security Analysis</option>
+                    <option value="performance">Performance Review</option>
+                    <option value="migration">Migration Readiness</option>
+                </select>
+            </div>
+
+            <!-- File Upload Buttons -->
+            <div class="col-md-6 mb-3 mb-md-0">
+                <label class="form-label fw-bold">Upload Files:</label>
+                <div class="d-flex gap-2 flex-wrap">
+                    <InputFile id="fileInput" OnChange="HandleFileSelection" multiple accept=".cs,.py,.js,.ts,.java,.go" class="d-none" webkitdirectory />
+                    <label for="fileInput" class="btn btn-primary">
+                        <i class="bi bi-folder-plus"></i> Select Project Folder
+                    </label>
+
+                    <InputFile id="individualFiles" OnChange="HandleIndividualFileSelection" multiple accept=".cs,.py,.js,.ts,.java,.go" class="d-none" />
+                    <label for="individualFiles" class="btn btn-outline-secondary">
+                        <i class="bi bi-file-plus"></i> Select Individual Files
+                    </label>
+                </div>
+                @if (SelectedFiles.Any())
+                {
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> Total size: @MultiFileHelpers.FormatFileSize(SelectedFiles.Sum(f => f.Size))
+                        </small>
+                    </div>
+                }
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="col-md-3">
+                <label class="form-label fw-bold d-block">&nbsp;</label>
+                <div class="d-flex gap-2">
+                    @if (SelectedFiles.Any())
+                    {
+                        <button class="btn btn-success flex-fill" @onclick="OnAnalyze" disabled="@IsAnalyzing">
+                            @if (IsAnalyzing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                <text>Analyzing...</text>
+                            }
+                            else
+                            {
+                                <text><i class="bi bi-play-circle"></i> Analyze</text>
+                            }
+                        </button>
+                        <button class="btn btn-outline-danger" @onclick="OnClearFiles" title="Clear all files">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @if (ShowValidationButtons)
+        {
+            <div class="mt-3 pt-3 border-top">
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-info btn-sm" @onclick="OnTestCharts">
+                        <i class="bi bi-check-circle"></i> Validate Dashboard
+                    </button>
+                    <button class="btn btn-outline-warning btn-sm" @onclick="OnDebugCharts">
+                        <i class="bi bi-gear"></i> System Diagnostics
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private string selectedAnalysisType = "general";
+
+    [Parameter]
+    public List<IBrowserFile> SelectedFiles { get; set; } = new();
+
+    [Parameter]
+    public string AnalysisType { get; set; } = "general";
+
+    [Parameter]
+    public bool IsAnalyzing { get; set; }
+
+    [Parameter]
+    public bool ShowValidationButtons { get; set; }
+
+    [Parameter]
+    public EventCallback<InputFileChangeEventArgs> OnFileSelection { get; set; }
+
+    [Parameter]
+    public EventCallback<InputFileChangeEventArgs> OnIndividualFileSelection { get; set; }
+
+    [Parameter]
+    public EventCallback OnAnalyze { get; set; }
+
+    [Parameter]
+    public EventCallback OnClearFiles { get; set; }
+
+    [Parameter]
+    public EventCallback OnTestCharts { get; set; }
+
+    [Parameter]
+    public EventCallback OnDebugCharts { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnAnalysisTypeChange { get; set; }
+
+    protected override void OnInitialized()
+    {
+        selectedAnalysisType = AnalysisType;
+    }
+
+    private async Task HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        await OnFileSelection.InvokeAsync(e);
+    }
+
+    private async Task HandleIndividualFileSelection(InputFileChangeEventArgs e)
+    {
+        await OnIndividualFileSelection.InvokeAsync(e);
+    }
+
+    private async Task OnAnalysisTypeChanged()
+    {
+        await OnAnalysisTypeChange.InvokeAsync(selectedAnalysisType);
+    }
+}

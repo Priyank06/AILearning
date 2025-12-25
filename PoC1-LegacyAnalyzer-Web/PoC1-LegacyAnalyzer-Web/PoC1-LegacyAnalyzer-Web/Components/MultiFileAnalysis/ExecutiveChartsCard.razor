@@ -1,0 +1,44 @@
+@using PoC1_LegacyAnalyzer_Web.Models
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <h5 class="alert-heading mb-3"><i class="bi bi-graph-up"></i> Executive Dashboard</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0">Files Requiring Immediate Review</h6>
+                            <small>Priority ranking by technical complexity</small>
+                        </div>
+                        <div class="card-body" style="height: 300px;">
+                            <canvas id="complexityChart" width="400" height="250"></canvas>
+                        </div>
+                        <div class="card-footer text-muted">
+                            <small><strong>Action:</strong> Focus development effort on highest-scoring files first</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border-warning">
+                        <div class="card-header bg-warning text-dark">
+                            <h6 class="mb-0">Project Risk Assessment</h6>
+                            <small>Risk distribution across entire codebase</small>
+                        </div>
+                        <div class="card-body" style="height: 300px;">
+                            <canvas id="riskChart" width="400" height="250"></canvas>
+                        </div>
+                        <div class="card-footer text-muted">
+                            <small><strong>Insight:</strong> Risk distribution indicates project complexity level</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // This component provides the canvas elements for Chart.js
+    // Chart generation logic remains in the parent component
+}

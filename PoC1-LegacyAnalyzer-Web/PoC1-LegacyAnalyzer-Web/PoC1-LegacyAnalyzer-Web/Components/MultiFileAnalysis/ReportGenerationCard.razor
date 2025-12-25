@@ -1,0 +1,32 @@
+@using PoC1_LegacyAnalyzer_Web.Models
+
+<div class="card shadow mt-3">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-download"></i> Executive Reporting</h5>
+    </div>
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="mb-1">Comprehensive Analysis Report</h6>
+                <small class="text-muted">
+                    Professional assessment report for stakeholder distribution
+                </small>
+            </div>
+            <button class="btn btn-success" @onclick="OnGenerateReport" disabled="@IsGeneratingReport">
+                @if (IsGeneratingReport)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+                <i class="bi bi-file-earmark-pdf"></i> Generate Report
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public bool IsGeneratingReport { get; set; }
+
+    [Parameter]
+    public EventCallback OnGenerateReport { get; set; }
+}

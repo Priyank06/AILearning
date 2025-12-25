@@ -1,0 +1,182 @@
+@using PoC1_LegacyAnalyzer_Web.Models
+@using PoC1_LegacyAnalyzer_Web.Helpers
+
+<div class="card shadow">
+    <div class="card-header bg-success text-white">
+        <h6 class="mb-0">Code Quality Assessment</h6>
+        <small>Maintenance optimization opportunities identified</small>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            @{
+                var completedFiles = Result.FileResults.Where(f => f.ComplexityScore > 0).ToList();
+                var failedFiles = Result.FileResults.Where(f => f.ComplexityScore <= 0).ToList();
+                var averageComplexity = completedFiles.Any() ? completedFiles.Average(f => f.ComplexityScore) : 0;
+            }
+
+            <div class="col-md-8">
+                @if (failedFiles.Any())
+                {
+                    <div class="alert alert-warning">
+                        <h6 class="text-warning mb-2">
+                            <i class="bi bi-exclamation-triangle"></i> Analysis Status: Incomplete
+                        </h6>
+                        <p class="mb-2">
+                            @failedFiles.Count of @Result.FileResults.Count files require completed analysis.
+                            Successfully analyzed files show @(averageComplexity.ToString("F0")) average complexity score.
+                        </p>
+                    </div>
+                }
+                else if (averageComplexity <= 30)
+                {
+                    <div class="alert alert-success">
+                        <h6 class="text-success mb-2">
+                            <i class="bi bi-check-circle"></i> Positive Assessment: Well-Maintained Codebase
+                        </h6>
+                        <p class="mb-2">
+                            Analysis indicates a well-structured project with manageable complexity levels.
+                            All files fall within acceptable maintenance thresholds.
+                        </p>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning">
+                        <h6 class="text-warning mb-2">
+                            <i class="bi bi-exclamation-triangle"></i> Moderate Complexity Detected
+                        </h6>
+                        <p class="mb-2">
+                            Project shows @(averageComplexity.ToString("F0")) average complexity requiring attention.
+                        </p>
+                    </div>
+                }
+
+                <h6 class="mb-3">File Quality Overview</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead class="table-light">
+                            <tr>
+                                <th>File</th>
+                                <th>Quality Score</th>
+                                <th>Status</th>
+                                <th>Maintenance Level</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var file in Result.FileResults.OrderByDescending(f => f.ComplexityScore).Take(5))
+                            {
+                                <tr>
+                                    <td class="fw-bold">@file.FileName</td>
+                                    <td>
+                                        @if (file.ComplexityScore > 0)
+                                        {
+                                            <div class="progress" style="height: 20px; width: 100px;">
+                                                <div class="progress-bar @MultiFileHelpers.GetQualityColorClass(file.ComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold)"
+                                                     style="width: @(100 - file.ComplexityScore)%">
+                                                    @(100 - file.ComplexityScore)%
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-warning">
+                                                <i class="bi bi-exclamation-triangle"></i> Analysis Incomplete
+                                            </span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (file.ComplexityScore > 0)
+                                        {
+                                            <span class="badge @MultiFileHelpers.GetStatusBadgeClass(file.ComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold)">
+                                                @MultiFileHelpers.GetStatusText(file.ComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold)
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning text-dark">Pending</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (file.ComplexityScore > 0)
+                                        {
+                                            @MultiFileHelpers.GetMaintenanceLevel(file.ComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold)
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Analysis required</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6 class="card-title @(failedFiles.Any() ? "text-warning" : averageComplexity > 30 ? "text-warning" : "text-success")">
+                            <i class="bi bi-@(failedFiles.Any() ? "exclamation-triangle" : "shield-check")"></i> Quality Summary
+                        </h6>
+
+                        @if (failedFiles.Any())
+                        {
+                            <div class="mb-3">
+                                <strong>Overall Status:</strong><br>
+                                <span class="text-warning">@failedFiles.Count file(s) require analysis</span>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Completion Rate:</strong><br>
+                                <small>@completedFiles.Count of @Result.FileResults.Count files processed</small>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Action Required:</strong><br>
+                                <small>Complete analysis for remaining files</small>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mb-3">
+                                <strong>Overall Status:</strong><br>
+                                <span class="@(averageComplexity > 30 ? "text-warning" : "text-success")">
+                                    @(averageComplexity > 30 ? "Moderate Complexity" : "Well-Maintained Project")
+                                </span>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Maintenance Approach:</strong><br>
+                                <small>@(averageComplexity > 30 ? "Structured improvement plan" : "Standard development practices")</small>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Estimated Effort:</strong><br>
+                                <small>@(averageComplexity > 30 ? "Moderate improvement cycles" : "Routine maintenance cycles")</small>
+                            </div>
+                        }
+
+                        <hr>
+                        <div class="text-center">
+                            <strong class="@(failedFiles.Any() ? "text-warning" : averageComplexity > 30 ? "text-warning" : "text-success")">
+                                @(failedFiles.Any() ? "Partial Analysis" : averageComplexity > 30 ? "Medium Risk Project" : "Low Risk Project")
+                            </strong><br>
+                            <small class="text-muted">
+                                @(failedFiles.Any() ? $"{(double)completedFiles.Count / Result.FileResults.Count * 100:F0}% Complete" :
+                                    averageComplexity > 30 ? "Experienced team recommended" : "Suitable for standard team")
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public MultiFileAnalysisResult Result { get; set; } = null!;
+
+    [Parameter]
+    public int ComplexityLowThreshold { get; set; } = 30;
+
+    [Parameter]
+    public int ComplexityMediumThreshold { get; set; } = 50;
+}
