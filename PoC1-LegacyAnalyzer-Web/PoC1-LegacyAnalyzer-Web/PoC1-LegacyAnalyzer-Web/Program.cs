@@ -101,6 +101,7 @@ public class Program
         builder.Services.Configure<RequestDeduplicationConfiguration>(builder.Configuration.GetSection("RequestDeduplication"));
         builder.Services.Configure<CostTrackingConfiguration>(builder.Configuration.GetSection("CostTracking"));
         builder.Services.Configure<TracingConfiguration>(builder.Configuration.GetSection("Tracing"));
+        builder.Services.Configure<PoC1_LegacyAnalyzer_Web.Services.Caching.AgentCacheConfiguration>(builder.Configuration.GetSection("AgentCache"));
         // Configure with validation - catch binding errors early
         try
         {
@@ -198,6 +199,18 @@ public class Program
         
         // Register tracing service
         builder.Services.AddSingleton<ITracingService, TracingService>();
+
+        // Register ground truth validation service
+        builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.GroundTruth.IGroundTruthValidationService,
+            PoC1_LegacyAnalyzer_Web.Services.GroundTruth.GroundTruthValidationService>();
+
+        // Register agent response caching service
+        builder.Services.AddSingleton<PoC1_LegacyAnalyzer_Web.Services.Caching.IAgentResponseCacheService,
+            PoC1_LegacyAnalyzer_Web.Services.Caching.AgentResponseCacheService>();
+
+        // Register determinism measurement service
+        builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.Determinism.IDeterminismMeasurementService,
+            PoC1_LegacyAnalyzer_Web.Services.Determinism.DeterminismMeasurementService>();
 
         // Create logger using LoggerFactory with Application Insights support
         using var loggerFactory = LoggerFactory.Create(logging =>

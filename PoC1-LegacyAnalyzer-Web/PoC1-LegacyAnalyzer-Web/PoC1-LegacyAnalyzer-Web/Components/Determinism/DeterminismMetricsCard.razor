@@ -1,0 +1,345 @@
+@using PoC1_LegacyAnalyzer_Web.Models.Determinism
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header @GetHeaderClass()">
+        <h5 class="mb-0">
+            <i class="bi bi-shield-check"></i> Determinism Analysis Results
+        </h5>
+    </div>
+    <div class="card-body">
+        @if (Result != null)
+        {
+            <!-- Overall Determinism Score -->
+            <div class="row mb-4">
+                <div class="col-md-12 text-center">
+                    <div class="determinism-score-display">
+                        <div class="score-circle @GetScoreClass()">
+                            <div class="score-value">@Result.DeterminismScore.ToString("F1")%</div>
+                            <div class="score-label">Determinism Score</div>
+                        </div>
+                        <div class="consistency-badge mt-3">
+                            <span class="badge @GetConsistencyBadgeClass()" style="font-size: 1.2rem;">
+                                @Result.ConsistencyLevel Consistency
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Info -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="alert alert-info">
+                        <strong><i class="bi bi-info-circle"></i> Test Configuration</strong>
+                        <p class="mb-1">Runs Performed: @Result.RunCount</p>
+                        <p class="mb-1">Tested: @Result.TestedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
+                        <p class="mb-0">Test ID: <code>@Result.TestId</code></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Metrics -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="metric-box">
+                        <i class="bi bi-check-circle-fill text-success"></i>
+                        <div class="metric-value">@Result.Statistics.FullyConsistentFindings</div>
+                        <div class="metric-label">100% Consistent</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-box">
+                        <i class="bi bi-check-circle text-info"></i>
+                        <div class="metric-value">@Result.Statistics.HighlyConsistentFindings</div>
+                        <div class="metric-label">≥80% Consistent</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-box">
+                        <i class="bi bi-exclamation-circle text-warning"></i>
+                        <div class="metric-value">@Result.Statistics.ModeratelyConsistentFindings</div>
+                        <div class="metric-label">50-79% Consistent</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-box">
+                        <i class="bi bi-x-circle text-danger"></i>
+                        <div class="metric-value">@Result.Statistics.PoorlyConsistentFindings</div>
+                        <div class="metric-label">&lt;50% Consistent</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Finding Statistics -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <h6>Finding Count Statistics</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <tbody>
+                                <tr>
+                                    <td><strong>Total Unique Findings:</strong></td>
+                                    <td>@Result.Statistics.TotalUniqueFindings</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Average Findings per Run:</strong></td>
+                                    <td>@Result.Statistics.AverageFindingsPerRun.ToString("F1")</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Standard Deviation:</strong></td>
+                                    <td>@Result.Statistics.FindingCountStdDev.ToString("F2")</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Range:</strong></td>
+                                    <td>@Result.Statistics.MinFindings - @Result.Statistics.MaxFindings findings</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Per-Category Metrics -->
+            @if (Result.MetricsByCategory.Any())
+            {
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h6>Determinism by Category</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Determinism Score</th>
+                                        <th>Consistent</th>
+                                        <th>Inconsistent</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var (category, metrics) in Result.MetricsByCategory.OrderByDescending(x => x.Value.DeterminismScore))
+                                    {
+                                        <tr>
+                                            <td><strong>@category</strong></td>
+                                            <td>
+                                                <span class="badge @GetScoreBadgeClass(metrics.DeterminismScore)">
+                                                    @metrics.DeterminismScore.ToString("F1")%
+                                                </span>
+                                            </td>
+                                            <td>@metrics.ConsistentFindings</td>
+                                            <td>@metrics.InconsistentFindings</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Assessment -->
+            <div class="alert @GetAssessmentAlertClass()" role="alert">
+                <h6 class="alert-heading">Consistency Assessment</h6>
+                @GetAssessmentText()
+            </div>
+
+            <!-- Full Report (Collapsible) -->
+            <div class="mt-4">
+                <button class="btn btn-outline-secondary btn-sm" @onclick="ToggleReport">
+                    <i class="bi @(showFullReport ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    @(showFullReport ? "Hide" : "Show") Detailed Report
+                </button>
+                @if (showFullReport && !string.IsNullOrEmpty(Result.ToString()))
+                {
+                    <pre class="mt-3 p-3 bg-light border rounded" style="max-height: 500px; overflow-y: auto;">@FullReport</pre>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="text-muted">No determinism results available.</p>
+        }
+    </div>
+</div>
+
+<style>
+    .determinism-score-display {
+        padding: 2rem 0;
+    }
+
+    .score-circle {
+        display: inline-block;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        border: 8px solid;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .score-circle.excellent {
+        border-color: #28a745;
+        background-color: #d4edda;
+    }
+
+    .score-circle.good {
+        border-color: #17a2b8;
+        background-color: #d1ecf1;
+    }
+
+    .score-circle.moderate {
+        border-color: #ffc107;
+        background-color: #fff3cd;
+    }
+
+    .score-circle.fair {
+        border-color: #fd7e14;
+        background-color: #ffe5d0;
+    }
+
+    .score-circle.poor {
+        border-color: #dc3545;
+        background-color: #f8d7da;
+    }
+
+    .score-value {
+        font-size: 3rem;
+        font-weight: bold;
+    }
+
+    .score-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+
+    .metric-box {
+        text-align: center;
+        padding: 1.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        background-color: #f8f9fa;
+    }
+
+    .metric-box i {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin: 0.5rem 0;
+    }
+
+    .metric-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public DeterminismResult? Result { get; set; }
+
+    [Parameter]
+    public string? FullReport { get; set; }
+
+    private bool showFullReport = false;
+
+    private void ToggleReport()
+    {
+        showFullReport = !showFullReport;
+    }
+
+    private string GetHeaderClass()
+    {
+        if (Result == null) return "bg-secondary text-white";
+        return Result.ConsistencyLevel switch
+        {
+            ConsistencyLevel.Excellent => "bg-success text-white",
+            ConsistencyLevel.Good => "bg-info text-white",
+            ConsistencyLevel.Moderate => "bg-warning text-dark",
+            ConsistencyLevel.Fair => "bg-warning text-dark",
+            _ => "bg-danger text-white"
+        };
+    }
+
+    private string GetScoreClass()
+    {
+        if (Result == null) return "";
+        return Result.ConsistencyLevel switch
+        {
+            ConsistencyLevel.Excellent => "excellent",
+            ConsistencyLevel.Good => "good",
+            ConsistencyLevel.Moderate => "moderate",
+            ConsistencyLevel.Fair => "fair",
+            _ => "poor"
+        };
+    }
+
+    private string GetConsistencyBadgeClass()
+    {
+        if (Result == null) return "bg-secondary";
+        return Result.ConsistencyLevel switch
+        {
+            ConsistencyLevel.Excellent => "bg-success",
+            ConsistencyLevel.Good => "bg-info",
+            ConsistencyLevel.Moderate => "bg-warning text-dark",
+            ConsistencyLevel.Fair => "bg-warning text-dark",
+            _ => "bg-danger"
+        };
+    }
+
+    private string GetScoreBadgeClass(double score)
+    {
+        if (score >= 90) return "bg-success text-white";
+        if (score >= 80) return "bg-info text-white";
+        if (score >= 70) return "bg-warning text-dark";
+        if (score >= 60) return "bg-warning text-dark";
+        return "bg-danger text-white";
+    }
+
+    private string GetAssessmentAlertClass()
+    {
+        if (Result == null) return "alert-secondary";
+        return Result.ConsistencyLevel switch
+        {
+            ConsistencyLevel.Excellent => "alert-success",
+            ConsistencyLevel.Good => "alert-info",
+            ConsistencyLevel.Moderate => "alert-warning",
+            ConsistencyLevel.Fair => "alert-warning",
+            _ => "alert-danger"
+        };
+    }
+
+    private string GetAssessmentText()
+    {
+        if (Result == null) return "";
+
+        var score = Result.DeterminismScore;
+        var assessment = new System.Text.StringBuilder();
+
+        if (score >= 90)
+            assessment.AppendLine("✓ EXCELLENT consistency - AI findings are highly reliable and reproducible");
+        else if (score >= 80)
+            assessment.AppendLine("✓ GOOD consistency - AI findings are generally reliable with minor variations");
+        else if (score >= 70)
+            assessment.AppendLine("⚠ MODERATE consistency - Some findings may vary between analysis runs");
+        else if (score >= 60)
+            assessment.AppendLine("⚠ FAIR consistency - Findings vary noticeably; consider this when making decisions");
+        else
+            assessment.AppendLine("✗ POOR consistency - Findings are unreliable; prompt tuning recommended");
+
+        if (score < 80)
+        {
+            assessment.AppendLine("\nRecommendations:");
+            assessment.AppendLine("• Review and refine agent prompts for more specific instructions");
+            assessment.AppendLine("• Lower LLM temperature (currently 0.3, try 0.2 or 0.1)");
+            assessment.AppendLine("• Add more structured examples to prompts");
+            assessment.AppendLine("• Consider using a different LLM model (e.g., GPT-4 vs GPT-3.5)");
+        }
+
+        return assessment.ToString();
+    }
+}

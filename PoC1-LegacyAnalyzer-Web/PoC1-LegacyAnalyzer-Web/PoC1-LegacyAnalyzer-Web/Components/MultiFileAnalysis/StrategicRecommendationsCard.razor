@@ -1,0 +1,23 @@
+@using PoC1_LegacyAnalyzer_Web.Models
+
+@if (Recommendations.Any())
+{
+    <div class="card shadow mb-3">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="bi bi-lightbulb"></i> Strategic Recommendations</h5>
+        </div>
+        <div class="card-body">
+            @foreach (var recommendation in Recommendations)
+            {
+                <div class="alert alert-light border-start border-primary border-3">
+                    <small><i class="bi bi-arrow-right"></i> @recommendation</small>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public List<string> Recommendations { get; set; } = new();
+}

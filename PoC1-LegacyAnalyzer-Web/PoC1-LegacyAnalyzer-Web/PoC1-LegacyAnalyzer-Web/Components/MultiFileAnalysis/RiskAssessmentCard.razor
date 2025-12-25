@@ -1,0 +1,40 @@
+@using PoC1_LegacyAnalyzer_Web.Models
+@using PoC1_LegacyAnalyzer_Web.Helpers
+
+<div class="card shadow mb-3">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="bi bi-shield-check"></i> Risk Assessment Summary</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Overall Complexity Score</h6>
+                <div class="progress mb-2" style="height: 25px;">
+                    <div class="progress-bar @MultiFileHelpers.GetComplexityColorClass(Result.OverallComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold)"
+                         style="width: @(Result.OverallComplexityScore)%">
+                        @Result.OverallComplexityScore/100
+                    </div>
+                </div>
+                <small class="text-muted">Assessment based on code structure and dependencies</small>
+            </div>
+            <div class="col-md-6">
+                <h6>Migration Risk Level</h6>
+                <h3 class="@MultiFileHelpers.GetRiskTextColorClass(Result.OverallRiskLevel)">
+                    @Result.OverallRiskLevel
+                </h3>
+                <small class="text-muted">@MultiFileHelpers.GetRiskDescription(Result.OverallRiskLevel)</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public MultiFileAnalysisResult Result { get; set; } = null!;
+
+    [Parameter]
+    public int ComplexityLowThreshold { get; set; } = 30;
+
+    [Parameter]
+    public int ComplexityMediumThreshold { get; set; } = 50;
+}

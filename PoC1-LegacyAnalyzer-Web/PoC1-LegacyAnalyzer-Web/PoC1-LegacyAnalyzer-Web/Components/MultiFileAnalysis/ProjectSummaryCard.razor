@@ -1,0 +1,48 @@
+@using PoC1_LegacyAnalyzer_Web.Models
+
+<div class="card shadow mb-3">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Project Summary</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-6 col-lg-3">
+                <div class="card bg-primary text-white text-center">
+                    <div class="card-body p-2">
+                        <h4>@Result.TotalFiles</h4>
+                        <small>Source Files</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card bg-info text-white text-center">
+                    <div class="card-body p-2">
+                        <h4>@Result.TotalClasses</h4>
+                        <small>Classes</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card bg-warning text-white text-center">
+                    <div class="card-body p-2">
+                        <h4>@Result.TotalMethods</h4>
+                        <small>Methods</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card bg-secondary text-white text-center">
+                    <div class="card-body p-2">
+                        <h4>@Result.TotalProperties</h4>
+                        <small>Properties</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public MultiFileAnalysisResult Result { get; set; } = null!;
+}

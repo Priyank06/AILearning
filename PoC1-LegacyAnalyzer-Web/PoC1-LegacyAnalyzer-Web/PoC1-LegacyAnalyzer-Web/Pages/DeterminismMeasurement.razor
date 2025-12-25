@@ -1,0 +1,404 @@
+@page "/determinism"
+@using PoC1_LegacyAnalyzer_Web.Models.Determinism
+@using PoC1_LegacyAnalyzer_Web.Services.Determinism
+@using Microsoft.AspNetCore.Components.Forms
+@inject IDeterminismMeasurementService DeterminismService
+@inject ILogger<DeterminismMeasurement> Logger
+
+<PageTitle>Determinism Measurement</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <h1 class="display-4 mb-2">Determinism Measurement</h1>
+            <p class="lead text-muted">Measure AI Analysis Consistency Across Multiple Runs</p>
+        </div>
+    </div>
+
+    <!-- Test Setup -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-gear-fill"></i> Determinism Test Setup</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Upload Files for Testing:</label>
+                            <InputFile OnChange="HandleFileSelection" multiple accept=".cs,.py,.java,.js,.ts,.cpp,.c,.h" class="form-control" />
+                            @if (selectedFiles.Count > 0)
+                            {
+                                <div class="mt-2">
+                                    <small class="text-muted">Selected @selectedFiles.Count file(s)</small>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label fw-bold">Number of Runs:</label>
+                            <input type="number" class="form-control" @bind="numberOfRuns" min="2" max="50" />
+                            <small class="text-muted">Default: 10 runs</small>
+                        </div>
+
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label fw-bold">Test Temperature:</label>
+                            <input type="number" class="form-control" @bind="temperature" min="0.0" max="1.0" step="0.1" />
+                            <small class="text-muted">Default: 0.3</small>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <label class="form-label fw-bold">Business Objective:</label>
+                            <textarea class="form-control" rows="3" @bind="businessObjective"
+                                      placeholder="Enter analysis objective (e.g., 'Identify security vulnerabilities and legacy patterns')"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <label class="form-label fw-bold">Required Specialists:</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="securityCheck" @bind="includeSecurityAgent" />
+                                <label class="form-check-label" for="securityCheck">Security Analyst</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="performanceCheck" @bind="includePerformanceAgent" />
+                                <label class="form-check-label" for="performanceCheck">Performance Guru</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="architectureCheck" @bind="includeArchitectureAgent" />
+                                <label class="form-check-label" for="architectureCheck">Architecture Master</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <button class="btn btn-success" @onclick="RunDeterminismTest" disabled="@(isTesting || selectedFiles.Count == 0 || !HasSelectedAgents())">
+                            @if (isTesting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                <text>Running Test (@currentRun/@numberOfRuns runs)...</text>
+                            }
+                            else
+                            {
+                                <i class="bi bi-play-circle-fill"></i>
+                                <text> Run Determinism Test</text>
+                            }
+                        </button>
+
+                        @if (selectedFiles.Count == 0)
+                        {
+                            <span class="text-muted ms-3"><i class="bi bi-info-circle"></i> Please upload files to begin</span>
+                        }
+                        else if (!HasSelectedAgents())
+                        {
+                            <span class="text-warning ms-3"><i class="bi bi-exclamation-triangle"></i> Please select at least one agent</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Indicator -->
+    @if (isTesting)
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
+                            <h5>@currentStatus</h5>
+                            <div class="progress mt-3" style="height: 25px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                     role="progressbar"
+                                     style="width: @progressPercentage%;"
+                                     aria-valuenow="@progressPercentage"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+                                    @progressPercentage%
+                                </div>
+                            </div>
+                            <p class="text-muted mt-2">This test runs @numberOfRuns separate analyses to measure consistency...</p>
+                            <p class="text-muted"><small>Estimated time: @(numberOfRuns * 15) seconds</small></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Test Results -->
+    @if (determinismResult != null)
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <DeterminismMetricsCard Result="determinismResult" FullReport="fullReportText" />
+            </div>
+        </div>
+    }
+
+    <!-- Instructions -->
+    @if (determinismResult == null && !isTesting)
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="bi bi-info-circle"></i> How Determinism Measurement Works</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6>What is Determinism?</h6>
+                        <p>
+                            Determinism measures how <strong>consistent</strong> your AI analysis is across multiple runs.
+                            Since LLMs are inherently non-deterministic (even with low temperature), the same file analyzed
+                            multiple times may produce slightly different findings.
+                        </p>
+
+                        <h6 class="mt-4">Why Does This Matter?</h6>
+                        <ul>
+                            <li><strong>Trust:</strong> Users need confidence that findings are reproducible</li>
+                            <li><strong>Reliability:</strong> High determinism means the AI consistently identifies the same issues</li>
+                            <li><strong>Quality Indicator:</strong> Low determinism suggests prompts need refinement</li>
+                        </ul>
+
+                        <h6 class="mt-4">How It Works:</h6>
+                        <ol>
+                            <li>Upload your code file(s)</li>
+                            <li>Configure number of runs (default: 10)</li>
+                            <li>The system runs identical analyses multiple times</li>
+                            <li>Findings are compared across runs using normalized matching</li>
+                            <li>Determinism score is calculated based on consistency rates</li>
+                        </ol>
+
+                        <h6 class="mt-4">Consistency Levels:</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Score</th>
+                                        <th>Level</th>
+                                        <th>Meaning</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="table-success">
+                                        <td>≥ 90%</td>
+                                        <td><strong>Excellent</strong></td>
+                                        <td>Highly reliable and reproducible findings</td>
+                                    </tr>
+                                    <tr class="table-info">
+                                        <td>80-89%</td>
+                                        <td><strong>Good</strong></td>
+                                        <td>Generally reliable with minor variations</td>
+                                    </tr>
+                                    <tr class="table-warning">
+                                        <td>70-79%</td>
+                                        <td><strong>Moderate</strong></td>
+                                        <td>Some findings vary between runs</td>
+                                    </tr>
+                                    <tr class="table-warning">
+                                        <td>60-69%</td>
+                                        <td><strong>Fair</strong></td>
+                                        <td>Findings vary noticeably; consider with caution</td>
+                                    </tr>
+                                    <tr class="table-danger">
+                                        <td>&lt; 60%</td>
+                                        <td><strong>Poor</strong></td>
+                                        <td>Unreliable; prompt tuning needed</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h6 class="mt-4">Improving Determinism:</h6>
+                        <ul>
+                            <li><strong>Lower Temperature:</strong> Try 0.1-0.2 instead of 0.3</li>
+                            <li><strong>More Specific Prompts:</strong> Add concrete examples to agent prompts</li>
+                            <li><strong>Structured Output:</strong> Use structured formats (JSON) for findings</li>
+                            <li><strong>Different Model:</strong> Test with GPT-4 vs GPT-3.5</li>
+                        </ul>
+
+                        <div class="alert alert-info mt-4">
+                            <strong><i class="bi bi-lightbulb"></i> Tip:</strong> Start with a small file and 5 runs to test quickly.
+                            For production validation, use 10-20 runs on representative files.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<IBrowserFile> selectedFiles = new();
+    private int numberOfRuns = 10;
+    private double temperature = 0.3;
+    private string businessObjective = "Comprehensive legacy code analysis - identify security vulnerabilities, performance issues, and architectural problems";
+
+    private bool includeSecurityAgent = true;
+    private bool includePerformanceAgent = true;
+    private bool includeArchitectureAgent = true;
+
+    private DeterminismResult? determinismResult;
+    private string fullReportText = string.Empty;
+    private bool isTesting = false;
+    private string currentStatus = "";
+    private int currentRun = 0;
+    private int progressPercentage = 0;
+
+    private bool HasSelectedAgents()
+    {
+        return includeSecurityAgent || includePerformanceAgent || includeArchitectureAgent;
+    }
+
+    private List<string> GetRequiredSpecialties()
+    {
+        var specialties = new List<string>();
+        if (includeSecurityAgent) specialties.Add("security");
+        if (includePerformanceAgent) specialties.Add("performance");
+        if (includeArchitectureAgent) specialties.Add("architecture");
+        return specialties;
+    }
+
+    private async Task HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        selectedFiles.Clear();
+        foreach (var file in e.GetMultipleFiles(10)) // Max 10 files
+        {
+            selectedFiles.Add(file);
+        }
+        StateHasChanged();
+    }
+
+    private async Task RunDeterminismTest()
+    {
+        if (selectedFiles.Count == 0 || !HasSelectedAgents()) return;
+
+        isTesting = true;
+        determinismResult = null;
+        fullReportText = string.Empty;
+        currentRun = 0;
+        progressPercentage = 0;
+        currentStatus = "Initializing determinism test...";
+        StateHasChanged();
+
+        try
+        {
+            var configuration = new DeterminismConfiguration
+            {
+                NumberOfRuns = numberOfRuns,
+                Temperature = temperature,
+                IncludeRawResults = true,
+                GroupByAgent = true,
+                GroupByCategory = true
+            };
+
+            var progress = new Progress<string>(message =>
+            {
+                currentStatus = message;
+
+                // Extract run number from progress message if available
+                if (message.Contains("Run ") && message.Contains("/"))
+                {
+                    var parts = message.Split(new[] { "Run ", "/" }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 2 && int.TryParse(parts[0].Trim(), out int runNum))
+                    {
+                        currentRun = runNum;
+                        progressPercentage = (int)((currentRun / (double)numberOfRuns) * 100);
+                    }
+                }
+
+                InvokeAsync(StateHasChanged);
+            });
+
+            var requiredSpecialties = GetRequiredSpecialties();
+
+            determinismResult = await DeterminismService.MeasureDeterminismAsync(
+                selectedFiles,
+                businessObjective,
+                requiredSpecialties,
+                configuration,
+                progress,
+                default);
+
+            // Generate full report text
+            fullReportText = GenerateFullReport(determinismResult);
+
+            currentStatus = "Test complete!";
+            progressPercentage = 100;
+
+            Logger.LogInformation(
+                "Determinism test complete. Score: {Score:F1}%, Consistency: {Level}, Runs: {Runs}",
+                determinismResult.DeterminismScore,
+                determinismResult.ConsistencyLevel,
+                determinismResult.RunCount);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Determinism test failed");
+            currentStatus = $"Test failed: {ex.Message}";
+        }
+        finally
+        {
+            isTesting = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GenerateFullReport(DeterminismResult result)
+    {
+        var report = new System.Text.StringBuilder();
+
+        report.AppendLine($"Determinism Test Report");
+        report.AppendLine($"Generated: {result.TestedAt:yyyy-MM-dd HH:mm:ss} UTC");
+        report.AppendLine($"Test ID: {result.TestId}");
+        report.AppendLine($"Runs: {result.RunCount}");
+        report.AppendLine($"Temperature: {temperature}");
+        report.AppendLine();
+
+        report.AppendLine($"Overall Score: {result.DeterminismScore:F1}%");
+        report.AppendLine($"Consistency Level: {result.ConsistencyLevel}");
+        report.AppendLine();
+
+        report.AppendLine("=== Consistent Findings ===");
+        report.AppendLine($"Total: {result.ConsistentFindings.Count}");
+        foreach (var finding in result.ConsistentFindings.OrderByDescending(f => f.AppearanceRate).Take(10))
+        {
+            report.AppendLine($"  - {finding.Category} at {finding.Location} ({finding.AppearanceRate:F0}% of runs)");
+        }
+        report.AppendLine();
+
+        report.AppendLine("=== Inconsistent Findings ===");
+        report.AppendLine($"Total: {result.InconsistentFindings.Count}");
+        foreach (var finding in result.InconsistentFindings.OrderBy(f => f.AppearanceRate).Take(10))
+        {
+            report.AppendLine($"  - {finding.Category} at {finding.Location} ({finding.AppearanceRate:F0}% of runs)");
+        }
+        report.AppendLine();
+
+        if (result.MetricsByAgent.Any())
+        {
+            report.AppendLine("=== By Agent ===");
+            foreach (var (agent, metrics) in result.MetricsByAgent.OrderByDescending(x => x.Value.DeterminismScore))
+            {
+                report.AppendLine($"  {agent}: {metrics.DeterminismScore:F1}% ({metrics.ConsistentFindings} consistent, {metrics.InconsistentFindings} inconsistent)");
+            }
+            report.AppendLine();
+        }
+
+        if (result.MetricsByCategory.Any())
+        {
+            report.AppendLine("=== By Category ===");
+            foreach (var (category, metrics) in result.MetricsByCategory.OrderByDescending(x => x.Value.DeterminismScore))
+            {
+                report.AppendLine($"  {category}: {metrics.DeterminismScore:F1}% ({metrics.ConsistentFindings} consistent, {metrics.InconsistentFindings} inconsistent)");
+            }
+        }
+
+        return report.ToString();
+    }
+}
