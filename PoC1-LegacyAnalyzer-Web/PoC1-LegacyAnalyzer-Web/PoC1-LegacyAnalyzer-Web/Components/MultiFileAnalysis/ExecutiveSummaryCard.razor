@@ -1,57 +1,49 @@
 @using PoC1_LegacyAnalyzer_Web.Models
 @using PoC1_LegacyAnalyzer_Web.Helpers
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
 
-<div class="card shadow mb-4">
-    <div class="card-header bg-primary text-white">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <h5 class="mb-0">
-                    <i class="bi bi-clipboard-check"></i> Executive Assessment Summary
-                </h5>
-                <small>Strategic overview for decision makers</small>
-            </div>
-            <div class="badge bg-warning text-dark fs-6">
-                Risk Level: @Result.OverallRiskLevel
-            </div>
-        </div>
-    </div>
+<div class="card shadow mb-4 section-sub">
+    <CardHeader Title="Executive Assessment Summary"
+                Subtitle="Strategic overview for decision makers"
+                Icon="bi bi-clipboard-check"
+                Variant="primary"
+                BadgeText="@($"Risk Level: {Result.OverallRiskLevel}")"
+                BadgeVariant="warning" />
     <div class="card-body">
         <div class="row">
             <div class="col-md-8">
-                <h6 class="text-primary mb-3">
-                    <i class="bi bi-graph-up"></i> Project Assessment
-                </h6>
-                <p class="mb-3">
-                    Analysis of <strong>@Result.TotalFiles files</strong> containing
-                    <strong>@Result.TotalClasses classes</strong> and
-                    <strong>@Result.TotalMethods methods</strong>.
-                    Overall risk level:
-                    <span class="badge bg-@(MultiFileHelpers.GetRiskBadgeClass(Result))">
-                        @Result.OverallRiskLevel
-                    </span>
-                </p>
-
-                <h6 class="text-success mb-3">
-                    <i class="bi bi-target"></i> Strategic Recommendations
-                </h6>
+                <div class="mb-4">
+                    <h6 class="text-primary mb-3">
+                        <i class="bi bi-graph-up"></i> Project Assessment
+                    </h6>
+                    <p class="mb-2">
+                        Analysis of <strong>@Result.TotalFiles files</strong> containing
+                        <strong>@Result.TotalClasses classes</strong> and
+                        <strong>@Result.TotalMethods methods</strong>.
+                    </p>
+                    <div class="alert alert-info mb-3">
+                        <strong><i class="bi bi-info-circle"></i> What This Means:</strong>
+                        <p class="mb-0 mt-2">
+                            @GetComplexityExplanation(Result.OverallComplexityScore)
+                        </p>
+                    </div>
+                </div>
 
                 @if (Result.KeyRecommendations.Any())
                 {
-                    <ul class="list-unstyled">
-                        @foreach (var recommendation in Result.KeyRecommendations.Take(3))
-                        {
-                            <li class="mb-2">
-                                <i class="bi bi-arrow-right text-success"></i>
-                                <strong>@recommendation</strong>
-                            </li>
-                        }
-                    </ul>
-                }
-                else
-                {
-                    <div class="alert alert-success">
-                        <strong>Recommended Approach:</strong>
-                        Standard development practices suitable for this project complexity level.
+                    <div>
+                        <h6 class="text-success mb-3">
+                            <i class="bi bi-target"></i> Key Strategic Recommendations
+                        </h6>
+                        <ul class="list-unstyled">
+                            @foreach (var recommendation in Result.KeyRecommendations.Take(3))
+                            {
+                                <li class="mb-2">
+                                    <i class="bi bi-arrow-right text-success"></i>
+                                    <strong>@recommendation</strong>
+                                </li>
+                            }
+                        </ul>
                     </div>
                 }
             </div>
@@ -59,12 +51,14 @@
             <div class="col-md-4">
                 <div class="card bg-primary text-white">
                     <div class="card-body text-center">
-                        <h6 class="card-title">Complexity Assessment</h6>
-
+                        <h6 class="card-title">Complexity Score</h6>
                         <div class="display-6 mb-2">
                             @Result.OverallComplexityScore<small>/100</small>
                         </div>
-                        <small>Technical Complexity Score</small>
+                        <div class="progress mb-2" style="height: 8px; background-color: rgba(255,255,255,0.3);">
+                            <div class="progress-bar bg-light" style="width: @(Result.OverallComplexityScore)%"></div>
+                        </div>
+                        <small class="d-block mb-3">@GetComplexityLevel(Result.OverallComplexityScore)</small>
 
                         <hr class="bg-light">
 
@@ -92,4 +86,27 @@
 
     [Parameter]
     public int ComplexityHighThreshold { get; set; } = 70;
+
+    private string GetComplexityExplanation(int score)
+    {
+        if (score <= ComplexityLowThreshold)
+        {
+            return "Your codebase shows low complexity, indicating well-structured code with manageable dependencies. This suggests the project is maintainable and suitable for standard development practices.";
+        }
+        else if (score <= ComplexityMediumThreshold)
+        {
+            return "Your codebase has moderate complexity. Some areas may require refactoring, but the overall structure is manageable. A structured improvement plan is recommended.";
+        }
+        else
+        {
+            return "Your codebase shows high complexity, indicating potential technical debt and maintenance challenges. A comprehensive modernization strategy with experienced team is strongly recommended.";
+        }
+    }
+
+    private string GetComplexityLevel(int score)
+    {
+        if (score <= ComplexityLowThreshold) return "Low Complexity";
+        if (score <= ComplexityMediumThreshold) return "Medium Complexity";
+        return "High Complexity";
+    }
 }

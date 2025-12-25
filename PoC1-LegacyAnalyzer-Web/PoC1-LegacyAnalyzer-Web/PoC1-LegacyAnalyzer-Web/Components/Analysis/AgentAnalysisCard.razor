@@ -72,122 +72,85 @@
                                                 }
                                             </div>
                                             
-                                            @* Explainability Section *@
+                                            @* Explainability Section - Simplified *@
                                             @if (finding.Explainability != null)
                                             {
                                                 var explainabilityId = $"explainability-{Analysis.AgentName}-{finding.GetHashCode()}";
                                                 <div class="mt-2">
-                                                    <button class="btn btn-sm btn-link p-0 text-decoration-none" 
+                                                    <button class="btn btn-sm btn-outline-info" 
                                                             type="button" 
                                                             data-bs-toggle="collapse" 
                                                             data-bs-target="#@explainabilityId"
                                                             aria-expanded="false"
                                                             @onclick:stopPropagation="true">
-                                                        <small class="text-info">
-                                                            <i class="bi bi-chevron-right"></i> 
-                                                            <i class="bi bi-lightbulb"></i> Reasoning & Confidence
-                                                        </small>
+                                                        <i class="bi bi-chevron-down"></i> 
+                                                        <i class="bi bi-lightbulb"></i> View Details
                                                     </button>
                                                     <div class="collapse mt-2" id="@explainabilityId">
-                                                        <div class="card card-body bg-light p-3">
-                                                            @* Confidence Breakdown *@
-                                                            <div class="mb-3">
-                                                                <h6 class="mb-2">
-                                                                    <i class="bi bi-graph-up"></i> Confidence Breakdown
-                                                                </h6>
-                                                                <div class="row g-2">
-                                                                    <div class="col-12">
-                                                                        <small class="text-muted">Evidence Clarity</small>
-                                                                        <div class="progress" style="height: 20px;">
-                                                                            <div class="progress-bar @GetConfidenceProgressColor(finding.Explainability.ConfidenceBreakdown.EvidenceClarity)" 
-                                                                                 style="width: @finding.Explainability.ConfidenceBreakdown.EvidenceClarity%">
-                                                                                @finding.Explainability.ConfidenceBreakdown.EvidenceClarity%
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div class="col-12">
-                                                                        <small class="text-muted">Pattern Match</small>
-                                                                        <div class="progress" style="height: 20px;">
-                                                                            <div class="progress-bar @GetConfidenceProgressColor(finding.Explainability.ConfidenceBreakdown.PatternMatch)" 
-                                                                                 style="width: @finding.Explainability.ConfidenceBreakdown.PatternMatch%">
-                                                                                @finding.Explainability.ConfidenceBreakdown.PatternMatch%
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div class="col-12">
-                                                                        <small class="text-muted">Context Understanding</small>
-                                                                        <div class="progress" style="height: 20px;">
-                                                                            <div class="progress-bar @GetConfidenceProgressColor(finding.Explainability.ConfidenceBreakdown.ContextUnderstanding)" 
-                                                                                 style="width: @finding.Explainability.ConfidenceBreakdown.ContextUnderstanding%">
-                                                                                @finding.Explainability.ConfidenceBreakdown.ContextUnderstanding%
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div class="col-12">
-                                                                        <small class="text-muted">Consistency</small>
-                                                                        <div class="progress" style="height: 20px;">
-                                                                            <div class="progress-bar @GetConfidenceProgressColor(finding.Explainability.ConfidenceBreakdown.Consistency)" 
-                                                                                 style="width: @finding.Explainability.ConfidenceBreakdown.Consistency%">
-                                                                                @finding.Explainability.ConfidenceBreakdown.Consistency%
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
+                                                        <div class="card card-body bg-light p-2 border">
+                                                            <div class="row g-2 mb-2">
+                                                                <div class="col-6">
+                                                                    <small class="text-muted d-block">Confidence</small>
+                                                                    <strong>@finding.Explainability.ConfidenceScore%</strong>
+                                                                </div>
+                                                                <div class="col-6">
+                                                                    <small class="text-muted d-block">Level</small>
+                                                                    <span class="badge bg-info">@finding.Explainability.ConfidenceLevel</span>
                                                                 </div>
                                                             </div>
-                                                            
-                                                            @* Reasoning Chain *@
-                                                            @if (finding.Explainability.ReasoningChain != null && finding.Explainability.ReasoningChain.Any())
+                                                            @* Simplified Confidence Breakdown *@
+                                                            @if (finding.Explainability.ConfidenceBreakdown != null)
                                                             {
-                                                                <div class="mb-3">
-                                                                    <h6 class="mb-2">
-                                                                        <i class="bi bi-diagram-3"></i> Reasoning Chain
-                                                                    </h6>
-                                                                    <ol class="mb-0">
-                                                                        @foreach (var step in finding.Explainability.ReasoningChain)
-                                                                        {
-                                                                            <li class="mb-2">
-                                                                                <strong>@step.Description</strong>
-                                                                                @if (!string.IsNullOrEmpty(step.Evidence))
-                                                                                {
-                                                                                    <br><small class="text-muted">Evidence: @step.Evidence</small>
-                                                                                }
-                                                                                @if (!string.IsNullOrEmpty(step.Conclusion))
-                                                                                {
-                                                                                    <br><small class="text-info">Conclusion: @step.Conclusion</small>
-                                                                                }
-                                                                            </li>
-                                                                        }
-                                                                    </ol>
+                                                                <div class="mb-2">
+                                                                    <small class="text-muted d-block mb-1">Confidence Factors</small>
+                                                                    <div class="d-flex gap-2 flex-wrap">
+                                                                        <span class="badge bg-light text-dark">Evidence: @finding.Explainability.ConfidenceBreakdown.EvidenceClarity%</span>
+                                                                        <span class="badge bg-light text-dark">Pattern: @finding.Explainability.ConfidenceBreakdown.PatternMatch%</span>
+                                                                        <span class="badge bg-light text-dark">Context: @finding.Explainability.ConfidenceBreakdown.ContextUnderstanding%</span>
+                                                                        <span class="badge bg-light text-dark">Consistency: @finding.Explainability.ConfidenceBreakdown.Consistency%</span>
+                                                                    </div>
                                                                 </div>
                                                             }
                                                             
-                                                            @* Supporting Evidence *@
-                                                            @if (finding.Explainability.SupportingEvidence != null && finding.Explainability.SupportingEvidence.Any())
+                                                            @* Simplified Reasoning - Show only summary *@
+                                                            @if (finding.Explainability.ReasoningChain != null && finding.Explainability.ReasoningChain.Any())
                                                             {
                                                                 <div class="mb-2">
-                                                                    <h6 class="mb-2 text-success">
-                                                                        <i class="bi bi-check-circle"></i> Supporting Evidence (@finding.Explainability.SupportingEvidence.Count)
-                                                                    </h6>
-                                                                    <ul class="list-unstyled mb-0">
-                                                                        @foreach (var evidence in finding.Explainability.SupportingEvidence)
+                                                                    <small class="text-muted d-block mb-1">Key Reasoning Steps (@finding.Explainability.ReasoningChain.Count)</small>
+                                                                    <ul class="list-unstyled mb-0 small">
+                                                                        @foreach (var step in finding.Explainability.ReasoningChain.Take(3))
                                                                         {
                                                                             <li class="mb-1">
-                                                                                <small>
-                                                                                    <span class="badge bg-success">@evidence.Type</span>
-                                                                                    @evidence.Description
-                                                                                    @if (!string.IsNullOrEmpty(evidence.Location))
-                                                                                    {
-                                                                                        <span class="text-muted">(@evidence.Location)</span>
-                                                                                    }
-                                                                                    <span class="badge bg-light text-dark">Strength: @evidence.Strength%</span>
-                                                                                </small>
+                                                                                <i class="bi bi-arrow-right text-info"></i> @step.Description
                                                                             </li>
+                                                                        }
+                                                                        @if (finding.Explainability.ReasoningChain.Count > 3)
+                                                                        {
+                                                                            <li class="text-muted"><small>+@(finding.Explainability.ReasoningChain.Count - 3) more steps</small></li>
                                                                         }
                                                                     </ul>
                                                                 </div>
                                                             }
                                                             
-                                                            @* Contradictory Evidence *@
+                                                            @* Simplified Supporting Evidence *@
+                                                            @if (finding.Explainability.SupportingEvidence != null && finding.Explainability.SupportingEvidence.Any())
+                                                            {
+                                                                <div class="mb-2">
+                                                                    <small class="text-muted d-block mb-1">Supporting Evidence (@finding.Explainability.SupportingEvidence.Count items)</small>
+                                                                    <div class="d-flex flex-wrap gap-1">
+                                                                        @foreach (var evidence in finding.Explainability.SupportingEvidence.Take(3))
+                                                                        {
+                                                                            <span class="badge bg-success">@evidence.Type</span>
+                                                                        }
+                                                                        @if (finding.Explainability.SupportingEvidence.Count > 3)
+                                                                        {
+                                                                            <span class="badge bg-light text-dark">+@(finding.Explainability.SupportingEvidence.Count - 3) more</span>
+                                                                        }
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                            
+                                                            @* Simplified Contradictory Evidence *@
                                                             @if (finding.Explainability.ContradictoryEvidence != null && finding.Explainability.ContradictoryEvidence.Any())
                                                             {
                                                                 <div>

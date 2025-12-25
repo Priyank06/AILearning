@@ -1,18 +1,19 @@
 @using PoC1_LegacyAnalyzer_Web.Models
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
 
-<div class="row mb-4">
+<div class="row mb-4 section-sub">
     <div class="col-12">
         <div class="alert alert-info">
             <h5 class="alert-heading mb-3"><i class="bi bi-graph-up"></i> Executive Dashboard</h5>
             <div class="row">
                 <div class="col-md-6">
-                    <div class="card border-primary">
-                        <div class="card-header bg-primary text-white">
-                            <h6 class="mb-0">Files Requiring Immediate Review</h6>
-                            <small>Priority ranking by technical complexity</small>
-                        </div>
+                    <div class="card border-primary shadow">
+                        <CardHeader Title="Files Requiring Immediate Review"
+                                    Subtitle="Priority ranking by technical complexity"
+                                    Variant="primary"
+                                    TitleLevel="6" />
                         <div class="card-body" style="height: 300px;">
-                            <canvas id="complexityChart" width="400" height="250"></canvas>
+                            <canvas id="complexityChart" width="400" height="250" role="img" aria-label="Complexity chart showing files requiring immediate review"></canvas>
                         </div>
                         <div class="card-footer text-muted">
                             <small><strong>Action:</strong> Focus development effort on highest-scoring files first</small>
@@ -20,13 +21,13 @@
                     </div>
                 </div>
                 <div class="col-md-6">
-                    <div class="card border-warning">
-                        <div class="card-header bg-warning text-dark">
-                            <h6 class="mb-0">Project Risk Assessment</h6>
-                            <small>Risk distribution across entire codebase</small>
-                        </div>
+                    <div class="card border-warning shadow">
+                        <CardHeader Title="Project Risk Assessment"
+                                    Subtitle="Risk distribution across entire codebase"
+                                    Variant="warning"
+                                    TitleLevel="6" />
                         <div class="card-body" style="height: 300px;">
-                            <canvas id="riskChart" width="400" height="250"></canvas>
+                            <canvas id="riskChart" width="400" height="250" role="img" aria-label="Risk distribution chart across the codebase"></canvas>
                         </div>
                         <div class="card-footer text-muted">
                             <small><strong>Insight:</strong> Risk distribution indicates project complexity level</small>

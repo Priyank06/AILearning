@@ -1,0 +1,51 @@
+@* Standardized metric card component for consistent metric display *@
+<div class="card @GetCardClass() text-white h-100 border-0 metric-card" style="transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;">
+    <div class="card-body p-3 text-center">
+        @if (!string.IsNullOrEmpty(Icon))
+        {
+            <i class="@Icon display-6 mb-2 d-block"></i>
+        }
+        <h3 class="mb-0">@Value</h3>
+        <div>
+            <strong>@Label</strong>
+            @if (!string.IsNullOrEmpty(SubLabel))
+            {
+                <br>
+                <small class="opacity-75">@SubLabel</small>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public string? SubLabel { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string Color { get; set; } = "primary"; // primary, success, warning, danger, info, secondary
+    [Parameter] public bool Hoverable { get; set; } = true;
+
+    private string GetCardClass()
+    {
+        var colorClass = Color switch
+        {
+            "primary" => "bg-primary",
+            "success" => "bg-success",
+            "warning" => "bg-warning text-dark",
+            "danger" => "bg-danger",
+            "info" => "bg-info",
+            "secondary" => "bg-secondary",
+            _ => "bg-primary"
+        };
+
+        return Hoverable ? $"{colorClass} metric-card-hover" : colorClass;
+    }
+}
+
+<style>
+    .metric-card-hover:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.2) !important;
+    }
+</style>
+

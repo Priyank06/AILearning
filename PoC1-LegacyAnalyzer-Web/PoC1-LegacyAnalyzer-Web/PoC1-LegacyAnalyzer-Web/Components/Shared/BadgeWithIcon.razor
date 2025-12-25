@@ -1,8 +1,8 @@
-@* Reusable badge with icon component *@
-<span class="badge @GetBadgeClass() @Size">
+@* Enhanced reusable badge with icon component - supports semantic types *@
+<span class="badge @GetBadgeClass() @Size" role="status" aria-label="@GetAriaLabel()">
     @if (!string.IsNullOrEmpty(Icon))
     {
-        <span class="me-1">@Icon</span>
+        <i class="@Icon"></i>
     }
     @Text
 </span>
@@ -12,8 +12,30 @@
     [Parameter] public string Icon { get; set; } = string.Empty;
     [Parameter] public string Color { get; set; } = "primary";
     [Parameter] public string? Size { get; set; }
+    
+    // Semantic type support
+    [Parameter] public string? BadgeType { get; set; } // "status", "severity", "type"
+    [Parameter] public string? SemanticValue { get; set; } // e.g., "success", "critical", "medium"
 
     private string GetBadgeClass()
+    {
+        // If semantic type is specified, use semantic classes
+        if (!string.IsNullOrEmpty(BadgeType) && !string.IsNullOrEmpty(SemanticValue))
+        {
+            return BadgeType switch
+            {
+                "status" => GetStatusBadgeClass(),
+                "severity" => GetSeverityBadgeClass(),
+                "type" => GetTypeBadgeClass(),
+                _ => GetColorBadgeClass()
+            };
+        }
+        
+        // Fall back to color-based classes
+        return GetColorBadgeClass();
+    }
+
+    private string GetColorBadgeClass()
     {
         return Color switch
         {
@@ -27,5 +49,48 @@
             "dark" => "bg-dark",
             _ => "bg-primary"
         };
+    }
+
+    private string GetStatusBadgeClass()
+    {
+        return SemanticValue?.ToLower() switch
+        {
+            "success" or "good" => "badge-status-success",
+            "warning" or "monitor" => "badge-status-warning",
+            "danger" or "error" => "badge-status-danger",
+            "info" => "badge-status-info",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetSeverityBadgeClass()
+    {
+        return SemanticValue?.ToLower() switch
+        {
+            "critical" => "badge-severity-critical",
+            "high" => "badge-severity-high",
+            "medium" => "badge-severity-medium",
+            "low" => "badge-severity-low",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetTypeBadgeClass()
+    {
+        return SemanticValue?.ToLower() switch
+        {
+            "primary" => "badge-type-primary",
+            "secondary" => "badge-type-secondary",
+            _ => "badge-type"
+        };
+    }
+
+    private string GetAriaLabel()
+    {
+        if (!string.IsNullOrEmpty(BadgeType) && !string.IsNullOrEmpty(SemanticValue))
+        {
+            return $"{BadgeType}: {SemanticValue}, {Text}";
+        }
+        return Text;
     }
 }

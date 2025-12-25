@@ -1,16 +1,12 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using PoC1_LegacyAnalyzer_Web.Helpers
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
 
-<div class="card shadow">
-    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Project File Upload</h5>
-        @if (SelectedFiles.Any())
-        {
-            <span class="badge bg-light text-dark">
-                <i class="bi bi-files"></i> @SelectedFiles.Count file(s) selected
-            </span>
-        }
-    </div>
+<div class="card shadow section-sub">
+    <CardHeader Title="Project File Upload"
+                Variant="warning"
+                BadgeText="@(SelectedFiles.Any() ? $"{SelectedFiles.Count} file(s) selected" : null)"
+                BadgeVariant="light" />
     <div class="card-body">
         <div class="row">
             <!-- Analysis Type Selection -->
@@ -40,10 +36,31 @@
                 </div>
                 @if (SelectedFiles.Any())
                 {
-                    <div class="mt-2">
-                        <small class="text-muted">
-                            <i class="bi bi-info-circle"></i> Total size: @MultiFileHelpers.FormatFileSize(SelectedFiles.Sum(f => f.Size))
-                        </small>
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong class="text-primary">
+                                <i class="bi bi-files"></i> @SelectedFiles.Count file(s) selected
+                            </strong>
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i> Total size: @MultiFileHelpers.FormatFileSize(SelectedFiles.Sum(f => f.Size))
+                            </small>
+                        </div>
+                        <div class="list-group" style="max-height: 200px; overflow-y: auto;">
+                            @foreach (var file in SelectedFiles)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+                                    <div class="flex-grow-1">
+                                        <i class="bi bi-file-earmark-code text-primary me-2"></i>
+                                        <small class="text-dark">@file.Name</small>
+                                        <br>
+                                        <small class="text-muted">@MultiFileHelpers.FormatFileSize(file.Size)</small>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveFile(file)" title="Remove file">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
                     </div>
                 }
             </div>
@@ -73,19 +90,6 @@
             </div>
         </div>
 
-        @if (ShowValidationButtons)
-        {
-            <div class="mt-3 pt-3 border-top">
-                <div class="d-flex gap-2">
-                    <button class="btn btn-outline-info btn-sm" @onclick="OnTestCharts">
-                        <i class="bi bi-check-circle"></i> Validate Dashboard
-                    </button>
-                    <button class="btn btn-outline-warning btn-sm" @onclick="OnDebugCharts">
-                        <i class="bi bi-gear"></i> System Diagnostics
-                    </button>
-                </div>
-            </div>
-        }
     </div>
 </div>
 
@@ -143,5 +147,11 @@
     private async Task OnAnalysisTypeChanged()
     {
         await OnAnalysisTypeChange.InvokeAsync(selectedAnalysisType);
+    }
+
+    private void RemoveFile(IBrowserFile file)
+    {
+        SelectedFiles.Remove(file);
+        StateHasChanged();
     }
 }

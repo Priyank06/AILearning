@@ -1,11 +1,13 @@
 @using PoC1_LegacyAnalyzer_Web.Models
 @using PoC1_LegacyAnalyzer_Web.Helpers
 
-<div class="card shadow">
-    <div class="card-header bg-success text-white">
-        <h6 class="mb-0">Code Quality Assessment</h6>
-        <small>Maintenance optimization opportunities identified</small>
-    </div>
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
+
+<div class="card shadow section-sub">
+    <CardHeader Title="Code Quality Assessment" 
+                Subtitle="Maintenance optimization opportunities identified"
+                Icon="bi bi-shield-check"
+                Variant="success" />
     <div class="card-body">
         <div class="row">
             @{
@@ -53,7 +55,7 @@
 
                 <h6 class="mb-3">File Quality Overview</h6>
                 <div class="table-responsive">
-                    <table class="table table-sm">
+                    <table class="table table-sm table-striped table-hover">
                         <thead class="table-light">
                             <tr>
                                 <th>File</th>
@@ -63,7 +65,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var file in Result.FileResults.OrderByDescending(f => f.ComplexityScore).Take(5))
+                            @foreach (var file in Result.FileResults.OrderByDescending(f => f.ComplexityScore))
                             {
                                 <tr>
                                     <td class="fw-bold">@file.FileName</td>

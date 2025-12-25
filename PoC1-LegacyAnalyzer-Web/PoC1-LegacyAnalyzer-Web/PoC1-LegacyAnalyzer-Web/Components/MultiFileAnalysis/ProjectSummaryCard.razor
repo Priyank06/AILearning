@@ -1,40 +1,45 @@
 @using PoC1_LegacyAnalyzer_Web.Models
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
 
-<div class="card shadow mb-3">
-    <div class="card-header bg-success text-white">
-        <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Project Summary</h5>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-6 col-lg-3">
-                <div class="card bg-primary text-white text-center">
-                    <div class="card-body p-2">
-                        <h4>@Result.TotalFiles</h4>
-                        <small>Source Files</small>
+<div class="card shadow mb-3 section-sub">
+    <CardHeader Title="Project Summary"
+                Icon="bi bi-bar-chart"
+                Variant="success" />
+    <div class="card-body py-2">
+        <div class="row g-2">
+            <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center gap-2 p-2 bg-primary text-white rounded">
+                    <i class="bi bi-file-earmark-code fs-4"></i>
+                    <div>
+                        <strong class="fs-5 d-block">@Result.TotalFiles</strong>
+                        <small class="opacity-75">Source Files</small>
                     </div>
                 </div>
             </div>
-            <div class="col-6 col-lg-3">
-                <div class="card bg-info text-white text-center">
-                    <div class="card-body p-2">
-                        <h4>@Result.TotalClasses</h4>
-                        <small>Classes</small>
+            <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center gap-2 p-2 bg-info text-white rounded">
+                    <i class="bi bi-box fs-4"></i>
+                    <div>
+                        <strong class="fs-5 d-block">@Result.TotalClasses</strong>
+                        <small class="opacity-75">Classes</small>
                     </div>
                 </div>
             </div>
-            <div class="col-6 col-lg-3">
-                <div class="card bg-warning text-white text-center">
-                    <div class="card-body p-2">
-                        <h4>@Result.TotalMethods</h4>
-                        <small>Methods</small>
+            <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center gap-2 p-2 bg-warning text-dark rounded">
+                    <i class="bi bi-code-square fs-4"></i>
+                    <div>
+                        <strong class="fs-5 d-block">@Result.TotalMethods</strong>
+                        <small class="opacity-75">Methods</small>
                     </div>
                 </div>
             </div>
-            <div class="col-6 col-lg-3">
-                <div class="card bg-secondary text-white text-center">
-                    <div class="card-body p-2">
-                        <h4>@Result.TotalProperties</h4>
-                        <small>Properties</small>
+            <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center gap-2 p-2 bg-secondary text-white rounded">
+                    <i class="bi bi-list-ul fs-4"></i>
+                    <div>
+                        <strong class="fs-5 d-block">@Result.TotalProperties</strong>
+                        <small class="opacity-75">Properties</small>
                     </div>
                 </div>
             </div>

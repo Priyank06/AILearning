@@ -1,11 +1,18 @@
 @using PoC1_LegacyAnalyzer_Web.Models
 @using PoC1_LegacyAnalyzer_Web.Helpers
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
 
-<div class="card shadow mb-3">
-    <div class="card-header bg-warning text-dark">
-        <h5 class="mb-0"><i class="bi bi-shield-check"></i> Risk Assessment Summary</h5>
-    </div>
+<div class="card shadow mb-3 section-sub">
+    <CardHeader Title="Risk Assessment Summary"
+                Icon="bi bi-shield-check"
+                Variant="warning" />
     <div class="card-body">
+        <div class="alert alert-warning mb-3">
+            <strong><i class="bi bi-exclamation-triangle"></i> Risk Assessment Reasoning:</strong>
+            <p class="mb-0 mt-2">
+                @GetRiskReasoning(Result.OverallRiskLevel, Result.OverallComplexityScore)
+            </p>
+        </div>
         <div class="row">
             <div class="col-md-6">
                 <h6>Overall Complexity Score</h6>
@@ -15,7 +22,7 @@
                         @Result.OverallComplexityScore/100
                     </div>
                 </div>
-                <small class="text-muted">Assessment based on code structure and dependencies</small>
+                <small class="text-muted">Based on: code structure, dependencies, and maintainability metrics</small>
             </div>
             <div class="col-md-6">
                 <h6>Migration Risk Level</h6>
@@ -23,6 +30,9 @@
                     @Result.OverallRiskLevel
                 </h3>
                 <small class="text-muted">@MultiFileHelpers.GetRiskDescription(Result.OverallRiskLevel)</small>
+                <div class="mt-2">
+                    <small><strong>Key Factors:</strong> @GetRiskFactors(Result.OverallComplexityScore)</small>
+                </div>
             </div>
         </div>
     </div>
@@ -37,4 +47,34 @@
 
     [Parameter]
     public int ComplexityMediumThreshold { get; set; } = 50;
+
+    private string GetRiskReasoning(string riskLevel, int complexityScore)
+    {
+        var baseReason = riskLevel switch
+        {
+            "LOW" => "Low risk indicates a well-structured codebase with minimal technical debt.",
+            "MEDIUM" => "Medium risk suggests some areas need attention but overall migration is feasible.",
+            "HIGH" => "High risk indicates significant technical debt and complexity requiring careful planning.",
+            _ => "Risk assessment based on code complexity and structure analysis."
+        };
+
+        var complexityReason = complexityScore switch
+        {
+            <= 30 => " Low complexity score supports manageable migration.",
+            <= 50 => " Moderate complexity requires structured approach.",
+            _ => " High complexity necessitates experienced team and extended timeline."
+        };
+
+        return baseReason + complexityReason;
+    }
+
+    private string GetRiskFactors(int complexityScore)
+    {
+        var factors = new List<string>();
+        if (complexityScore > 50) factors.Add("High complexity");
+        if (complexityScore > 30 && complexityScore <= 50) factors.Add("Moderate complexity");
+        if (complexityScore <= 30) factors.Add("Low complexity");
+        factors.Add("Code structure analysis");
+        return string.Join(", ", factors);
+    }
 }

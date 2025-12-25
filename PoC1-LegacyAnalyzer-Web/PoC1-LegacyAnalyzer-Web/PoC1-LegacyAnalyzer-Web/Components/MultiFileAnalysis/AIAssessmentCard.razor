@@ -1,13 +1,22 @@
 @using PoC1_LegacyAnalyzer_Web.Models
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
 
 @if (!string.IsNullOrEmpty(AssessmentText))
 {
-    <div class="card shadow mb-3">
-        <div class="card-header bg-info text-white">
-            <h5 class="mb-0"><i class="bi bi-cpu"></i> Intelligent Assessment Summary</h5>
-        </div>
+    <div class="card shadow mb-3 section-sub">
+        <CardHeader Title="Intelligent Assessment Summary"
+                    Icon="bi bi-cpu"
+                    Variant="info" />
         <div class="card-body">
-            <p class="mb-0">@AssessmentText</p>
+            <div class="assessment-content" style="line-height: 1.8;">
+                @((MarkupString)FormatAssessmentText(AssessmentText))
+            </div>
+            @if (AssessmentText.Length < 200)
+            {
+                <div class="alert alert-info mt-3 mb-0">
+                    <small><i class="bi bi-info-circle"></i> <strong>Note:</strong> This is a brief summary. For detailed analysis, review individual file assessments and recommendations below.</small>
+                </div>
+            }
         </div>
     </div>
 }
@@ -15,4 +24,14 @@
 @code {
     [Parameter, EditorRequired]
     public string AssessmentText { get; set; } = string.Empty;
+
+    private string FormatAssessmentText(string text)
+    {
+        // Format paragraphs and bullet points for better readability
+        var formatted = text.Replace("\n\n", "</p><p>");
+        formatted = formatted.Replace("\n", "<br>");
+        if (!formatted.StartsWith("<p>")) formatted = "<p>" + formatted;
+        if (!formatted.EndsWith("</p>")) formatted = formatted + "</p>";
+        return formatted;
+    }
 }

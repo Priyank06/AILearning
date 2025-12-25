@@ -19,128 +19,58 @@
                         <p class="text-muted">AI-powered insights generating in real-time</p>
                     </div>
 
-                    <!-- Main Progress Bar -->
+                    <!-- Main Progress Bar - Simplified -->
                     <div class="mb-4">
                         <div class="d-flex justify-content-between mb-2">
-                            <span class="fw-bold">Overall Progress</span>
-                            <span class="fw-bold text-primary">@($"{Progress.ProgressPercentage:F1}")%</span>
+                            <span class="fw-bold fs-5">Overall Progress</span>
+                            <span class="fw-bold text-primary fs-5">@($"{Progress.ProgressPercentage:F1}")%</span>
                         </div>
-                        <div class="progress" style="height: 25px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
-                                 style="width: @($"{Progress.ProgressPercentage:F1}")%">
+                        <div class="progress" style="height: 30px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                 style="width: @($"{Progress.ProgressPercentage:F1}")%"
+                                 role="progressbar"
+                                 aria-valuenow="@((int)Progress.ProgressPercentage)"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100">
+                                <span class="fw-bold">@($"{Progress.ProgressPercentage:F1}")%</span>
                             </div>
                         </div>
+                        <div class="text-center mt-2">
+                            <small class="text-muted">
+                                <i class="bi bi-file-earmark-code"></i> @Progress.CompletedFiles of @Progress.TotalFiles files analyzed
+                            </small>
+                        </div>
+                        @if (Progress.EstimatedTimeRemaining.HasValue && Progress.EstimatedTimeRemaining.Value.TotalSeconds > 0)
+                        {
+                            <div class="text-center mt-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-clock"></i> Estimated time remaining:
+                                    @if (Progress.EstimatedTimeRemaining.Value.TotalMinutes >= 1)
+                                    {
+                                        <text>@((int)Progress.EstimatedTimeRemaining.Value.TotalMinutes) min @((int)Progress.EstimatedTimeRemaining.Value.Seconds) sec</text>
+                                    }
+                                    else
+                                    {
+                                        <text>@((int)Progress.EstimatedTimeRemaining.Value.TotalSeconds) sec</text>
+                                    }
+                                </small>
+                            </div>
+                        }
                     </div>
 
-                    <!-- Batch Progress Indicator -->
-                    @if (Progress.TotalBatches > 0)
-                    {
-                        <div class="mb-4">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span class="fw-bold">
-                                    <i class="bi bi-stack"></i> Batch Progress
-                                </span>
-                                <span class="fw-bold text-info">
-                                    Batch @Progress.CurrentBatch of @Progress.TotalBatches
-                                </span>
+                    <!-- Current Status - Simplified -->
+                    <div class="alert alert-info mb-0">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <i class="bi bi-cpu-fill me-2"></i>
+                                <strong>@Progress.Status</strong>
                             </div>
-                            <div class="progress" style="height: 20px;">
-                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-info"
-                                     style="width: @($"{((Progress.TotalBatches > 0) ? ((double)Progress.CurrentBatch / Progress.TotalBatches * 100) : 0):F1}")%">
-                                    @Progress.CurrentBatch / @Progress.TotalBatches
-                                </div>
-                            </div>
-                            @if (Progress.EstimatedTimeRemaining.HasValue && Progress.EstimatedTimeRemaining.Value.TotalSeconds > 0)
+                            @if (!string.IsNullOrEmpty(Progress.CurrentFile))
                             {
-                                <div class="text-center mt-2">
-                                    <small class="text-muted">
-                                        <i class="bi bi-clock"></i> Estimated time remaining:
-                                        @if (Progress.EstimatedTimeRemaining.Value.TotalMinutes >= 1)
-                                        {
-                                            <text>@((int)Progress.EstimatedTimeRemaining.Value.TotalMinutes) min @((int)Progress.EstimatedTimeRemaining.Value.Seconds) sec</text>
-                                        }
-                                        else
-                                        {
-                                            <text>@((int)Progress.EstimatedTimeRemaining.Value.TotalSeconds) sec</text>
-                                        }
-                                    </small>
-                                </div>
+                                <small class="text-muted">
+                                    <i class="bi bi-file-earmark-code"></i> @Progress.CurrentFile
+                                </small>
                             }
-                        </div>
-                    }
-
-                    <!-- Current Analysis Status -->
-                    <div class="row g-3 mb-4">
-                        <div class="col-md-6">
-                            <div class="card border-primary">
-                                <div class="card-body text-center">
-                                    <i class="bi bi-file-earmark-code fs-2 text-primary mb-2"></i>
-                                    <h6 class="card-title">Current File</h6>
-                                    <p class="card-text fw-bold">@(string.IsNullOrEmpty(Progress.CurrentFile) ? "Preparing..." : Progress.CurrentFile)</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card border-success">
-                                <div class="card-body text-center">
-                                    <i class="bi bi-graph-up fs-2 text-success mb-2"></i>
-                                    <h6 class="card-title">Files Completed</h6>
-                                    <p class="card-text fw-bold">@Progress.CompletedFiles of @Progress.TotalFiles</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    @if (Progress.TotalBatches > 0)
-                    {
-                        <div class="row g-3 mb-4">
-                            <div class="col-md-6">
-                                <div class="card border-info">
-                                    <div class="card-body text-center">
-                                        <i class="bi bi-stack fs-2 text-info mb-2"></i>
-                                        <h6 class="card-title">Files in Current Batch</h6>
-                                        <p class="card-text fw-bold">@Progress.FilesInCurrentBatch files</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="card border-warning">
-                                    <div class="card-body text-center">
-                                        <i class="bi bi-info-circle fs-2 text-warning mb-2"></i>
-                                        <h6 class="card-title">Batch Status</h6>
-                                        <p class="card-text fw-bold small">@Progress.BatchStatus</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    }
-
-                    <!-- AI Status Banner -->
-                    <div class="alert alert-info d-flex align-items-center">
-                        <i class="bi bi-cpu-fill fs-4 me-3"></i>
-                        <div>
-                            <strong>AI Analysis Status:</strong><br>
-                            <span>@Progress.Status</span>
-                        </div>
-                    </div>
-
-                    <!-- Time and Performance Metrics -->
-                    <div class="row text-center">
-                        <div class="col-4">
-                            <div class="border-end">
-                                <h6 class="text-muted mb-1">Analysis Type</h6>
-                                <strong class="text-primary">@Progress.CurrentAnalysisType.ToUpper()</strong>
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="border-end">
-                                <h6 class="text-muted mb-1">Elapsed Time</h6>
-                                <strong class="text-success">@($"{Progress.ElapsedTime.TotalSeconds:F0}s")</strong>
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <h6 class="text-muted mb-1">Remaining</h6>
-                            <strong class="text-warning">@(Progress.TotalFiles - Progress.CompletedFiles) files</strong>
                         </div>
                     </div>
                 </div>

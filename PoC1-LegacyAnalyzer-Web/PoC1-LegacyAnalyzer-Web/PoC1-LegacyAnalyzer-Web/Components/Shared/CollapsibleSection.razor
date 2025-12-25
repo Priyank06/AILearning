@@ -1,0 +1,64 @@
+@* Collapsible section component for progressive disclosure *@
+<div class="collapsible-section @CssClass">
+    <div class="card shadow">
+        <div class="card-header @GetHeaderClass() text-white" style="cursor: pointer;" @onclick="Toggle" role="button" aria-expanded="@IsExpanded.ToString().ToLower()" aria-controls="@SectionId">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    @if (!string.IsNullOrEmpty(Icon))
+                    {
+                        <i class="@Icon me-2"></i>
+                    }
+                    <strong>@Title</strong>
+                    @if (!string.IsNullOrEmpty(Subtitle))
+                    {
+                        <small class="d-block opacity-75 mt-1">@Subtitle</small>
+                    }
+                </div>
+                <i class="bi bi-chevron-@(IsExpanded ? "up" : "down")"></i>
+            </div>
+        </div>
+        <div class="collapse @(IsExpanded ? "show" : "")" id="@SectionId">
+            <div class="card-body">
+                @ChildContent
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string Variant { get; set; } = "primary";
+    [Parameter] public bool DefaultExpanded { get; set; } = true;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string CssClass { get; set; } = "";
+
+    private bool IsExpanded { get; set; }
+    private string SectionId { get; set; } = Guid.NewGuid().ToString("N")[..8];
+
+    protected override void OnInitialized()
+    {
+        IsExpanded = DefaultExpanded;
+    }
+
+    private void Toggle()
+    {
+        IsExpanded = !IsExpanded;
+    }
+
+    private string GetHeaderClass()
+    {
+        return Variant switch
+        {
+            "primary" => "bg-primary",
+            "success" => "bg-success",
+            "warning" => "bg-warning text-dark",
+            "danger" => "bg-danger",
+            "dark" => "bg-dark",
+            "info" => "bg-info",
+            _ => "bg-primary"
+        };
+    }
+}
+

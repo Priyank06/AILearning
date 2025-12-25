@@ -1,0 +1,68 @@
+@* Skeleton loading component for cards *@
+<div class="card shadow @CssClass">
+    <div class="card-header bg-light" style="height: 48px;">
+        <div class="skeleton-text" style="width: 60%; height: 1.2rem;"></div>
+    </div>
+    <div class="card-body">
+        @if (ShowTable)
+        {
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            @for (int i = 0; i < TableColumns; i++)
+                            {
+                                <th><div class="skeleton-text" style="width: 80px; height: 1rem;"></div></th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < TableRows; i++)
+                        {
+                            <tr>
+                                @for (int j = 0; j < TableColumns; j++)
+                                {
+                                    <td><div class="skeleton-text" style="width: @(j == 0 ? "120px" : "80px"); height: 0.875rem;"></div></td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            @for (int i = 0; i < Lines; i++)
+            {
+                <div class="skeleton-text mb-2" style="width: @(i == 0 ? "100%" : i == Lines - 1 ? "60%" : "90%"); height: 1rem;"></div>
+            }
+        }
+    </div>
+</div>
+
+<style>
+    .skeleton-text {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: skeleton-loading 1.5s ease-in-out infinite;
+        border-radius: 4px;
+    }
+
+    @@keyframes skeleton-loading {
+        0% {
+            background-position: 200% 0;
+        }
+        100% {
+            background-position: -200% 0;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public int Lines { get; set; } = 3;
+    [Parameter] public bool ShowTable { get; set; } = false;
+    [Parameter] public int TableRows { get; set; } = 5;
+    [Parameter] public int TableColumns { get; set; } = 4;
+    [Parameter] public string CssClass { get; set; } = "";
+}
+

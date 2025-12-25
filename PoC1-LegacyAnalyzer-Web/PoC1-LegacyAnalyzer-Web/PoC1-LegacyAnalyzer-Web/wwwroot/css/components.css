@@ -227,3 +227,8 @@
         display: none;
     }
 }
+
+/* Import standardized styles */
+@import url('_card-styles.css');
+@import url('_badge-styles.css');
+@import url('_table-styles.css');

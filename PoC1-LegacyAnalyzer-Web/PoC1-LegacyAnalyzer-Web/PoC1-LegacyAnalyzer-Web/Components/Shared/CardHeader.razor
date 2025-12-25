@@ -1,0 +1,95 @@
+@* Standardized card header component with consistent styling *@
+<div class="card-header @GetHeaderClass() text-white" style="height: 48px; padding: 0.75rem 1rem;">
+    <div class="d-flex justify-content-between align-items-center h-100">
+        <div class="flex-grow-1">
+            @if (TitleLevel == 5)
+            {
+                <h5 class="mb-0 d-inline">
+                    @if (!string.IsNullOrEmpty(Icon))
+                    {
+                        <i class="@Icon me-2"></i>
+                    }
+                    @Title
+                </h5>
+            }
+            else if (TitleLevel == 6)
+            {
+                <h6 class="mb-0 d-inline">
+                    @if (!string.IsNullOrEmpty(Icon))
+                    {
+                        <i class="@Icon me-2"></i>
+                    }
+                    @Title
+                </h6>
+            }
+            else
+            {
+                <h5 class="mb-0 d-inline">
+                    @if (!string.IsNullOrEmpty(Icon))
+                    {
+                        <i class="@Icon me-2"></i>
+                    }
+                    @Title
+                </h5>
+            }
+            @if (!string.IsNullOrEmpty(Subtitle))
+            {
+                <small class="d-block mt-1 opacity-75">@Subtitle</small>
+            }
+        </div>
+        @if (!string.IsNullOrEmpty(BadgeText))
+        {
+            <div class="ms-3">
+                <span class="badge @GetBadgeClass()">@BadgeText</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string Variant { get; set; } = "primary"; // primary, success, warning, danger, dark, info
+    [Parameter] public string? BadgeText { get; set; }
+    [Parameter] public string? BadgeVariant { get; set; }
+    [Parameter] public int TitleLevel { get; set; } = 5; // h5 or h6
+
+    private string GetHeaderClass()
+    {
+        return Variant switch
+        {
+            "primary" => "bg-primary",
+            "success" => "bg-success",
+            "warning" => "bg-warning text-dark",
+            "danger" => "bg-danger",
+            "dark" => "bg-dark",
+            "info" => "bg-info",
+            _ => "bg-primary"
+        };
+    }
+
+    private string GetBadgeClass()
+    {
+        if (!string.IsNullOrEmpty(BadgeVariant))
+        {
+            return BadgeVariant switch
+            {
+                "primary" => "bg-light text-primary",
+                "success" => "bg-light text-success",
+                "warning" => "bg-light text-warning",
+                "danger" => "bg-light text-danger",
+                "info" => "bg-light text-info",
+                "light" => "bg-light text-dark",
+                "dark" => "bg-dark text-white",
+                _ => "bg-light text-dark"
+            };
+        }
+        // Default badge styling based on header variant
+        return Variant switch
+        {
+            "warning" => "bg-dark text-white",
+            _ => "bg-light text-dark"
+        };
+    }
+}

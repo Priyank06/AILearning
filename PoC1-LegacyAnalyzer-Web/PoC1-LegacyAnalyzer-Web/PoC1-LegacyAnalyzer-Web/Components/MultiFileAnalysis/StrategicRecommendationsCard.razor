@@ -1,17 +1,28 @@
 @using PoC1_LegacyAnalyzer_Web.Models
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
 
 @if (Recommendations.Any())
 {
-    <div class="card shadow mb-3">
-        <div class="card-header bg-success text-white">
-            <h5 class="mb-0"><i class="bi bi-lightbulb"></i> Strategic Recommendations</h5>
-        </div>
+    <div class="card shadow mb-3 section-sub">
+        <CardHeader Title="Strategic Recommendations"
+                    Icon="bi bi-lightbulb"
+                    Variant="success" />
         <div class="card-body">
+            @{ var priority = 1; }
             @foreach (var recommendation in Recommendations)
             {
-                <div class="alert alert-light border-start border-primary border-3">
-                    <small><i class="bi bi-arrow-right"></i> @recommendation</small>
+                <div class="d-flex align-items-start gap-3 mb-3 p-3 bg-light rounded">
+                    <div class="flex-shrink-0">
+                        <span class="badge bg-primary rounded-circle d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; font-size: 0.875rem;">
+                            @priority
+                        </span>
+                    </div>
+                    <div class="flex-grow-1">
+                        <strong class="d-block mb-1">Priority @priority</strong>
+                        <p class="mb-0">@recommendation</p>
+                    </div>
                 </div>
+                priority++;
             }
         </div>
     </div>

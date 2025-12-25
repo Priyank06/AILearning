@@ -12,29 +12,20 @@
             <p class="text-muted mb-3">AI specialists working together on your code</p>
         </div>
 
-        <div class="progress mb-3" style="height: 12px;">
+        <div class="progress mb-3" style="height: 25px;">
             <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
-                 style="width: @GetAnalysisProgress()%"></div>
+                 style="width: @GetAnalysisProgress()%"
+                 role="progressbar"
+                 aria-valuenow="@GetAnalysisProgress()"
+                 aria-valuemin="0"
+                 aria-valuemax="100">
+                <span class="fw-bold">@GetAnalysisProgress()%</span>
+            </div>
+        </div>
+        <div class="text-center mb-3">
+            <small class="text-muted">@GetCurrentAnalysisPhase()</small>
         </div>
 
-        <div class="row text-center">
-            @for (int i = 0; i < Math.Min(phases.Length, 3); i++)
-            {
-                var phaseIndex = i * 2; // Show every other phase for display
-                if (phaseIndex < phases.Length)
-                {
-                    <ProgressPhaseIndicator 
-                        PhaseName="@GetPhaseDisplayName(phaseIndex)"
-                        IsCompleted="@(CurrentPhase > phaseIndex + 1)"
-                        IsCurrent="@(CurrentPhase == phaseIndex || CurrentPhase == phaseIndex + 1)"
-                        Description="@phases[phaseIndex]" />
-                }
-            }
-        </div>
-
-        <div class="text-center mt-3">
-            <strong class="text-primary">Current: @GetCurrentAnalysisPhase()</strong>
-        </div>
     </div>
 }
 

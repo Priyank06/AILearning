@@ -1,0 +1,73 @@
+@* Standardized error and validation message component *@
+@if (!string.IsNullOrEmpty(Message))
+{
+    <div class="alert @GetAlertClass() alert-dismissible fade show d-flex align-items-start" role="alert" aria-live="polite">
+        <i class="@GetIconClass() me-2 mt-1"></i>
+        <div class="flex-grow-1">
+            @if (!string.IsNullOrEmpty(Title))
+            {
+                <strong class="d-block mb-1">@Title</strong>
+            }
+            @if (IsList && Messages?.Any() == true)
+            {
+                <ul class="mb-0 @(Title != null ? "mt-2" : "")">
+                    @foreach (var msg in Messages)
+                    {
+                        <li>@msg</li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <span>@Message</span>
+            }
+        </div>
+        @if (Dismissible)
+        {
+            <button type="button" class="btn-close" aria-label="Close" @onclick="HandleDismiss"></button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public List<string>? Messages { get; set; }
+    [Parameter] public string Severity { get; set; } = "danger"; // danger, warning, info, success
+    [Parameter] public bool Dismissible { get; set; } = false;
+    [Parameter] public bool IsList { get; set; } = false;
+    [Parameter] public EventCallback OnDismiss { get; set; }
+
+    private bool isVisible = true;
+
+    private string GetAlertClass()
+    {
+        return Severity switch
+        {
+            "danger" => "alert-danger",
+            "warning" => "alert-warning",
+            "info" => "alert-info",
+            "success" => "alert-success",
+            _ => "alert-danger"
+        };
+    }
+
+    private string GetIconClass()
+    {
+        return Severity switch
+        {
+            "danger" => "bi bi-exclamation-triangle-fill",
+            "warning" => "bi bi-exclamation-triangle",
+            "info" => "bi bi-info-circle-fill",
+            "success" => "bi bi-check-circle-fill",
+            _ => "bi bi-exclamation-triangle-fill"
+        };
+    }
+
+    private async Task HandleDismiss()
+    {
+        isVisible = false;
+        await OnDismiss.InvokeAsync();
+    }
+}
+
