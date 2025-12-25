@@ -50,3 +50,4 @@ appsettings.Development.json
 .env
 keys/
 ai-learning.code-workspace
+/Projects/agents
