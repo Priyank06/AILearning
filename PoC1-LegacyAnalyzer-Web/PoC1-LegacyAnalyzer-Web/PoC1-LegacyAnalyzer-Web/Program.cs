@@ -199,6 +199,10 @@ public class Program
         // Register tracing service
         builder.Services.AddSingleton<ITracingService, TracingService>();
 
+        // Register ground truth validation service
+        builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.GroundTruth.IGroundTruthValidationService,
+            PoC1_LegacyAnalyzer_Web.Services.GroundTruth.GroundTruthValidationService>();
+
         // Create logger using LoggerFactory with Application Insights support
         using var loggerFactory = LoggerFactory.Create(logging =>
         {

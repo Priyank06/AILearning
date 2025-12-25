@@ -1,0 +1,313 @@
+@using PoC1_LegacyAnalyzer_Web.Models.GroundTruth
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-clipboard-check"></i> Ground Truth Validation Results
+        </h5>
+    </div>
+    <div class="card-body">
+        @if (ValidationResult != null)
+        {
+            <!-- Overall Quality Summary -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <h6 class="text-muted">Dataset: @ValidationResult.DatasetName</h6>
+                    <p class="text-muted small">
+                        Validated: @ValidationResult.ValidatedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC
+                    </p>
+                </div>
+            </div>
+
+            <!-- Key Metrics -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-label">Precision</div>
+                        <div class="metric-value @GetPrecisionClass()">
+                            @ValidationResult.OverallMetrics.Precision.ToString("F1")%
+                        </div>
+                        <div class="metric-description">% of AI findings that are correct</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-label">Recall</div>
+                        <div class="metric-value @GetRecallClass()">
+                            @ValidationResult.OverallMetrics.Recall.ToString("F1")%
+                        </div>
+                        <div class="metric-description">% of real issues detected</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-label">F1 Score</div>
+                        <div class="metric-value @GetF1Class()">
+                            @ValidationResult.OverallMetrics.F1Score.ToString("F1")%
+                        </div>
+                        <div class="metric-description">Overall quality metric</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-label">Accuracy</div>
+                        <div class="metric-value">
+                            @ValidationResult.OverallMetrics.Accuracy.ToString("F1")%
+                        </div>
+                        <div class="metric-description">Simplified accuracy</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Counts -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="count-card bg-success text-white">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <div class="count-value">@ValidationResult.OverallMetrics.TruePositiveCount</div>
+                        <div class="count-label">True Positives</div>
+                        <small>Correctly detected issues</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="count-card bg-warning text-dark">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <div class="count-value">@ValidationResult.OverallMetrics.FalsePositiveCount</div>
+                        <div class="count-label">False Positives</div>
+                        <small>AI found issues that don't exist</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="count-card bg-danger text-white">
+                        <i class="bi bi-x-circle-fill"></i>
+                        <div class="count-value">@ValidationResult.OverallMetrics.FalseNegativeCount</div>
+                        <div class="count-label">False Negatives</div>
+                        <small>AI missed known issues</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quality Assessment -->
+            <div class="alert @GetQualityAlertClass()" role="alert">
+                <h6 class="alert-heading">Quality Assessment</h6>
+                @GetQualityAssessmentText()
+            </div>
+
+            <!-- Metrics by Agent (if available) -->
+            @if (ValidationResult.MetricsByAgent.Any())
+            {
+                <div class="mt-4">
+                    <h6>Metrics by Agent</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Agent</th>
+                                    <th>Precision</th>
+                                    <th>Recall</th>
+                                    <th>F1 Score</th>
+                                    <th>TP</th>
+                                    <th>FP</th>
+                                    <th>FN</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var (agent, metrics) in ValidationResult.MetricsByAgent.OrderByDescending(x => x.Value.F1Score))
+                                {
+                                    <tr>
+                                        <td><strong>@agent</strong></td>
+                                        <td>@metrics.Precision.ToString("F1")%</td>
+                                        <td>@metrics.Recall.ToString("F1")%</td>
+                                        <td>@metrics.F1Score.ToString("F1")%</td>
+                                        <td>@metrics.TruePositiveCount</td>
+                                        <td>@metrics.FalsePositiveCount</td>
+                                        <td>@metrics.FalseNegativeCount</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            <!-- Full Report (Collapsible) -->
+            <div class="mt-4">
+                <button class="btn btn-outline-secondary btn-sm" @onclick="ToggleReport">
+                    <i class="bi @(showFullReport ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    @(showFullReport ? "Hide" : "Show") Full Report
+                </button>
+                @if (showFullReport)
+                {
+                    <pre class="mt-3 p-3 bg-light border rounded" style="max-height: 500px; overflow-y: auto;">@ValidationResult.Summary</pre>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="text-muted">No validation results available.</p>
+        }
+    </div>
+</div>
+
+<style>
+    .metric-card {
+        text-align: center;
+        padding: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        background-color: #f8f9fa;
+    }
+
+    .metric-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-bottom: 0.5rem;
+    }
+
+    .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 0.25rem;
+    }
+
+    .metric-value.excellent {
+        color: #28a745;
+    }
+
+    .metric-value.good {
+        color: #17a2b8;
+    }
+
+    .metric-value.moderate {
+        color: #ffc107;
+    }
+
+    .metric-value.poor {
+        color: #dc3545;
+    }
+
+    .metric-description {
+        font-size: 0.75rem;
+        color: #6c757d;
+    }
+
+    .count-card {
+        text-align: center;
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+    }
+
+    .count-card i {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .count-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+    }
+
+    .count-label {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-top: 0.5rem;
+    }
+
+    .count-card small {
+        display: block;
+        margin-top: 0.25rem;
+        opacity: 0.9;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public GroundTruthValidationResult? ValidationResult { get; set; }
+
+    private bool showFullReport = false;
+
+    private void ToggleReport()
+    {
+        showFullReport = !showFullReport;
+    }
+
+    private string GetPrecisionClass()
+    {
+        if (ValidationResult == null) return "";
+        var precision = ValidationResult.OverallMetrics.Precision;
+        if (precision >= 90) return "excellent";
+        if (precision >= 80) return "good";
+        if (precision >= 70) return "moderate";
+        return "poor";
+    }
+
+    private string GetRecallClass()
+    {
+        if (ValidationResult == null) return "";
+        var recall = ValidationResult.OverallMetrics.Recall;
+        if (recall >= 90) return "excellent";
+        if (recall >= 80) return "good";
+        if (recall >= 70) return "moderate";
+        return "poor";
+    }
+
+    private string GetF1Class()
+    {
+        if (ValidationResult == null) return "";
+        var f1 = ValidationResult.OverallMetrics.F1Score;
+        if (f1 >= 85) return "excellent";
+        if (f1 >= 75) return "good";
+        if (f1 >= 65) return "moderate";
+        return "poor";
+    }
+
+    private string GetQualityAlertClass()
+    {
+        if (ValidationResult == null) return "alert-secondary";
+        var f1 = ValidationResult.OverallMetrics.F1Score;
+        if (f1 >= 85) return "alert-success";
+        if (f1 >= 75) return "alert-info";
+        if (f1 >= 65) return "alert-warning";
+        return "alert-danger";
+    }
+
+    private string GetQualityAssessmentText()
+    {
+        if (ValidationResult == null) return "";
+
+        var m = ValidationResult.OverallMetrics;
+        var assessment = new System.Text.StringBuilder();
+
+        // Precision
+        if (m.Precision >= 90)
+            assessment.AppendLine("✓ EXCELLENT precision - Very few false positives");
+        else if (m.Precision >= 80)
+            assessment.AppendLine("✓ GOOD precision - Acceptable false positive rate");
+        else if (m.Precision >= 70)
+            assessment.AppendLine("⚠ MODERATE precision - Noticeable false positives");
+        else
+            assessment.AppendLine("✗ LOW precision - Too many false positives");
+
+        // Recall
+        if (m.Recall >= 90)
+            assessment.AppendLine("✓ EXCELLENT recall - Catches nearly all issues");
+        else if (m.Recall >= 80)
+            assessment.AppendLine("✓ GOOD recall - Catches most issues");
+        else if (m.Recall >= 70)
+            assessment.AppendLine("⚠ MODERATE recall - Misses some issues");
+        else
+            assessment.AppendLine("✗ LOW recall - Misses too many issues");
+
+        // Overall
+        if (m.F1Score >= 85)
+            assessment.AppendLine("✓ EXCELLENT overall quality - Production ready");
+        else if (m.F1Score >= 75)
+            assessment.AppendLine("✓ GOOD overall quality - Suitable for most use cases");
+        else if (m.F1Score >= 65)
+            assessment.AppendLine("⚠ MODERATE overall quality - Needs improvement");
+        else
+            assessment.AppendLine("✗ LOW overall quality - Not production ready");
+
+        return assessment.ToString();
+    }
+}
