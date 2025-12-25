@@ -6,6 +6,16 @@ namespace PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
     {
         public string ConversationId { get; set; } = "";
         public List<SpecialistAnalysisResult> IndividualAnalyses { get; set; } = new();
+        
+        /// <summary>
+        /// Alias for IndividualAnalyses for backward compatibility
+        /// </summary>
+        public List<SpecialistAnalysisResult> AgentAnalyses
+        {
+            get => IndividualAnalyses;
+            set => IndividualAnalyses = value;
+        }
+        
         public List<AgentMessage> TeamDiscussion { get; set; } = new();
         public ConsolidatedRecommendations FinalRecommendations { get; set; } = new();
         public TeamConsensusMetrics Consensus { get; set; } = new();

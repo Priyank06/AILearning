@@ -177,19 +177,19 @@ namespace PoC1_LegacyAnalyzer_Web.Services.GroundTruth
             // Determine match type
             if (match.CategoryMatches && match.SeverityMatches && match.LocationMatches)
             {
-                match.MatchType = MatchType.Exact;
+                match.MatchType = PoC1_LegacyAnalyzer_Web.Models.GroundTruth.MatchType.Exact;
             }
             else if (match.CategoryMatches && (match.SeverityMatches || match.LocationMatches))
             {
-                match.MatchType = MatchType.Partial;
+                match.MatchType = PoC1_LegacyAnalyzer_Web.Models.GroundTruth.MatchType.Partial;
             }
             else if (match.CategoryMatches)
             {
-                match.MatchType = MatchType.Weak;
+                match.MatchType = PoC1_LegacyAnalyzer_Web.Models.GroundTruth.MatchType.Weak;
             }
             else
             {
-                match.MatchType = MatchType.None;
+                match.MatchType = PoC1_LegacyAnalyzer_Web.Models.GroundTruth.MatchType.None;
             }
 
             return match;
@@ -312,8 +312,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services.GroundTruth
             // Classify true positives
             foreach (var match in matches)
             {
-                if (match.MatchType == MatchType.Exact ||
-                    (match.MatchType == MatchType.Partial && configuration.CountPartialMatchesAsTruePositives))
+                if (match.MatchType == PoC1_LegacyAnalyzer_Web.Models.GroundTruth.MatchType.Exact ||
+                    (match.MatchType == PoC1_LegacyAnalyzer_Web.Models.GroundTruth.MatchType.Partial && configuration.CountPartialMatchesAsTruePositives))
                 {
                     result.TruePositives.Add(match);
                     matchedGtIssues.Add(match.GroundTruthIssue.Id);
@@ -374,8 +374,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services.GroundTruth
                 var truePositives = 0;
                 foreach (var match in agentMatches)
                 {
-                    if (match.MatchType == MatchType.Exact ||
-                        (match.MatchType == MatchType.Partial && configuration.CountPartialMatchesAsTruePositives))
+                    if (match.MatchType == PoC1_LegacyAnalyzer_Web.Models.GroundTruth.MatchType.Exact ||
+                        (match.MatchType == PoC1_LegacyAnalyzer_Web.Models.GroundTruth.MatchType.Partial && configuration.CountPartialMatchesAsTruePositives))
                     {
                         truePositives++;
                         matchedGtIssues.Add(match.GroundTruthIssue.Id);

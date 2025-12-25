@@ -368,7 +368,7 @@
         report.AppendLine($"Total: {result.ConsistentFindings.Count}");
         foreach (var finding in result.ConsistentFindings.OrderByDescending(f => f.AppearanceRate).Take(10))
         {
-            report.AppendLine($"  - {finding.Category} at {finding.Location} ({finding.AppearanceRate:F0}% of runs)");
+            report.AppendLine($"  - {finding.Finding.Category} at {finding.Finding.Location} ({finding.AppearanceRate:F0}% of runs)");
         }
         report.AppendLine();
 
@@ -376,7 +376,7 @@
         report.AppendLine($"Total: {result.InconsistentFindings.Count}");
         foreach (var finding in result.InconsistentFindings.OrderBy(f => f.AppearanceRate).Take(10))
         {
-            report.AppendLine($"  - {finding.Category} at {finding.Location} ({finding.AppearanceRate:F0}% of runs)");
+            report.AppendLine($"  - {finding.Finding.Category} at {finding.Finding.Location} ({finding.AppearanceRate:F0}% of runs)");
         }
         report.AppendLine();
 

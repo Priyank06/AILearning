@@ -198,9 +198,27 @@ namespace PoC1_LegacyAnalyzer_Web.Models.Determinism
         public int ConsistentFindingCount { get; set; }
 
         /// <summary>
+        /// Alias for ConsistentFindingCount
+        /// </summary>
+        public int ConsistentFindings
+        {
+            get => ConsistentFindingCount;
+            set => ConsistentFindingCount = value;
+        }
+
+        /// <summary>
         /// Findings that were inconsistent
         /// </summary>
         public int InconsistentFindingCount { get; set; }
+
+        /// <summary>
+        /// Alias for InconsistentFindingCount
+        /// </summary>
+        public int InconsistentFindings
+        {
+            get => InconsistentFindingCount;
+            set => InconsistentFindingCount = value;
+        }
 
         /// <summary>
         /// Average number of findings per run
@@ -300,6 +318,36 @@ namespace PoC1_LegacyAnalyzer_Web.Models.Determinism
         /// Default: 10
         /// </summary>
         public int RunCount { get; set; } = 10;
+
+        /// <summary>
+        /// Alias for RunCount for backward compatibility
+        /// </summary>
+        public int NumberOfRuns
+        {
+            get => RunCount;
+            set => RunCount = value;
+        }
+
+        /// <summary>
+        /// LLM temperature setting (0.0-1.0)
+        /// Lower values = more deterministic
+        /// </summary>
+        public double Temperature { get; set; } = 0.3;
+
+        /// <summary>
+        /// Whether to include raw results in output
+        /// </summary>
+        public bool IncludeRawResults { get; set; } = false;
+
+        /// <summary>
+        /// Whether to group metrics by agent
+        /// </summary>
+        public bool GroupByAgent { get; set; } = true;
+
+        /// <summary>
+        /// Whether to group metrics by category
+        /// </summary>
+        public bool GroupByCategory { get; set; } = true;
 
         /// <summary>
         /// Minimum appearance rate to consider a finding consistent (0-100%)
