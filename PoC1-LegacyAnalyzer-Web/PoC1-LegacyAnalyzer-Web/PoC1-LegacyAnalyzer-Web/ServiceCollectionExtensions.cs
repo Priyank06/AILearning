@@ -2,6 +2,11 @@ using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
 using PoC1_LegacyAnalyzer_Web.Services;
+using PoC1_LegacyAnalyzer_Web.Services.AI;
+using PoC1_LegacyAnalyzer_Web.Services.Business;
+using PoC1_LegacyAnalyzer_Web.Services.Infrastructure;
+using PoC1_LegacyAnalyzer_Web.Services.Reporting;
+using PoC1_LegacyAnalyzer_Web.Services.Validation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -18,10 +23,10 @@ namespace PoC1_LegacyAnalyzer_Web
             // Core analysis services (scoped for Blazor circuits)
             services.AddScoped<ICodeAnalysisService, CodeAnalysisService>();
             services.AddScoped<IPromptBuilderService, PromptBuilderService>();
-            services.AddScoped<IAIAnalysisService, AIAnalysisService>();
-            services.AddScoped<IReportService, ReportService>();
+            services.AddScoped<Services.AI.IAIAnalysisService, Services.AI.AIAnalysisService>();
+            services.AddScoped<Services.Reporting.IReportService, Services.Reporting.ReportService>();
             services.AddScoped<IMultiFileAnalysisService, MultiFileAnalysisService>();
-            services.AddScoped<IFileDownloadService, FileDownloadService>();
+            services.AddScoped<Services.Infrastructure.IFileDownloadService, Services.Infrastructure.FileDownloadService>();
             services.AddScoped<ICodeAnalysisAgentService, CodeAnalysisAgentService>();
             
             // File preprocessing focused services
@@ -51,9 +56,9 @@ namespace PoC1_LegacyAnalyzer_Web
             // Multi-file analysis services
             services.AddScoped<IBatchAnalysisOrchestrator, BatchAnalysisOrchestrator>();
             services.AddScoped<IComplexityCalculatorService, ComplexityCalculatorService>();
-            services.AddScoped<IRiskAssessmentService, RiskAssessmentService>();
-            services.AddScoped<IRecommendationGeneratorService, RecommendationGeneratorService>();
-            services.AddScoped<IBusinessMetricsCalculator, BusinessMetricsCalculator>();
+            services.AddScoped<Services.Business.IRiskAssessmentService, Services.Business.RiskAssessmentService>();
+            services.AddScoped<Services.Business.IRecommendationGeneratorService, Services.Business.RecommendationGeneratorService>();
+            services.AddScoped<Services.Business.IBusinessMetricsCalculator, Services.Business.BusinessMetricsCalculator>();
             
             // Helper services
             services.AddScoped<ITokenEstimationService, TokenEstimationService>();
@@ -100,13 +105,13 @@ namespace PoC1_LegacyAnalyzer_Web
             services.AddScoped<IResultTransformerService, ResultTransformerService>();
             
             // Register finding validation service
-            services.AddScoped<IFindingValidationService, FindingValidationService>();
+            services.AddScoped<Services.Validation.IFindingValidationService, Services.Validation.FindingValidationService>();
             
             // Register robust JSON extractor service
             services.AddScoped<IRobustJsonExtractor, RobustJsonExtractor>();
             
             // Register confidence validation service
-            services.AddScoped<IConfidenceValidationService, ConfidenceValidationService>();
+            services.AddScoped<Services.Validation.IConfidenceValidationService, Services.Validation.ConfidenceValidationService>();
             
             // Register agent rate limiter
             services.AddSingleton<IAgentRateLimiter>(sp => new AgentRateLimiter(
@@ -128,7 +133,7 @@ namespace PoC1_LegacyAnalyzer_Web
             services.AddScoped<IProjectMetadataService, ProjectMetadataService>();
             services.AddScoped<IFolderAnalysisService, FolderAnalysisService>();
             services.AddScoped<IArchitectureAssessmentService, ArchitectureAssessmentService>();
-            services.AddScoped<IBusinessImpactCalculator, BusinessImpactCalculator>();
+            services.AddScoped<Services.Business.IBusinessImpactCalculator, Services.Business.BusinessImpactCalculator>();
             services.AddScoped<IProjectInsightsGenerator, ProjectInsightsGenerator>();
 
             // Agent orchestration (scoped - each circuit gets fresh state)
@@ -166,28 +171,28 @@ namespace PoC1_LegacyAnalyzer_Web
             services.AddScoped<IEnhancedProjectAnalysisService, EnhancedProjectAnalysisService>();
 
             // Specialist agents (scoped - isolated per analysis session)
-            services.AddScoped<SecurityAnalystAgent>(sp =>
-                new SecurityAnalystAgent(
+            services.AddScoped<Services.AI.SecurityAnalystAgent>(sp =>
+                new Services.AI.SecurityAnalystAgent(
                     sp.GetRequiredService<Kernel>(),
-                    sp.GetRequiredService<ILogger<SecurityAnalystAgent>>(),
+                    sp.GetRequiredService<ILogger<Services.AI.SecurityAnalystAgent>>(),
                     configuration,
                     sp.GetRequiredService<IResultTransformerService>(),
                     sp.GetRequiredService<IOptions<AgentLegacyIndicatorsConfiguration>>(),
                     sp.GetRequiredService<IOptions<LegacyContextMessagesConfiguration>>()));
 
-            services.AddScoped<PerformanceAnalystAgent>(sp =>
-                new PerformanceAnalystAgent(
+            services.AddScoped<Services.AI.PerformanceAnalystAgent>(sp =>
+                new Services.AI.PerformanceAnalystAgent(
                     sp.GetRequiredService<Kernel>(),
-                    sp.GetRequiredService<ILogger<PerformanceAnalystAgent>>(),
+                    sp.GetRequiredService<ILogger<Services.AI.PerformanceAnalystAgent>>(),
                     configuration,
                     sp.GetRequiredService<IResultTransformerService>(),
                     sp.GetRequiredService<IOptions<AgentLegacyIndicatorsConfiguration>>(),
                     sp.GetRequiredService<IOptions<LegacyContextMessagesConfiguration>>()));
 
-            services.AddScoped<ArchitecturalAnalystAgent>(sp =>
-                new ArchitecturalAnalystAgent(
+            services.AddScoped<Services.AI.ArchitecturalAnalystAgent>(sp =>
+                new Services.AI.ArchitecturalAnalystAgent(
                     sp.GetRequiredService<Kernel>(),
-                    sp.GetRequiredService<ILogger<ArchitecturalAnalystAgent>>(),
+                    sp.GetRequiredService<ILogger<Services.AI.ArchitecturalAnalystAgent>>(),
                     configuration,
                     sp.GetRequiredService<IResultTransformerService>(),
                     sp.GetRequiredService<IOptions<AgentLegacyIndicatorsConfiguration>>(),
@@ -196,9 +201,9 @@ namespace PoC1_LegacyAnalyzer_Web
             // Register as collection for orchestrator
             services.AddScoped<IEnumerable<ISpecialistAgentService>>(sp =>
             [
-                sp.GetRequiredService<SecurityAnalystAgent>(),
-                sp.GetRequiredService<PerformanceAnalystAgent>(),
-                sp.GetRequiredService<ArchitecturalAnalystAgent>()
+                sp.GetRequiredService<Services.AI.SecurityAnalystAgent>(),
+                sp.GetRequiredService<Services.AI.PerformanceAnalystAgent>(),
+                sp.GetRequiredService<Services.AI.ArchitecturalAnalystAgent>()
             ]);
 
             return services;
@@ -261,9 +266,9 @@ namespace PoC1_LegacyAnalyzer_Web
                 );
 
                 // Wrap with resilient service (retry + circuit breaker)
-                var logger = sp.GetRequiredService<ILogger<ResilientChatCompletionService>>();
+                var logger = sp.GetRequiredService<ILogger<Services.AI.ResilientChatCompletionService>>();
                 var retryConfig = sp.GetRequiredService<IOptions<Models.RetryPolicyConfiguration>>();
-                return new ResilientChatCompletionService(innerService, logger, retryConfig);
+                return new Services.AI.ResilientChatCompletionService(innerService, logger, retryConfig);
             });
 
             services.AddScoped<Kernel>(sp =>

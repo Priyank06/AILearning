@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Options;
 using PoC1_LegacyAnalyzer_Web.Models;
-using PoC1_LegacyAnalyzer_Web.Services;
+using PoC1_LegacyAnalyzer_Web.Services.Infrastructure;
 using System.Net;
 
 namespace PoC1_LegacyAnalyzer_Web.Middleware

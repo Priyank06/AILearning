@@ -1,4 +1,4 @@
-using PoC1_LegacyAnalyzer_Web.Services;
+using PoC1_LegacyAnalyzer_Web.Services.Infrastructure;
 
 namespace PoC1_LegacyAnalyzer_Web.Middleware
 {

@@ -1,4 +1,5 @@
 using PoC1_LegacyAnalyzer_Web.Models;
+using PoC1_LegacyAnalyzer_Web.Services.AI;
 using PoC1_LegacyAnalyzer_Web.Services.Analysis;
 using System.Text.Json;
 using System.Text.RegularExpressions;

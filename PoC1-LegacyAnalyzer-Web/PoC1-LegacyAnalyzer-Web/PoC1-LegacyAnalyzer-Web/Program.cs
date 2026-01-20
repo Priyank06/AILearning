@@ -7,6 +7,7 @@ using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using PoC1_LegacyAnalyzer_Web.Services;
+using PoC1_LegacyAnalyzer_Web.Services.Infrastructure;
 using PoC1_LegacyAnalyzer_Web.Middleware;
 using PoC1_LegacyAnalyzer_Web.Extensions;
 using PoC1_LegacyAnalyzer_Web.HealthChecks;
@@ -179,26 +180,26 @@ public class Program
         builder.Services.AddCodeAnalysisServices();
         builder.Services.AddMultiAgentOrchestration(builder.Configuration);
         builder.Services.AddSemanticKernel(builder.Configuration);
-        builder.Services.AddScoped<ITeamReportService, TeamReportService>();
+        builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.Reporting.ITeamReportService, PoC1_LegacyAnalyzer_Web.Services.Reporting.TeamReportService>();
         
         // Register rate limiting service
-        builder.Services.AddSingleton<IRateLimitService, RateLimitService>();
+        builder.Services.AddSingleton<PoC1_LegacyAnalyzer_Web.Services.Infrastructure.IRateLimitService, PoC1_LegacyAnalyzer_Web.Services.Infrastructure.RateLimitService>();
         
         // Register input validation service
-        builder.Services.AddScoped<IInputValidationService, InputValidationService>();
+        builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.Infrastructure.IInputValidationService, PoC1_LegacyAnalyzer_Web.Services.Infrastructure.InputValidationService>();
         
         // Register error handling service
-        builder.Services.AddScoped<IErrorHandlingService, ErrorHandlingService>();
+        builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.Infrastructure.IErrorHandlingService, PoC1_LegacyAnalyzer_Web.Services.Infrastructure.ErrorHandlingService>();
         
         // Register request deduplication service
         builder.Services.AddMemoryCache();
         builder.Services.AddScoped<IRequestDeduplicationService, RequestDeduplicationService>();
         
         // Register cost tracking service
-        builder.Services.AddScoped<ICostTrackingService, CostTrackingService>();
+        builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.Business.ICostTrackingService, PoC1_LegacyAnalyzer_Web.Services.Business.CostTrackingService>();
         
         // Register tracing service
-        builder.Services.AddSingleton<ITracingService, TracingService>();
+        builder.Services.AddSingleton<PoC1_LegacyAnalyzer_Web.Services.Infrastructure.ITracingService, PoC1_LegacyAnalyzer_Web.Services.Infrastructure.TracingService>();
 
         // Register ground truth validation service
         builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.GroundTruth.IGroundTruthValidationService,
