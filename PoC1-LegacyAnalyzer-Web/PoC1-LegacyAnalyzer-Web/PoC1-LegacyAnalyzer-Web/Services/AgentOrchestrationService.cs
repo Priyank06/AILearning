@@ -3,6 +3,7 @@ using Microsoft.SemanticKernel.ChatCompletion;
 using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication;
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
 using PoC1_LegacyAnalyzer_Web.Models;
+using PoC1_LegacyAnalyzer_Web.Services.AI;
 using PoC1_LegacyAnalyzer_Web.Services.Infrastructure;
 using Microsoft.Extensions.Options;
 using System.ComponentModel;

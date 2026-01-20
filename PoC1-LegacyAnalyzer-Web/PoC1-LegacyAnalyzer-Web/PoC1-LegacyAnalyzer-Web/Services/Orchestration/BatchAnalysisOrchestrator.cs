@@ -5,7 +5,7 @@ using PoC1_LegacyAnalyzer_Web.Services.AI;
 using PoC1_LegacyAnalyzer_Web.Services.Analysis;
 using PoC1_LegacyAnalyzer_Web.Services.Infrastructure;
 
-namespace PoC1_LegacyAnalyzer_Web.Services
+namespace PoC1_LegacyAnalyzer_Web.Services.Orchestration
 {
     /// <summary>
     /// Orchestrates batch processing of files for analysis.
@@ -187,7 +187,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                         Language = languageKind
                     };
 
-                    var (_, staticAnalysis) = await _analyzerRouter.AnalyzeAsync(analyzable);
+                    var analysisResult = await _analyzerRouter.AnalyzeAsync(analyzable);
+                    var staticAnalysis = analysisResult.summary;
                     staticAnalysis.LanguageKind = languageKind;
                     staticAnalysis.Language = languageKind.ToString().ToLowerInvariant();
 

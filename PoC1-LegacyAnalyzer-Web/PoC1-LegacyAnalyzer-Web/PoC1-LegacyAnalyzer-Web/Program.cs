@@ -193,7 +193,7 @@ public class Program
         
         // Register request deduplication service
         builder.Services.AddMemoryCache();
-        builder.Services.AddScoped<IRequestDeduplicationService, RequestDeduplicationService>();
+        builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.Infrastructure.IRequestDeduplicationService, PoC1_LegacyAnalyzer_Web.Services.Infrastructure.RequestDeduplicationService>();
         
         // Register cost tracking service
         builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.Business.ICostTrackingService, PoC1_LegacyAnalyzer_Web.Services.Business.CostTrackingService>();

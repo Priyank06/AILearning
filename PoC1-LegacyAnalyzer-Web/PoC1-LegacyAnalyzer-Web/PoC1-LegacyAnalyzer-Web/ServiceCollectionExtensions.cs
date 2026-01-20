@@ -22,7 +22,7 @@ namespace PoC1_LegacyAnalyzer_Web
         {
             // Core analysis services (scoped for Blazor circuits)
             services.AddScoped<ICodeAnalysisService, CodeAnalysisService>();
-            services.AddScoped<IPromptBuilderService, PromptBuilderService>();
+            services.AddScoped<Services.AI.IPromptBuilderService, Services.AI.PromptBuilderService>();
             services.AddScoped<Services.AI.IAIAnalysisService, Services.AI.AIAnalysisService>();
             services.AddScoped<Services.Reporting.IReportService, Services.Reporting.ReportService>();
             services.AddScoped<IMultiFileAnalysisService, MultiFileAnalysisService>();
@@ -30,14 +30,14 @@ namespace PoC1_LegacyAnalyzer_Web
             services.AddScoped<ICodeAnalysisAgentService, CodeAnalysisAgentService>();
             
             // File preprocessing focused services
-            services.AddScoped<IFileCacheManager, FileCacheManager>();
+            services.AddScoped<Services.Infrastructure.IFileCacheManager, Services.Infrastructure.FileCacheManager>();
             services.AddScoped<IComplexityCalculationService, ComplexityCalculationService>();
             services.AddScoped<IPatternDetectionService, PatternDetectionService>();
             services.AddScoped<ILegacyPatternDetectionService, LegacyPatternDetectionService>();
-            services.AddScoped<IFileFilteringService, FileFilteringService>();
+            services.AddScoped<Services.Infrastructure.IFileFilteringService, Services.Infrastructure.FileFilteringService>();
             services.AddScoped<IMetadataExtractionService>(sp => new MetadataExtractionService(
                 sp.GetRequiredService<ILogger<MetadataExtractionService>>(),
-                sp.GetRequiredService<IFileCacheManager>(),
+                sp.GetRequiredService<Services.Infrastructure.IFileCacheManager>(),
                 sp.GetRequiredService<IPatternDetectionService>(),
                 sp.GetRequiredService<IComplexityCalculationService>(),
                 sp.GetRequiredService<Services.Analysis.IAnalyzerRouter>(),
@@ -48,7 +48,10 @@ namespace PoC1_LegacyAnalyzer_Web
                 sp.GetService<IHybridMultiLanguageAnalyzer>())); // Inject hybrid analyzer for semantic analysis
             
             // Legacy context formatter
-            services.AddScoped<LegacyContextFormatter>();
+            services.AddScoped<Services.AI.LegacyContextFormatter>();
+            
+            // Register sanitized logging service
+            services.AddSingleton<Services.Infrastructure.ILogSanitizationService, Services.Infrastructure.LogSanitizationService>();
             
             // FilePreProcessingService as facade (maintains backward compatibility)
             services.AddScoped<IFilePreProcessingService, FilePreProcessingService>();
@@ -61,7 +64,7 @@ namespace PoC1_LegacyAnalyzer_Web
             services.AddScoped<Services.Business.IBusinessMetricsCalculator, Services.Business.BusinessMetricsCalculator>();
             
             // Helper services
-            services.AddScoped<ITokenEstimationService, TokenEstimationService>();
+            services.AddScoped<Services.AI.ITokenEstimationService, Services.AI.TokenEstimationService>();
             
             // Cross-file dependency analysis
             services.AddScoped<ICrossFileAnalyzer>(sp => new CrossFileAnalyzer(
@@ -102,13 +105,13 @@ namespace PoC1_LegacyAnalyzer_Web
             services.Configure<BusinessCalculationRules>(configuration.GetSection("BusinessCalculationRules"));
 
             // Register result transformer service
-            services.AddScoped<IResultTransformerService, ResultTransformerService>();
+            services.AddScoped<Services.AI.IResultTransformerService, Services.AI.ResultTransformerService>();
             
             // Register finding validation service
             services.AddScoped<Services.Validation.IFindingValidationService, Services.Validation.FindingValidationService>();
             
             // Register robust JSON extractor service
-            services.AddScoped<IRobustJsonExtractor, RobustJsonExtractor>();
+            services.AddScoped<Services.AI.IRobustJsonExtractor, Services.AI.RobustJsonExtractor>();
             
             // Register confidence validation service
             services.AddScoped<Services.Validation.IConfidenceValidationService, Services.Validation.ConfidenceValidationService>();
@@ -121,7 +124,7 @@ namespace PoC1_LegacyAnalyzer_Web
             // Register new services for DI
             services.AddScoped<IPeerReviewCoordinator, PeerReviewCoordinator>();
             services.AddScoped<IRecommendationSynthesizer, RecommendationSynthesizer>();
-            services.AddScoped<IExecutiveSummaryGenerator, ExecutiveSummaryGenerator>();
+            services.AddScoped<Services.AI.IExecutiveSummaryGenerator, Services.AI.ExecutiveSummaryGenerator>();
 
             // Register new focused services
             services.AddScoped<IAgentRegistry, AgentRegistryService>();
@@ -151,11 +154,11 @@ namespace PoC1_LegacyAnalyzer_Web
                         sp.GetRequiredService<IAgentCommunicationCoordinator>(),
                         sp.GetRequiredService<IConsensusCalculator>(),
                         sp.GetRequiredService<IRecommendationSynthesizer>(),
-                        sp.GetRequiredService<IExecutiveSummaryGenerator>(),
+                        sp.GetRequiredService<Services.AI.IExecutiveSummaryGenerator>(),
                         sp.GetRequiredService<IFilePreProcessingService>(),
                         sp.GetRequiredService<IInputValidationService>(),
                         sp.GetRequiredService<IErrorHandlingService>(),
-                        sp.GetService<IRequestDeduplicationService>(),
+                        sp.GetService<Services.Infrastructure.IRequestDeduplicationService>(),
                         sp.GetService<ICostTrackingService>(),
                         sp.GetService<ITracingService>(),
                         sp.GetService<IAgentRateLimiter>());
@@ -176,7 +179,7 @@ namespace PoC1_LegacyAnalyzer_Web
                     sp.GetRequiredService<Kernel>(),
                     sp.GetRequiredService<ILogger<Services.AI.SecurityAnalystAgent>>(),
                     configuration,
-                    sp.GetRequiredService<IResultTransformerService>(),
+                    sp.GetRequiredService<Services.AI.IResultTransformerService>(),
                     sp.GetRequiredService<IOptions<AgentLegacyIndicatorsConfiguration>>(),
                     sp.GetRequiredService<IOptions<LegacyContextMessagesConfiguration>>()));
 
@@ -185,7 +188,7 @@ namespace PoC1_LegacyAnalyzer_Web
                     sp.GetRequiredService<Kernel>(),
                     sp.GetRequiredService<ILogger<Services.AI.PerformanceAnalystAgent>>(),
                     configuration,
-                    sp.GetRequiredService<IResultTransformerService>(),
+                    sp.GetRequiredService<Services.AI.IResultTransformerService>(),
                     sp.GetRequiredService<IOptions<AgentLegacyIndicatorsConfiguration>>(),
                     sp.GetRequiredService<IOptions<LegacyContextMessagesConfiguration>>()));
 
@@ -194,17 +197,20 @@ namespace PoC1_LegacyAnalyzer_Web
                     sp.GetRequiredService<Kernel>(),
                     sp.GetRequiredService<ILogger<Services.AI.ArchitecturalAnalystAgent>>(),
                     configuration,
-                    sp.GetRequiredService<IResultTransformerService>(),
+                    sp.GetRequiredService<Services.AI.IResultTransformerService>(),
                     sp.GetRequiredService<IOptions<AgentLegacyIndicatorsConfiguration>>(),
                     sp.GetRequiredService<IOptions<LegacyContextMessagesConfiguration>>()));
 
             // Register as collection for orchestrator
-            services.AddScoped<IEnumerable<ISpecialistAgentService>>(sp =>
-            [
-                sp.GetRequiredService<Services.AI.SecurityAnalystAgent>(),
-                sp.GetRequiredService<Services.AI.PerformanceAnalystAgent>(),
-                sp.GetRequiredService<Services.AI.ArchitecturalAnalystAgent>()
-            ]);
+            services.AddScoped<IEnumerable<Services.AI.ISpecialistAgentService>>(sp =>
+            {
+                return new Services.AI.ISpecialistAgentService[]
+                {
+                    sp.GetRequiredService<Services.AI.SecurityAnalystAgent>(),
+                    sp.GetRequiredService<Services.AI.PerformanceAnalystAgent>(),
+                    sp.GetRequiredService<Services.AI.ArchitecturalAnalystAgent>()
+                };
+            });
 
             return services;
         }

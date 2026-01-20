@@ -1,12 +1,13 @@
-﻿using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Options;
 using PoC1_LegacyAnalyzer_Web.Models;
 using PoC1_LegacyAnalyzer_Web.Services.AI;
 using PoC1_LegacyAnalyzer_Web.Services.Analysis;
 using PoC1_LegacyAnalyzer_Web.Services.Business;
 using PoC1_LegacyAnalyzer_Web.Services.Infrastructure;
+using PoC1_LegacyAnalyzer_Web.Services.Orchestration;
 
-namespace PoC1_LegacyAnalyzer_Web.Services
+namespace PoC1_LegacyAnalyzer_Web.Services.Orchestration
 {
     public class MultiFileAnalysisService : IMultiFileAnalysisService
     {
@@ -199,7 +200,8 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 Language = languageKind
             };
 
-            var (structure, staticAnalysis) = await _analyzerRouter.AnalyzeAsync(analyzable);
+            var analysisResult = await _analyzerRouter.AnalyzeAsync(analyzable);
+            var staticAnalysis = analysisResult.summary;
             staticAnalysis.LanguageKind = languageKind;
             staticAnalysis.Language = languageKind.ToString().ToLowerInvariant();
 
