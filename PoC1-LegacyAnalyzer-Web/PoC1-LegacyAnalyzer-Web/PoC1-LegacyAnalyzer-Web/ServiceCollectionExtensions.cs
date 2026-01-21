@@ -174,6 +174,7 @@ namespace PoC1_LegacyAnalyzer_Web
             services.AddScoped<IEnhancedProjectAnalysisService, EnhancedProjectAnalysisService>();
 
             // Specialist agents (scoped - isolated per analysis session)
+            // Register concrete types
             services.AddScoped<Services.AI.SecurityAnalystAgent>(sp =>
                 new Services.AI.SecurityAnalystAgent(
                     sp.GetRequiredService<Kernel>(),

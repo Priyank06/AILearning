@@ -1,6 +1,7 @@
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
 using Microsoft.Extensions.Logging;
 using PoC1_LegacyAnalyzer_Web.Services.AI;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
@@ -44,16 +45,21 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
             try
             {
-                var agent = _serviceProvider.GetService(agentType) as ISpecialistAgentService;
+                _logger.LogDebug("Attempting to resolve agent type: {AgentType} for specialty: {Specialty}", agentType.FullName, specialty);
+                
+                var agent = _serviceProvider.GetRequiredService(agentType) as ISpecialistAgentService;
                 if (agent == null)
                 {
-                    _logger.LogError("Failed to resolve agent of type {AgentType} for specialty: {Specialty}", agentType.Name, specialty);
+                    _logger.LogError("Failed to cast resolved service of type {AgentType} to ISpecialistAgentService for specialty: {Specialty}", agentType.Name, specialty);
+                    return null;
                 }
+                
+                _logger.LogDebug("Successfully resolved agent: {AgentName} for specialty: {Specialty}", agent.AgentName, specialty);
                 return agent;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error resolving agent for specialty: {Specialty}", specialty);
+                _logger.LogError(ex, "Error resolving agent for specialty: {Specialty}. AgentType: {AgentType}", specialty, agentType?.FullName ?? "unknown");
                 return null;
             }
         }

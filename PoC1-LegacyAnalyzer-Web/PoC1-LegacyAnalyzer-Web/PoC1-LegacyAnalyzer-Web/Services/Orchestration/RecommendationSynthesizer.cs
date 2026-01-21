@@ -37,8 +37,15 @@ namespace PoC1_LegacyAnalyzer_Web.Services.Orchestration
             // Logic-based synthesis without LLM
             var consolidated = new ConsolidatedRecommendations();
             
-            // Collect all recommendations from all agents
-            var allRecommendations = analyses.SelectMany(a => a.Recommendations.Select(r => new
+            // Filter out error results (those with "Analysis Error" findings)
+            var successfulAnalyses = analyses.Where(a => 
+                !a.KeyFindings.Any(f => f.Category == "Analysis Error")).ToList();
+            
+            _logger.LogInformation("Filtering recommendations: Total analyses={Total}, Successful={Successful}, Errors={Errors}",
+                analyses.Count, successfulAnalyses.Count, analyses.Count - successfulAnalyses.Count);
+            
+            // Collect all recommendations from successful agents only
+            var allRecommendations = successfulAnalyses.SelectMany(a => a.Recommendations.Select(r => new
             {
                 Agent = a.AgentName,
                 Recommendation = r
@@ -92,11 +99,21 @@ namespace PoC1_LegacyAnalyzer_Web.Services.Orchestration
                 + consolidated.MediumPriorityActions.Sum(r => r.EstimatedHours)
                 + consolidated.LongTermStrategic.Sum(r => r.EstimatedHours);
             
-            consolidated.SynthesisSummary = $"Synthesized {analyses.Count} agent analyses: " +
-                $"{consolidated.HighPriorityActions.Count} high priority, " +
-                $"{consolidated.MediumPriorityActions.Count} medium priority, " +
-                $"{consolidated.LongTermStrategic.Count} strategic recommendations.";
-            consolidated.ImplementationStrategy = "Implementation strategy to be generated.";
+            var errorCount = analyses.Count - successfulAnalyses.Count;
+            var synthesisParts = new List<string>();
+            synthesisParts.Add($"Synthesized {successfulAnalyses.Count} successful agent analyses");
+            if (errorCount > 0)
+            {
+                synthesisParts.Add($"{errorCount} agent(s) encountered errors");
+            }
+            synthesisParts.Add($"{consolidated.HighPriorityActions.Count} high priority");
+            synthesisParts.Add($"{consolidated.MediumPriorityActions.Count} medium priority");
+            synthesisParts.Add($"{consolidated.LongTermStrategic.Count} strategic recommendations");
+            
+            consolidated.SynthesisSummary = string.Join(", ", synthesisParts) + ".";
+            consolidated.ImplementationStrategy = successfulAnalyses.Count > 0 
+                ? "Implementation strategy based on successful agent recommendations." 
+                : "Unable to generate implementation strategy due to agent errors. Please review error details above.";
             consolidated.ResolvedConflicts = new List<PoC1_LegacyAnalyzer_Web.Models.AgentCommunication.ConflictResolution>();
             return await Task.FromResult(consolidated);
         }

@@ -8,7 +8,7 @@ namespace PoC1_LegacyAnalyzer_Web.Models
         /// <summary>
         /// The base template string with placeholders.
         /// </summary>
-        public string BaseTemplate { get; set; }
+        public string BaseTemplate { get; set; } = string.Empty;
 
         /// <summary>
         /// Dictionary of analysis type to its prompt sections.

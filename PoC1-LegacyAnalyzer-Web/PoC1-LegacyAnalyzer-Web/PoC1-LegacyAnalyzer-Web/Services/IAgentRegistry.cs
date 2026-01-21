@@ -1,4 +1,5 @@
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
+using PoC1_LegacyAnalyzer_Web.Services.AI;
 
 namespace PoC1_LegacyAnalyzer_Web.Services
 {
