@@ -3,6 +3,8 @@
 @using PoC1_LegacyAnalyzer_Web.Services
 @using PoC1_LegacyAnalyzer_Web.Models
 @using PoC1_LegacyAnalyzer_Web.Components.MultiFileAnalysis
+@using PoC1_LegacyAnalyzer_Web.Components.Shared
+@using PoC1_LegacyAnalyzer_Web.Helpers
 @using Microsoft.AspNetCore.Components.Forms
 @using System.Text
 @using PoC1_LegacyAnalyzer_Web.Services.Infrastructure
@@ -24,83 +26,18 @@
         </div>
     </div>
 
-    <!-- Single-column layout for file upload and configuration -->
-    <div class="row mb-3">
+    <!-- File Upload Card Component -->
+    <div class="row section-main">
         <div class="col-12">
-            <div class="card shadow">
-                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Project File Upload</h5>
-                    @if (selectedFiles.Any())
-                    {
-                        <span class="badge bg-light text-dark">
-                            <i class="bi bi-files"></i> @selectedFiles.Count file(s) selected
-                        </span>
-                    }
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <!-- Analysis Type Selection -->
-                        <div class="col-md-3 mb-3 mb-md-0">
-                            <label class="form-label fw-bold">Analysis Type:</label>
-                            <select class="form-select" @bind="selectedAnalysisType">
-                                <option value="general">General Code Assessment</option>
-                                <option value="security">Security Analysis</option>
-                                <option value="performance">Performance Review</option>
-                                <option value="migration">Migration Readiness</option>
-                            </select>
-                        </div>
-
-                        <!-- File Upload Buttons -->
-                        <div class="col-md-6 mb-3 mb-md-0">
-                            <label class="form-label fw-bold">Upload Files:</label>
-                            <div class="d-flex gap-2 flex-wrap">
-                                <InputFile id="fileInput" OnChange="HandleFileSelection" multiple accept=".cs,.py,.js,.ts,.java,.go" class="d-none" webkitdirectory />
-                                <label for="fileInput" class="btn btn-primary">
-                                    <i class="bi bi-folder-plus"></i> Select Project Folder
-                                </label>
-
-                                <InputFile id="individualFiles" OnChange="HandleIndividualFileSelection" multiple accept=".cs,.py,.js,.ts,.java,.go" class="d-none" />
-                                <label for="individualFiles" class="btn btn-outline-secondary">
-                                    <i class="bi bi-file-plus"></i> Select Individual Files
-                                </label>
-                            </div>
-                            @if (selectedFiles.Any())
-                            {
-                                <div class="mt-2">
-                                    <small class="text-muted">
-                                        <i class="bi bi-info-circle"></i> Total size: @FormatFileSize(selectedFiles.Sum(f => f.Size))
-                                    </small>
-                                </div>
-                            }
-                        </div>
-
-                        <!-- Action Buttons -->
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold d-block">&nbsp;</label>
-                            <div class="d-flex gap-2">
-                                @if (selectedFiles.Any())
-                                {
-                                    <button class="btn btn-success flex-fill" @onclick="AnalyzeProject" disabled="@isAnalyzing">
-                                        @if (isAnalyzing)
-                                        {
-                                            <span class="spinner-border spinner-border-sm me-2"></span>
-                                            <text>Analyzing...</text>
-                                        }
-                                        else
-                                        {
-                                            <text><i class="bi bi-play-circle"></i> Analyze</text>
-                                        }
-                                    </button>
-                                    <button class="btn btn-outline-danger" @onclick="ClearFiles" title="Clear all files">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                }
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
+            <FileUploadCard
+                SelectedFiles="selectedFiles"
+                AnalysisType="@selectedAnalysisType"
+                IsAnalyzing="@isAnalyzing"
+                OnFileSelection="HandleFileSelection"
+                OnIndividualFileSelection="HandleIndividualFileSelection"
+                OnAnalyze="AnalyzeProject"
+                OnClearFiles="ClearFiles"
+                OnAnalysisTypeChange="HandleAnalysisTypeChange" />
         </div>
     </div>
 
@@ -362,6 +299,12 @@
         StateHasChanged();
     }
 
+    private void HandleAnalysisTypeChange(string analysisType)
+    {
+        selectedAnalysisType = analysisType;
+        StateHasChanged();
+    }
+
     private async Task TestSimpleCharts()
     {
         try
@@ -615,14 +558,14 @@
         report.AppendLine("## Key Performance Indicators");
         report.AppendLine("| Metric | Value | Assessment |");
         report.AppendLine("|--------|--------|------------|");
-        report.AppendLine($"| Source Files | {analysisResult.TotalFiles} | {GetFileCountAssessment(analysisResult.TotalFiles)} |");
-        report.AppendLine($"| Code Classes | {analysisResult.TotalClasses} | {GetClassCountAssessment(analysisResult.TotalClasses)} |");
-        report.AppendLine($"| Methods | {analysisResult.TotalMethods} | {GetMethodCountAssessment(analysisResult.TotalMethods)} |");
+        report.AppendLine($"| Source Files | {analysisResult.TotalFiles} | {MultiFileHelpers.GetFileCountAssessment(analysisResult.TotalFiles)} |");
+        report.AppendLine($"| Code Classes | {analysisResult.TotalClasses} | {MultiFileHelpers.GetClassCountAssessment(analysisResult.TotalClasses)} |");
+        report.AppendLine($"| Methods | {analysisResult.TotalMethods} | {MultiFileHelpers.GetMethodCountAssessment(analysisResult.TotalMethods)} |");
         report.AppendLine($"| Complexity Score | {analysisResult.OverallComplexityScore}/100 | {analysisResult.OverallRiskLevel} Risk Level |");
         report.AppendLine();
 
         // Risk Assessment
-        var riskStats = GetRiskStatistics();
+        var riskStats = MultiFileHelpers.GetRiskStatistics(analysisResult);
         report.AppendLine("## Risk Assessment");
         report.AppendLine($"- **Low Risk Files**: {riskStats.low} files ({riskStats.lowPercent:F1}%)");
         report.AppendLine($"- **Medium Risk Files**: {riskStats.medium} files ({riskStats.mediumPercent:F1}%)");
@@ -642,9 +585,9 @@
 
         // Business Impact
         report.AppendLine("## Business Impact Assessment");
-        report.AppendLine($"**Migration Timeline**: {GetMigrationTimeline(analysisResult.OverallComplexityScore)}");
-        report.AppendLine($"**Resource Requirements**: {GetResourceRequirements(analysisResult.OverallComplexityScore)}");
-        report.AppendLine($"**Financial Impact**: {GetFinancialImpact(analysisResult.OverallComplexityScore)}");
+        report.AppendLine($"**Migration Timeline**: {MultiFileHelpers.GetMigrationTimeline(analysisResult.OverallComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold, ComplexityHighThreshold)}");
+        report.AppendLine($"**Resource Requirements**: {MultiFileHelpers.GetResourceRequirements(analysisResult.OverallComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold, ComplexityHighThreshold)}");
+        report.AppendLine($"**Financial Impact**: {MultiFileHelpers.GetFinancialImpact(analysisResult.OverallComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold, ComplexityHighThreshold)}");
         report.AppendLine();
 
         // Technical Details
@@ -674,51 +617,8 @@
         return report.ToString();
     }
 
-    private (int low, int medium, int high, double lowPercent, double mediumPercent, double highPercent) GetRiskStatistics()
-    {
-        if (analysisResult?.FileResults == null) return (0, 0, 0, 0, 0, 0);
-
-        var total = analysisResult.FileResults.Count;
-        var low = analysisResult.FileResults.Count(f => f.ComplexityScore < 40);
-        var medium = analysisResult.FileResults.Count(f => f.ComplexityScore >= 40 && f.ComplexityScore < 70);
-        var high = analysisResult.FileResults.Count(f => f.ComplexityScore >= 70);
-
-        return (low, medium, high,
-                low * 100.0 / total,
-                medium * 100.0 / total,
-                high * 100.0 / total);
-    }
-
-    private string FormatFileSize(long bytes)
-    {
-        string[] suffixes = { "B", "KB", "MB", "GB" };
-        int counter = 0;
-        decimal number = bytes;
-        while (Math.Round(number / 1024) >= 1)
-        {
-            number /= 1024;
-            counter++;
-        }
-        return $"{number:n1} {suffixes[counter]}";
-    }
-
-    private string GetStatusAlertClass() => statusMessage.Contains("error") || statusMessage.Contains("failed") ? "alert-danger" : "alert-info";
-
-    private string GetRiskTextColorClass(string risk) => risk switch
-    {
-        "LOW" => "text-success",
-        "MEDIUM" => "text-warning",
-        "HIGH" => "text-danger",
-        _ => "text-secondary"
-    };
-
-    private string GetRiskDescription(string risk) => risk switch
-    {
-        "LOW" => "Standard migration process applicable",
-        "MEDIUM" => "Structured approach with experienced team required",
-        "HIGH" => "Complex migration requiring specialist expertise",
-        _ => "Assessment in progress"
-    };
+    // NOTE: GetRiskStatistics, FormatFileSize, GetRiskTextColorClass, GetRiskDescription
+    // have been moved to MultiFileHelpers.cs
 
     private async Task HandleIndividualFileSelection(InputFileChangeEventArgs e)
     {
@@ -746,216 +646,9 @@
         StateHasChanged();
     }
 
-    private string FormatAIInsight(string insight)
-    {
-        if (string.IsNullOrEmpty(insight))
-            return "<div class='alert alert-light'><em>Assessment pending - analysis in progress</em></div>";
-
-        try
-        {
-            // Clean up the text aggressively
-            var cleaned = insight
-                .Replace("###", "")
-                .Replace("##", "")
-                .Replace("#", "")
-                .Replace("**", "")
-                .Replace("*", "")
-                .Replace("```", "")
-                .Replace("`", "")
-                .Replace("---", "")
-                .Trim();
-
-            // Split into sentences and clean them
-            var sentences = cleaned.Split(new[] { '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => s.Length > 10 && !s.StartsWith("Priority") && !s.StartsWith("Implementation"))
-                .Take(3) // Limit to 3 key insights for executives
-                .ToList();
-
-            if (!sentences.Any())
-            {
-                return "<div class='alert alert-warning'><strong>Assessment Summary:</strong> Code analysis completed. Technical details require manual review.</div>";
-            }
-
-            var formatted = new System.Text.StringBuilder();
-            formatted.Append("<div class='executive-summary'>");
-
-            for (int i = 0; i < sentences.Count; i++)
-            {
-                var sentence = sentences[i].Trim();
-                if (!sentence.EndsWith(".")) sentence += ".";
-
-                // Format as executive-friendly insight
-                formatted.Append($"<div class='insight-item mb-2'>");
-                formatted.Append($"<span class='badge bg-primary me-2'>{i + 1}</span>");
-                formatted.Append($"<span class='insight-text'>{sentence}</span>");
-                formatted.Append("</div>");
-            }
-
-            formatted.Append("</div>");
-            return formatted.ToString();
-        }
-        catch (Exception)
-        {
-            return "<div class='alert alert-info'><strong>Technical Assessment:</strong> Code structure analyzed. Detailed recommendations available upon request.</div>";
-        }
-    }
-
-    private string GetComplexityCardClass(int score) => score switch
-    {
-        >= 70 => "bg-danger",
-        >= 40 => "bg-warning text-dark",
-        _ => "bg-success"
-    };
-
-    private string GetRiskBadgeClass()
-    {
-        return analysisResult?.OverallRiskLevel switch
-        {
-            "LOW" => "success",
-            "MEDIUM" => "warning",
-            "HIGH" => "danger",
-            _ => "secondary"
-        };
-    }
-
-    // Helper methods for UI rendering using config thresholds
-    private string GetQualityColorClass(int complexity)
-    {
-        if (complexity > ComplexityMediumThreshold) return "bg-danger";
-        if (complexity > ComplexityLowThreshold) return "bg-warning";
-        return "bg-success";
-    }
-
-    private string GetStatusBadgeClass(int complexity)
-    {
-        if (complexity > ComplexityMediumThreshold) return "bg-danger";
-        if (complexity > ComplexityLowThreshold) return "bg-warning";
-        return "bg-success";
-    }
-
-    private string GetStatusText(int complexity)
-    {
-        if (complexity > ComplexityMediumThreshold) return "Needs Review";
-        if (complexity > ComplexityLowThreshold) return "Monitor";
-        return "Good";
-    }
-
-    private string GetMaintenanceLevel(int complexity)
-    {
-        if (complexity > ComplexityMediumThreshold) return "Immediate attention";
-        if (complexity > ComplexityLowThreshold) return "Scheduled review";
-        return "Standard maintenance";
-    }
-
-    private string GetComplexityColorClass(int score)
-    {
-        if (score < ComplexityLowThreshold) return "bg-success";
-        if (score < ComplexityMediumThreshold) return "bg-warning";
-        return "bg-danger";
-    }
-
-    private string GetComplexityTextColor(int score)
-    {
-        if (score < ComplexityMediumThreshold) return "text-success";
-        if (score < ComplexityHighThreshold) return "text-warning";
-        return "text-danger";
-    }
-
-    private string GetComplexityBadgeClass(int score)
-    {
-        if (score < ComplexityLowThreshold) return "bg-success";
-        if (score < ComplexityMediumThreshold) return "bg-warning text-dark";
-        return "bg-danger";
-    }
-
-    private string GetComplexityLabel(int score)
-    {
-        if (score < ComplexityLowThreshold) return "Low Risk";
-        if (score < ComplexityMediumThreshold) return "Medium Risk";
-        return "High Risk";
-    }
-
-    private string GetSeverityBadgeClass(string severity)
-    {
-        return severity?.ToUpper() switch
-        {
-            "CRITICAL" => "bg-danger",
-            "HIGH" => "bg-warning text-dark",
-            "MEDIUM" => "bg-info",
-            "LOW" => "bg-secondary",
-            _ => "bg-light text-dark"
-        };
-    }
-
-    private string GetRiskBadgeClass(string riskLevel)
-    {
-        return riskLevel?.ToUpper() switch
-        {
-            "CRITICAL" => "bg-danger",
-            "HIGH" => "bg-warning text-dark",
-            "MEDIUM" => "bg-info text-white",
-            "LOW" => "bg-success",
-            _ => "bg-secondary"
-        };
-    }
-
-    private string GetSemanticQualityColor(int score)
-    {
-        return score >= 80 ? "bg-success" :
-               score >= 60 ? "bg-warning" :
-               score >= 40 ? "bg-info" :
-               "bg-danger";
-    }
-
-    private string GetSemanticIssueTypeBadge(string issueType)
-    {
-        return issueType.ToUpper() switch
-        {
-            var t when t.Contains("TYPE") => "bg-danger",
-            var t when t.Contains("UNINITIALIZED") => "bg-warning text-dark",
-            var t when t.Contains("CONTROL") => "bg-info",
-            var t when t.Contains("DEPRECATED") => "bg-danger",
-            var t when t.Contains("RUNTIME") => "bg-danger",
-            _ => "bg-secondary"
-        };
-    }
-
-    private string GetCategoryBadge(string category)
-    {
-        return category?.ToUpper() switch
-        {
-            "ERROR" => "bg-danger",
-            "WARNING" => "bg-warning text-dark",
-            "INFO" => "bg-info",
-            _ => "bg-secondary"
-        };
-    }
-
-    private string GetTimelineColorClass()
-    {
-        if (analysisResult == null) return "secondary";
-
-        if (analysisResult.OverallComplexityScore < 40)
-            return "success";
-        else if (analysisResult.OverallComplexityScore < 70)
-            return "warning";
-        else
-            return "danger";
-    }
-
-    private string GetExecutiveTimeline()
-    {
-        if (analysisResult == null) return "Assessment Pending";
-        if (analysisResult.OverallComplexityScore < ComplexityLowThreshold)
-            return "2-4 weeks (Low complexity migration)";
-        else if (analysisResult.OverallComplexityScore < ComplexityMediumThreshold)
-            return "4-8 weeks (Standard migration process)";
-        else if (analysisResult.OverallComplexityScore < ComplexityHighThreshold)
-            return "8-12 weeks (Complex migration - phased approach)";
-        else
-            return "12+ weeks (High complexity - dedicated team required)";
-    }
+    // NOTE: UI helper methods (GetComplexityBadgeClass, GetStatusText, etc.) have been
+    // moved to MultiFileHelpers.cs and are used by extracted components directly.
+    // Only page-specific methods remain here.
 
     private AnalysisProgress? analysisProgress;
 
@@ -1058,55 +751,10 @@
         return (int)(baseHours + methodHours + dependencyHours);
     }
 
-    private string GetFileCountAssessment(int fileCount)
-    {
-        if (fileCount < 5) return "Small project scope";
-        if (fileCount < 15) return "Medium project complexity";
-        if (fileCount < 30) return "Large project - requires structured approach";
-        return "Enterprise-scale project - dedicated team recommended";
-    }
+    // NOTE: GetFileCountAssessment, GetClassCountAssessment, GetMethodCountAssessment,
+    // GetMigrationTimeline, GetResourceRequirements, GetFinancialImpact have been
+    // moved to MultiFileHelpers.cs - report generation now uses those helpers directly
 
-    private string GetClassCountAssessment(int classCount)
-    {
-        if (classCount < 10) return "Low structural complexity";
-        if (classCount < 25) return "Moderate architectural complexity";
-        if (classCount < 50) return "Complex architecture - careful planning required";
-        return "Highly complex system - expert analysis recommended";
-    }
-
-    private string GetMethodCountAssessment(int methodCount)
-    {
-        if (methodCount < 50) return "Manageable codebase size";
-        if (methodCount < 150) return "Medium codebase - standard development practices apply";
-        if (methodCount < 300) return "Large codebase - requires systematic approach";
-        return "Very large codebase - enterprise development practices essential";
-    }
-
-    private string GetMigrationTimeline(int complexityScore)
-    {
-        if (complexityScore < ComplexityLowThreshold) return "2-4 weeks (Low complexity migration)";
-        if (complexityScore < ComplexityMediumThreshold) return "4-8 weeks (Standard migration process)";
-        if (complexityScore < ComplexityHighThreshold) return "8-16 weeks (Complex migration - phased approach)";
-        return "16+ weeks (High complexity - dedicated team required)";
-    }
-
-    private string GetResourceRequirements(int complexityScore)
-    {
-        if (complexityScore < ComplexityLowThreshold) return "1-2 developers, standard skillset";
-        if (complexityScore < ComplexityMediumThreshold) return "2-3 developers, experienced team";
-        if (complexityScore < ComplexityHighThreshold) return "3-5 developers, senior expertise required";
-        return "5+ developers, specialist migration team with architect oversight";
-    }
-
-    private string GetFinancialImpact(int complexityScore)
-    {
-        if (complexityScore < ComplexityLowThreshold) return "Low cost - standard development rates";
-        if (complexityScore < ComplexityMediumThreshold) return "Moderate cost - budget for quality assurance";
-        if (complexityScore < ComplexityHighThreshold) return "High cost - include risk mitigation budget";
-        return "Very high cost - executive approval recommended";
-    }
-
-    // Replace token estimation usage
     private int EstimateTokens(int charCount)
     {
         return charCount / TokenCharEstimate;
