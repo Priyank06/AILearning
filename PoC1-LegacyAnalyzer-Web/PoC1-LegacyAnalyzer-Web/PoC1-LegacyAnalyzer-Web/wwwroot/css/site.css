@@ -295,3 +295,165 @@ h6, .h6 {
 * {
     scroll-padding-top: 2rem;
 }
+
+/* =============================================================================
+   TASK 5: Consistent Badge System
+   Semantic colors for status, severity, and type badges
+   ============================================================================= */
+
+/* Status Badges - For operational states (Good, Warning, Error) */
+.badge-status-success {
+    background-color: #198754 !important;
+    color: #fff !important;
+}
+
+.badge-status-warning {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+}
+
+.badge-status-danger {
+    background-color: #dc3545 !important;
+    color: #fff !important;
+}
+
+.badge-status-info {
+    background-color: #0dcaf0 !important;
+    color: #000 !important;
+}
+
+/* Severity Badges - For risk/impact levels (Critical, High, Medium, Low) */
+.badge-severity-critical {
+    background-color: #dc3545 !important;
+    color: #fff !important;
+    font-weight: 700;
+}
+
+.badge-severity-high {
+    background-color: #fd7e14 !important;
+    color: #000 !important;
+    font-weight: 600;
+}
+
+.badge-severity-medium {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+}
+
+.badge-severity-low {
+    background-color: #198754 !important;
+    color: #fff !important;
+}
+
+/* Type Badges - For categorization */
+.badge-type {
+    background-color: #6c757d !important;
+    color: #fff !important;
+}
+
+.badge-type-primary {
+    background-color: #0d6efd !important;
+    color: #fff !important;
+}
+
+.badge-type-secondary {
+    background-color: #adb5bd !important;
+    color: #000 !important;
+}
+
+/* Badge size variants */
+.badge-sm {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.4rem;
+}
+
+.badge-lg {
+    font-size: 0.95rem;
+    padding: 0.5rem 0.8rem;
+}
+
+/* Badge with icon spacing */
+.badge i {
+    margin-right: 0.25rem;
+}
+
+/* =============================================================================
+   TASK 8: Standardized Section Spacing
+   Consistent spacing between major sections and subsections
+   ============================================================================= */
+
+/* Major section spacing (between top-level content areas) */
+.section-main {
+    margin-bottom: 2rem;
+}
+
+/* Sub-section spacing (within a major section) */
+.section-sub {
+    margin-bottom: 1rem;
+}
+
+/* Card spacing within sections */
+.card.section-card {
+    margin-bottom: 1rem;
+}
+
+/* Results container spacing */
+.results-section {
+    margin-top: 2rem;
+}
+
+.results-section > .card,
+.results-section > .row {
+    margin-bottom: 1.25rem;
+}
+
+/* Visual separator between major sections */
+.section-divider {
+    border-top: 1px solid #dee2e6;
+    margin: 2rem 0;
+}
+
+/* Section header with bottom margin */
+.section-header {
+    margin-bottom: 1.5rem;
+}
+
+/* Compact list item spacing */
+.list-compact .list-group-item {
+    padding: 0.5rem 0.75rem;
+}
+
+/* Table section spacing */
+.table-section {
+    margin-bottom: 1.5rem;
+}
+
+/* Chart container spacing */
+.chart-section {
+    margin-bottom: 1.5rem;
+}
+
+/* Action button section */
+.action-section {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+}
+
+/* Row gap utility for consistent grid spacing */
+.row-gap-3 {
+    row-gap: 1rem !important;
+}
+
+.row-gap-4 {
+    row-gap: 1.5rem !important;
+}
+
+/* Column gap utility */
+.col-gap-3 {
+    column-gap: 1rem !important;
+}
+
+.col-gap-4 {
+    column-gap: 1.5rem !important;
+}
