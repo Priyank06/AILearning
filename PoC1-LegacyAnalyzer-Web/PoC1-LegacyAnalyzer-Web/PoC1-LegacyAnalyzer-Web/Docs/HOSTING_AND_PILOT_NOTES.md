@@ -55,12 +55,195 @@ This document outlines key considerations for transitioning the Legacy Code Anal
 - [ ] Azure Monitor alerts configured
 - [ ] Azure Storage (for large report exports, if needed)
 - [ ] Azure AD App Registration (if SSO required)
+- [ ] Azure SQL Database or Cosmos DB (if history/incremental analysis enabled)
 
 ---
 
-## 2. Security and Compliance Considerations
+## 2. Database Implementation for History & Incremental Analysis
 
-### 2.1 Data Handling
+### 2.1 Current State vs. Enhanced State
+
+| Aspect | Current (No DB) | With Database |
+|--------|-----------------|---------------|
+| Analysis History | Session-only, lost on disconnect | Persistent, queryable |
+| Re-analysis | Full analysis every time | Incremental (only changed files) |
+| Team Visibility | Individual sessions only | Shared project/team views |
+| Trend Tracking | Not possible | Track improvements over time |
+| Cost Efficiency | High (repeated full analyses) | Lower (skip unchanged files) |
+| Compliance/Audit | Limited (logs only) | Full audit trail |
+
+### 2.2 Recommendation for Pilot
+
+**Decision Point**: Should database be included in pilot or post-pilot?
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Include in Pilot** | Real-world feedback, validates value | More complexity, longer setup |
+| **Post-Pilot Enhancement** | Faster pilot launch, simpler | Miss feedback on key feature |
+
+**Recommendation**: Implement **basic history storage** for pilot (Option A below), defer full incremental analysis to post-pilot.
+
+### 2.3 Implementation Options
+
+#### Option A: Basic History (Recommended for Pilot)
+Store analysis results for history/audit without incremental analysis.
+
+**Data to Persist:**
+```
+AnalysisRun:
+  - Id (GUID)
+  - UserId
+  - ProjectName
+  - Timestamp
+  - TotalFiles
+  - TotalFindings
+  - AnalysisDurationMs
+  - Status (Completed/Failed/Partial)
+
+AnalysisFinding:
+  - Id (GUID)
+  - AnalysisRunId (FK)
+  - FilePath (relative, not absolute)
+  - Category (Security/Performance/Architecture)
+  - Severity (Critical/High/Medium/Low)
+  - Title
+  - Description
+  - Recommendation
+  - LineNumber (optional)
+  - AgentSource (SecurityAgent/PerformanceAgent/etc.)
+  - Confidence (0.0-1.0)
+```
+
+**What NOT to Store:**
+- Full source code (privacy/storage concerns)
+- Code snippets longer than 200 chars
+- Absolute file paths
+- User credentials or secrets
+
+#### Option B: Full Incremental Analysis (Post-Pilot)
+Adds file fingerprinting to skip unchanged files.
+
+**Additional Data:**
+```
+FileFingerprint:
+  - Id (GUID)
+  - ProjectId (FK)
+  - RelativeFilePath
+  - ContentHash (SHA256)
+  - LastAnalyzedAt
+  - LastAnalysisRunId (FK)
+
+IncrementalAnalysisCache:
+  - FileFingerPrintId (FK)
+  - AgentType
+  - CachedFindings (JSON)
+  - ValidUntil (TTL)
+```
+
+**Incremental Analysis Flow:**
+```
+1. User uploads files for analysis
+2. Calculate SHA256 hash for each file
+3. Check FileFingerprint table:
+   - Hash matches? → Return cached findings
+   - Hash different? → Re-analyze, update cache
+4. Only send changed files to Azure OpenAI
+5. Merge cached + new findings for report
+```
+
+**Expected Benefits:**
+- 40-70% reduction in Azure OpenAI calls (typical codebases)
+- Faster analysis times for repeat analyses
+- Lower costs for frequent users
+
+### 2.4 Database Technology Options
+
+| Option | Best For | Cost (Pilot) | Complexity |
+|--------|----------|--------------|------------|
+| **Azure SQL Database** | Relational queries, familiar SQL | ~$15-50/mo (Basic/S0) | Low |
+| **Azure Cosmos DB** | JSON documents, global scale | ~$25-100/mo | Medium |
+| **SQLite (embedded)** | Single-instance, no infra | $0 | Very Low |
+| **Azure Table Storage** | Simple key-value, cheap | ~$5/mo | Low |
+
+**Recommendation for Pilot**: Azure SQL Database (Basic tier) or SQLite for simplicity.
+
+### 2.5 Additional Infrastructure Costs (with DB)
+
+| Component | Pilot Estimate | Notes |
+|-----------|----------------|-------|
+| Azure SQL Basic | ~$5/mo | 2GB, 5 DTUs |
+| Azure SQL S0 | ~$15/mo | 250GB, 10 DTUs (recommended) |
+| Backup Storage | ~$2-5/mo | Geo-redundant |
+| **Total Additional** | **~$20-25/mo** | Minimal impact on budget |
+
+### 2.6 Data Retention & Privacy Considerations
+
+| Consideration | Recommendation |
+|---------------|----------------|
+| Retention Period | 90 days default, configurable per org |
+| Data Deletion | User can delete their history on demand |
+| Data Export | GDPR-compliant export (JSON/CSV) |
+| Anonymization | Strip user identity after 90 days, keep aggregates |
+| Code Storage | **Never store full source code** - only findings |
+| Access Control | Users see only their own analyses (unless team mode) |
+
+### 2.7 New Features Enabled by Database
+
+#### For Pilot Users:
+- **Analysis History Dashboard**: View past analyses, compare runs
+- **Trend Charts**: "Your security findings decreased 40% this month"
+- **Bookmarking**: Save important findings for follow-up
+- **Export History**: Download all past analyses as report
+
+#### For Pilot Admins:
+- **Usage Analytics**: Which teams use it most, common finding types
+- **Accuracy Tracking**: Correlate user feedback with findings
+- **Cost Attribution**: Track Azure OpenAI spend by user/team
+- **Compliance Reporting**: Audit trail of all analyses
+
+#### For Post-Pilot (Incremental Analysis):
+- **Smart Re-analysis**: "Only 3 of 50 files changed, analyzing those"
+- **Baseline Comparison**: "12 new issues since last analysis"
+- **CI/CD Integration**: Store baseline, fail build on regression
+- **Project Health Score**: Track codebase health over time
+
+### 2.8 Implementation Checklist (If Including DB in Pilot)
+
+- [ ] Choose database technology (Azure SQL recommended)
+- [ ] Design schema (see 2.3 Option A)
+- [ ] Add Entity Framework Core / Dapper to project
+- [ ] Create migration scripts
+- [ ] Implement repository pattern for data access
+- [ ] Add connection string to Key Vault
+- [ ] Update data handling section in consent form
+- [ ] Define retention policy (90 days recommended)
+- [ ] Add "View History" page to UI
+- [ ] Add "Delete My Data" functionality
+- [ ] Load test with expected data volume
+- [ ] Document backup/restore procedures
+
+### 2.9 Schema Migration Path
+
+Start simple, evolve based on feedback:
+
+```
+Phase 1 (Pilot):
+  AnalysisRun + AnalysisFinding tables only
+
+Phase 2 (Post-Pilot):
+  + FileFingerprint for incremental analysis
+  + Project/Team tables for collaboration
+
+Phase 3 (GA):
+  + CustomRules for user-defined patterns
+  + Integrations for CI/CD webhooks
+```
+
+---
+
+## 3. Security and Compliance Considerations
+
+### 3.1 Data Handling
 
 | Data Type | Handling | Retention |
 |-----------|----------|-----------|
@@ -69,7 +252,7 @@ This document outlines key considerations for transitioning the Legacy Code Anal
 | User Session Data | Standard Blazor Server state | Cleared on disconnect |
 | Logs (Application Insights) | Sanitized via LogSanitizationService | 90-day default |
 
-### 2.2 Code Confidentiality Concerns
+### 3.2 Code Confidentiality Concerns
 
 **Critical Consideration**: Source code is sent to Azure OpenAI for analysis.
 
@@ -82,7 +265,7 @@ This document outlines key considerations for transitioning the Legacy Code Anal
 
 **Recommendation**: Obtain written acknowledgment from pilot users about AI processing of their code.
 
-### 2.3 Access Control
+### 3.3 Access Control
 
 | Level | Recommendation |
 |-------|----------------|
@@ -91,7 +274,7 @@ This document outlines key considerations for transitioning the Legacy Code Anal
 | API Access | API keys or OAuth2 for programmatic access |
 | Audit Trail | All analyses logged with user identity |
 
-### 2.4 Compliance Checklist
+### 3.4 Compliance Checklist
 
 - [ ] Privacy Impact Assessment (PIA) completed
 - [ ] Data Processing Agreement (DPA) with Azure
@@ -103,9 +286,9 @@ This document outlines key considerations for transitioning the Legacy Code Anal
 
 ---
 
-## 3. Pilot Program Structure
+## 4. Pilot Program Structure
 
-### 3.1 Pilot Phases
+### 4.1 Pilot Phases
 
 | Phase | Duration | Users | Scope |
 |-------|----------|-------|-------|
@@ -114,7 +297,7 @@ This document outlines key considerations for transitioning the Legacy Code Anal
 | Extended Pilot | 6-8 weeks | 25-50 | Cross-team validation |
 | GA Decision | Week 12-16 | - | Go/No-Go based on metrics |
 
-### 3.2 Pilot User Selection Criteria
+### 4.2 Pilot User Selection Criteria
 
 Recommended pilot participant profile:
 - Teams with active legacy modernization initiatives
@@ -123,7 +306,7 @@ Recommended pilot participant profile:
 - Users comfortable providing constructive feedback
 - Representation from Security, Architecture, and Dev teams
 
-### 3.3 Success Metrics and KPIs
+### 4.3 Success Metrics and KPIs
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
@@ -136,7 +319,7 @@ Recommended pilot participant profile:
 | **Time to First Analysis** | <5 minutes | Session tracking |
 | **Mean Analysis Time** | <2 min for 10 files | Performance logs |
 
-### 3.4 Feedback Collection Mechanisms
+### 4.4 Feedback Collection Mechanisms
 
 | Method | Frequency | Purpose |
 |--------|-----------|---------|
@@ -148,9 +331,9 @@ Recommended pilot participant profile:
 
 ---
 
-## 4. Known Limitations to Communicate
+## 5. Known Limitations to Communicate
 
-### 4.1 Must Communicate to Pilot Users
+### 5.1 Must Communicate to Pilot Users
 
 | Limitation | Impact | Workaround |
 |------------|--------|------------|
@@ -161,7 +344,7 @@ Recommended pilot participant profile:
 | **No IDE integration** | No VS/VS Code extension yet | Export reports manually |
 | **Single user sessions** | No shared/team analysis views | Export and share reports |
 
-### 4.2 Pilot Scope Exclusions
+### 5.2 Pilot Scope Exclusions
 
 Clearly communicate what is NOT included:
 - Automated code fixes/refactoring
@@ -173,9 +356,9 @@ Clearly communicate what is NOT included:
 
 ---
 
-## 5. Operational Readiness
+## 6. Operational Readiness
 
-### 5.1 Monitoring and Alerting
+### 6.1 Monitoring and Alerting
 
 | Alert | Threshold | Action |
 |-------|-----------|--------|
@@ -185,7 +368,7 @@ Clearly communicate what is NOT included:
 | Memory usage | >80% | Scale up consideration |
 | Health check failures | 2 consecutive | Auto-restart |
 
-### 5.2 Incident Response
+### 6.2 Incident Response
 
 | Severity | Response Time | Example |
 |----------|---------------|---------|
@@ -194,14 +377,14 @@ Clearly communicate what is NOT included:
 | P3 - Medium | 4 hours | Feature degradation |
 | P4 - Low | 24 hours | UI glitches, minor bugs |
 
-### 5.3 Maintenance Windows
+### 6.3 Maintenance Windows
 
 - **Planned maintenance**: Weekends, 2AM-6AM local time
 - **Deployment strategy**: Blue-green with staging slot
 - **Rollback capability**: One-click via deployment slots
 - **Notification**: 48 hours advance notice for planned downtime
 
-### 5.4 Support Model for Pilot
+### 6.4 Support Model for Pilot
 
 | Support Type | Channel | Response SLA |
 |--------------|---------|--------------|
@@ -212,9 +395,9 @@ Clearly communicate what is NOT included:
 
 ---
 
-## 6. Pre-Launch Checklist
+## 7. Pre-Launch Checklist
 
-### 6.1 Technical Readiness
+### 7.1 Technical Readiness
 
 - [ ] Load testing completed (target: 20 concurrent users)
 - [ ] Security scan completed (no critical findings)
@@ -226,7 +409,7 @@ Clearly communicate what is NOT included:
 - [ ] SSL certificates configured and valid
 - [ ] Custom domain configured (if applicable)
 
-### 6.2 Documentation Ready
+### 7.2 Documentation Ready
 
 - [ ] User guide/quick start documentation
 - [ ] FAQ document for common questions
@@ -235,7 +418,7 @@ Clearly communicate what is NOT included:
 - [ ] Incident response runbook
 - [ ] Architecture diagram for stakeholders
 
-### 6.3 Organizational Readiness
+### 7.3 Organizational Readiness
 
 - [ ] Pilot user list finalized and communicated
 - [ ] Stakeholder buy-in confirmed
@@ -247,9 +430,9 @@ Clearly communicate what is NOT included:
 
 ---
 
-## 7. Go/No-Go Decision Framework
+## 8. Go/No-Go Decision Framework
 
-### 7.1 Pilot Exit Criteria
+### 8.1 Pilot Exit Criteria
 
 | Outcome | Criteria | Action |
 |---------|----------|--------|
@@ -258,7 +441,7 @@ Clearly communicate what is NOT included:
 | **Pivot** | Core assumptions invalid, major redesign needed | Reassess approach |
 | **Stop** | Security issues, unacceptable accuracy, no user adoption | Archive and lessons learned |
 
-### 7.2 Decision Points
+### 8.2 Decision Points
 
 | Milestone | Date (Relative) | Decision |
 |-----------|-----------------|----------|
@@ -268,7 +451,7 @@ Clearly communicate what is NOT included:
 
 ---
 
-## 8. Risk Register
+## 9. Risk Register
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
@@ -282,7 +465,7 @@ Clearly communicate what is NOT included:
 
 ---
 
-## 9. Post-Pilot Roadmap (If Successful)
+## 10. Post-Pilot Roadmap (If Successful)
 
 ### Short-term (0-3 months post-pilot)
 - Address top feedback items
@@ -304,7 +487,7 @@ Clearly communicate what is NOT included:
 
 ---
 
-## 10. Contacts and Escalation
+## 11. Contacts and Escalation
 
 | Role | Name | Contact |
 |------|------|---------|
