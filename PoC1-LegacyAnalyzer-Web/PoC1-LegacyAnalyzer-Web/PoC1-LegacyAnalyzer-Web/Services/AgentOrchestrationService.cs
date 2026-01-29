@@ -1,4 +1,4 @@
-﻿using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication;
 using PoC1_LegacyAnalyzer_Web.Models.MultiAgent;
@@ -540,9 +540,10 @@ namespace PoC1_LegacyAnalyzer_Web.Services
 
                 if (recommendations != null)
                 {
-                    // Generate implementation strategy if not already generated
+                    // Generate implementation strategy if not already generated or still using placeholder text
                     if (string.IsNullOrWhiteSpace(recommendations.ImplementationStrategy) ||
-                        recommendations.ImplementationStrategy == "Implementation strategy to be generated.")
+                        recommendations.ImplementationStrategy == "Implementation strategy to be generated." ||
+                        recommendations.ImplementationStrategy == "Implementation strategy based on successful agent recommendations.")
                     {
                         _logger.LogInformation("[Orchestrator] Generating implementation strategy for consolidated recommendations");
                         try
