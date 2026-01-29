@@ -9,14 +9,14 @@
 
 <div class="nav-scrollable @(isCollapsed ? "sidebar-collapsed" : "")">
     <nav class="flex-column">
-        <div class="nav-item px-3">
+        @* <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All" title="Single File Analysis" data-bs-toggle="@(isCollapsed ? "tooltip" : null)" data-bs-placement="right">
                 <i class="bi bi-house @(isCollapsed ? "" : "me-2")" aria-hidden="true"></i>
                 <span class="nav-text @(isCollapsed ? "d-none" : "")">Single File Analysis</span>
             </NavLink>
-        </div>
+        </div> *@
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="multifile" title="Project Analysis" data-bs-toggle="@(isCollapsed ? "tooltip" : null)" data-bs-placement="right">
+            <NavLink class="nav-link" href="multifile" title="AI Analysis" data-bs-toggle="@(isCollapsed ? "tooltip" : null)" data-bs-placement="right">
                 <i class="bi bi-folder @(isCollapsed ? "" : "me-2")" aria-hidden="true"></i>
                 <span class="nav-text @(isCollapsed ? "d-none" : "")">Project Analysis</span>
             </NavLink>
