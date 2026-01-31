@@ -1,4 +1,4 @@
-﻿@page "/multifile"
+@page "/multifile"
 @using Microsoft.Extensions.Logging
 @using PoC1_LegacyAnalyzer_Web.Services
 @using PoC1_LegacyAnalyzer_Web.Models
@@ -9,10 +9,13 @@
 @using System.Text
 @using PoC1_LegacyAnalyzer_Web.Services.Infrastructure
 @using PoC1_LegacyAnalyzer_Web.Services.Reporting
+@using PoC1_LegacyAnalyzer_Web.Services.Persistence
 @inject IMultiFileAnalysisService MultiFileAnalysisService
+@inject IBrowserStorageService BrowserStorageService
 @inject IFileDownloadService FileDownloadService
 @inject IJSRuntime JSRuntime
 @inject IReportService ReportService
+@inject PoC1_LegacyAnalyzer_Web.Services.Reporting.IExecutiveReportService ExecutiveReportService
 @inject IConfiguration Configuration
 @implements IAsyncDisposable
 
@@ -25,6 +28,35 @@
             <p class="lead text-muted">Advanced Legacy System Assessment Platform</p>
         </div>
     </div>
+
+    <!-- History (browser storage) -->
+    @if (browserStorageAvailable && recentSessions.Any())
+    {
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-clock-history"></i> Recent analyses</span>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="LoadRecentSessions">Refresh</button>
+                    </div>
+                    <div class="card-body py-2">
+                        <ul class="list-group list-group-flush">
+                            @foreach (var s in recentSessions.Take(10))
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                                    <span>@(s.UserFriendlyName ?? s.CreatedAt.ToString("g")) — @s.Result.TotalFiles files, @s.Result.OverallRiskLevel</span>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" @onclick="() => LoadSession(s.Id)">Load</button>
+                                        <button class="btn btn-outline-danger" @onclick="() => DeleteSession(s.Id)" title="Remove from history">Delete</button>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 
     <!-- File Upload Card Component -->
     <div class="row section-main">
@@ -229,14 +261,32 @@
     private int TokenCharEstimate;
     private bool businessRulesLoaded = false;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        // Load thresholds from configuration
+        // Load thresholds from configuration (no JS interop)
         ComplexityLowThreshold = int.TryParse(Configuration["BusinessCalculationRules:ComplexityLowThreshold"], out var low) ? low : 30;
         ComplexityMediumThreshold = int.TryParse(Configuration["BusinessCalculationRules:ComplexityMediumThreshold"], out var med) ? med : 50;
         ComplexityHighThreshold = int.TryParse(Configuration["BusinessCalculationRules:ComplexityHighThreshold"], out var high) ? high : 70;
         TokenCharEstimate = int.TryParse(Configuration["BusinessCalculationRules:TokenCharEstimate"], out var token) ? token : 4;
         businessRulesLoaded = true;
+        // Browser storage (JS interop) is loaded in OnAfterRenderAsync to avoid circuit disconnect during prerender.
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            if (await BrowserStorageService.IsAvailableAsync())
+            {
+                var prefs = await BrowserStorageService.GetPreferencesAsync();
+                if (!string.IsNullOrEmpty(prefs.LastAnalysisType))
+                    selectedAnalysisType = prefs.LastAnalysisType;
+                await LoadRecentSessions();
+                StateHasChanged();
+            }
+        }
+        catch { /* ignore */ }
     }
 
     private async Task HandleFileSelection(InputFileChangeEventArgs e)
@@ -477,8 +527,7 @@
 
         try
         {
-            // Generate executive summary report
-            var reportContent = GenerateExecutiveReport();
+            var reportContent = ExecutiveReportService.GenerateExecutiveReport(analysisResult, selectedAnalysisType, ComplexityLowThreshold, ComplexityMediumThreshold, ComplexityHighThreshold);
             var reportBytes = System.Text.Encoding.UTF8.GetBytes(reportContent);
             var fileName = $"executive-analysis-{selectedAnalysisType}-{DateTime.Now:yyyyMMdd-HHmmss}.md";
 
@@ -496,127 +545,7 @@
         }
     }
 
-    private string GenerateExecutiveReport()
-    {
-        if (analysisResult == null) return "";
-
-        var report = new StringBuilder();
-
-        // Executive Summary Header
-        report.AppendLine("# Executive Project Analysis Report");
-        report.AppendLine($"**Analysis Type**: {selectedAnalysisType.ToUpper()} ASSESSMENT");
-        report.AppendLine($"**Report Generated**: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-        report.AppendLine($"**Project Scope**: {analysisResult.TotalFiles} source files analyzed");
-        report.AppendLine();
-
-        // Executive Summary
-        report.AppendLine("## Executive Summary");
-        report.AppendLine($"This comprehensive analysis evaluated {analysisResult.TotalFiles} source files containing {analysisResult.TotalClasses} classes and {analysisResult.TotalMethods} methods. ");
-        report.AppendLine($"The overall project complexity is rated as **{analysisResult.OverallRiskLevel}** with a risk score of {analysisResult.OverallComplexityScore}/100.");
-        report.AppendLine();
-
-        // FIXED: Use real data calculations directly in the report
-        var manualHours = CalculateManualAnalysisHours(analysisResult);
-        var costSavings = manualHours * 125;
-
-        // Strategic Business Context with real data
-        report.AppendLine("## Strategic Business Context");
-        report.AppendLine("**Market Timing**: Legacy modernization market projected 15% annual growth");
-        report.AppendLine("**Competitive Advantage**: AI-powered analysis delivers results 20x faster than manual assessment");
-        report.AppendLine($"**Risk Management**: {analysisResult.OverallRiskLevel} complexity level (score: {analysisResult.OverallComplexityScore}/100) requires immediate attention");
-        report.AppendLine();
-
-        report.AppendLine("## Financial Impact Analysis");
-        report.AppendLine($"**Code Complexity**: {analysisResult.TotalClasses} classes with {analysisResult.TotalMethods} methods analyzed");
-        report.AppendLine($"**Estimated Manual Analysis Time**: {manualHours} hours");
-        report.AppendLine($"**AI Analysis Time**: 3 minutes");
-        report.AppendLine($"**Time Savings**: {manualHours} hours manual vs. 3 minutes AI = {manualHours * 60 - 3} minutes saved");
-        report.AppendLine($"**Cost Avoidance**: ${costSavings:N0} in developer time cost avoidance");
-        report.AppendLine();
-
-        // Competitive Advantage Analysis with real data
-        var speedMultiplier = (manualHours * 60) / 3;
-        report.AppendLine("## Competitive Advantage Analysis");
-        report.AppendLine();
-        report.AppendLine("### Speed Advantage");
-        report.AppendLine($"- **Traditional Approach**: {manualHours} hours manual analysis");
-        report.AppendLine($"- **AI-Enhanced Approach**: 3 minutes automated analysis");
-        report.AppendLine($"- **Speed Multiplier**: {speedMultiplier:F0}x faster time-to-insight");
-        report.AppendLine();
-        report.AppendLine("### Cost Advantage");
-        report.AppendLine($"- **Traditional Manual Review**: ${costSavings:N0} ({manualHours} hours @ $125/hour)");
-        report.AppendLine($"- **AI-Enhanced Analysis**: $5 per comprehensive assessment");
-        report.AppendLine($"- **Cost Reduction**: ${costSavings - 5:N0} savings per analysis");
-        report.AppendLine();
-        report.AppendLine("### Project Metrics");
-        report.AppendLine($"- **Code Complexity**: {analysisResult.OverallComplexityScore}/100 complexity score");
-        report.AppendLine($"- **Risk Assessment**: {analysisResult.OverallRiskLevel} risk level based on actual code structure");
-        report.AppendLine($"- **Analysis Scope**: {analysisResult.TotalClasses} classes, {analysisResult.TotalMethods} methods, {analysisResult.TotalProperties} properties");
-        report.AppendLine();
-
-        // Key Metrics
-        report.AppendLine("## Key Performance Indicators");
-        report.AppendLine("| Metric | Value | Assessment |");
-        report.AppendLine("|--------|--------|------------|");
-        report.AppendLine($"| Source Files | {analysisResult.TotalFiles} | {MultiFileHelpers.GetFileCountAssessment(analysisResult.TotalFiles)} |");
-        report.AppendLine($"| Code Classes | {analysisResult.TotalClasses} | {MultiFileHelpers.GetClassCountAssessment(analysisResult.TotalClasses)} |");
-        report.AppendLine($"| Methods | {analysisResult.TotalMethods} | {MultiFileHelpers.GetMethodCountAssessment(analysisResult.TotalMethods)} |");
-        report.AppendLine($"| Complexity Score | {analysisResult.OverallComplexityScore}/100 | {analysisResult.OverallRiskLevel} Risk Level |");
-        report.AppendLine();
-
-        // Risk Assessment
-        var riskStats = MultiFileHelpers.GetRiskStatistics(analysisResult);
-        report.AppendLine("## Risk Assessment");
-        report.AppendLine($"- **Low Risk Files**: {riskStats.low} files ({riskStats.lowPercent:F1}%)");
-        report.AppendLine($"- **Medium Risk Files**: {riskStats.medium} files ({riskStats.mediumPercent:F1}%)");
-        report.AppendLine($"- **High Risk Files**: {riskStats.high} files ({riskStats.highPercent:F1}%)");
-        report.AppendLine();
-
-        // Strategic Recommendations
-        if (analysisResult.KeyRecommendations.Any())
-        {
-            report.AppendLine("## Strategic Recommendations");
-            foreach (var recommendation in analysisResult.KeyRecommendations)
-            {
-                report.AppendLine($"- {recommendation}");
-            }
-            report.AppendLine();
-        }
-
-        // Business Impact
-        report.AppendLine("## Business Impact Assessment");
-        report.AppendLine($"**Migration Timeline**: {MultiFileHelpers.GetMigrationTimeline(analysisResult.OverallComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold, ComplexityHighThreshold)}");
-        report.AppendLine($"**Resource Requirements**: {MultiFileHelpers.GetResourceRequirements(analysisResult.OverallComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold, ComplexityHighThreshold)}");
-        report.AppendLine($"**Financial Impact**: {MultiFileHelpers.GetFinancialImpact(analysisResult.OverallComplexityScore, ComplexityLowThreshold, ComplexityMediumThreshold, ComplexityHighThreshold)}");
-        report.AppendLine();
-
-        // Technical Details
-        report.AppendLine("## Detailed File Analysis");
-        foreach (var file in analysisResult.FileResults.OrderByDescending(f => f.ComplexityScore).Take(10))
-        {
-            report.AppendLine($"### {file.FileName}");
-            report.AppendLine($"- **Complexity Score**: {file.ComplexityScore}/100");
-            report.AppendLine($"- **Classes**: {file.StaticAnalysis.ClassCount}");
-            report.AppendLine($"- **Methods**: {file.StaticAnalysis.MethodCount}");
-            report.AppendLine($"- **Properties**: {file.StaticAnalysis.PropertyCount}");
-            if (!string.IsNullOrEmpty(file.AIInsight))
-            {
-                report.AppendLine($"- **Assessment**: {file.AIInsight}");
-            }
-            report.AppendLine();
-        }
-
-        // Next Steps
-        report.AppendLine("## Recommended Next Steps");
-        report.AppendLine("1. **Immediate Actions**: Address high-complexity files identified in this analysis");
-        report.AppendLine("2. **Resource Planning**: Allocate development resources based on complexity assessment");
-        report.AppendLine("3. **Timeline Development**: Create detailed project timeline using risk assessment data");
-        report.AppendLine("4. **Stakeholder Communication**: Present findings to technical and business stakeholders");
-        report.AppendLine("5. **Monitoring Strategy**: Establish metrics tracking for modernization progress");
-
-        return report.ToString();
-    }
-
+    // NOTE: GenerateExecutiveReport and CalculateManualAnalysisHours moved to IExecutiveReportService / ExecutiveReportService.
     // NOTE: GetRiskStatistics, FormatFileSize, GetRiskTextColorClass, GetRiskDescription
     // have been moved to MultiFileHelpers.cs
 
@@ -692,6 +621,17 @@
             statusMessage += $" Project Size: {businessMetrics.ProjectSize}.";
 
             await GenerateCharts();
+
+            if (browserStorageAvailable)
+            {
+                try
+                {
+                    await BrowserStorageService.SaveSessionAsync(analysisResult, businessMetrics, null, analysisResult.OverallRiskLevel, selectedAnalysisType);
+                    await BrowserStorageService.SavePreferencesAsync(new UserPreferences { LastAnalysisType = selectedAnalysisType, ClientPersistenceEnabled = true });
+                    await LoadRecentSessions();
+                }
+                catch { /* ignore persistence errors */ }
+            }
         }
         catch (Exception ex)
         {
@@ -703,6 +643,55 @@
             analysisProgress = null;
             StateHasChanged();
         }
+    }
+
+    private bool browserStorageAvailable;
+    private IReadOnlyList<SavedAnalysisSession> recentSessions = Array.Empty<SavedAnalysisSession>();
+
+    private async Task LoadRecentSessions()
+    {
+        try
+        {
+            browserStorageAvailable = await BrowserStorageService.IsAvailableAsync();
+            if (browserStorageAvailable)
+            {
+                await BrowserStorageService.PurgeExpiredSessionsAsync();
+                recentSessions = await BrowserStorageService.GetRecentSessionsAsync(20);
+            }
+        }
+        catch { browserStorageAvailable = false; recentSessions = Array.Empty<SavedAnalysisSession>(); }
+        StateHasChanged();
+    }
+
+    private async Task DeleteSession(string sessionId)
+    {
+        try
+        {
+            await BrowserStorageService.DeleteSessionAsync(sessionId);
+            await LoadRecentSessions();
+        }
+        catch { /* ignore */ }
+    }
+
+    private async Task LoadSession(string sessionId)
+    {
+        try
+        {
+            var session = await BrowserStorageService.GetSessionByIdAsync(sessionId);
+            if (session != null)
+            {
+                analysisResult = session.Result;
+                businessMetrics = session.BusinessMetrics;
+                selectedAnalysisType = session.AnalysisType;
+                statusMessage = $"Loaded session from {session.CreatedAt:g}.";
+                await GenerateCharts();
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Could not load session: {ex.Message}";
+        }
+        StateHasChanged();
     }
 
     private async Task<BusinessMetrics> CalculateBusinessMetricsAsync(MultiFileAnalysisResult result)
@@ -742,15 +731,7 @@
         });
     }
 
-    private int CalculateManualAnalysisHours(MultiFileAnalysisResult result)
-    {
-        var baseHours = result.TotalClasses * 2; // 2 hours per class
-        var methodHours = result.TotalMethods * 0.25; // 15 minutes per method
-        var dependencyHours = result.TotalUsingStatements * 0.5; // 30 minutes per dependency
-
-        return (int)(baseHours + methodHours + dependencyHours);
-    }
-
+    // NOTE: CalculateManualAnalysisHours moved to IExecutiveReportService.
     // NOTE: GetFileCountAssessment, GetClassCountAssessment, GetMethodCountAssessment,
     // GetMigrationTimeline, GetResourceRequirements, GetFinancialImpact have been
     // moved to MultiFileHelpers.cs - report generation now uses those helpers directly

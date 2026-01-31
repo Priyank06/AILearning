@@ -50,10 +50,13 @@
                     OnStatusChanged="@OnStatusChanged" />
             </div>
 
-            <!-- Row 3: Action button -->
+            <!-- Row 3: Action button. Use parent's analyzing state when provided so progress bar hides when parent sets isAnalyzing=false -->
+            @{
+                var showProgress = IsAnalyzingFromParent ?? isAnalyzing;
+            }
             <div class="d-grid mb-2">
-                <button class="btn btn-success btn-lg" @onclick="StartAnalysis" disabled="@(isAnalyzing || !IsConfigurationValid())">
-                    @if (isAnalyzing)
+                <button class="btn btn-success btn-lg" @onclick="StartAnalysis" disabled="@(showProgress || !IsConfigurationValid())">
+                    @if (showProgress)
                     {
                         <span class="spinner-border spinner-border-sm me-2"></span>
                         <text>Team Analyzing...</text>
@@ -66,11 +69,11 @@
             </div>
 
             <AnalysisProgressTracker 
-                IsAnalyzing="@isAnalyzing"
+                IsAnalyzing="@showProgress"
                 CurrentPhase="@currentPhase"
                 TotalPhases="6" />
 
-            @if (!string.IsNullOrEmpty(statusMessage) && !isAnalyzing)
+            @if (!string.IsNullOrEmpty(statusMessage) && !showProgress)
             {
                 <div class="alert alert-info">
                     <small><i class="bi bi-info-circle"></i> @statusMessage</small>
@@ -103,6 +106,7 @@
     private List<string> selectedAgents = new();
     private bool isConfigExpanded = true;
 
+    [Parameter] public bool? IsAnalyzingFromParent { get; set; }
     [Parameter] public int MaxFiles { get; set; } = 50;
     [Parameter] public int MaxFileSizeMB { get; set; } = 10;
     [Parameter] public EventCallback<AnalysisConfiguration> OnAnalysisStarted { get; set; }

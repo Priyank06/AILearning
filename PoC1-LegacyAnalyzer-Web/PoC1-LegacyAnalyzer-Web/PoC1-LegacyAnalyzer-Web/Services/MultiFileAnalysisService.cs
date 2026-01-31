@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Options;
 using PoC1_LegacyAnalyzer_Web.Models;
 using PoC1_LegacyAnalyzer_Web.Services.AI;
@@ -85,99 +85,27 @@ namespace PoC1_LegacyAnalyzer_Web.Services
             if (_batchConfig.Enabled && filesToProcess.Count > 1)
             {
                 _logger.LogInformation("Using optimized batch processing: {FileCount} files will be processed in batches", filesToProcess.Count);
-                
                 var analysisProgress = new AnalysisProgress
                 {
                     TotalFiles = filesToProcess.Count,
                     CurrentAnalysisType = analysisType,
                     StartTime = DateTime.Now
                 };
-
                 fileResults = await _batchOrchestrator.AnalyzeFilesInBatchesAsync(filesToProcess, analysisType, analysisProgress, null);
-                
-                // Build dependency graph for C# files after analysis
-                if (_crossFileAnalyzer != null && _dependencyGraphService != null)
-                {
-                    try
-                    {
-                        // Process all files (not just C#) for dependency analysis
-                        var filesForDependencyAnalysis = filesToProcess.ToList();
-                        if (filesForDependencyAnalysis.Count > 1)
-                        {
-                            _logger.LogInformation("Building dependency graph for {FileCount} files", filesForDependencyAnalysis.Count);
-                            var dependencyGraph = await _crossFileAnalyzer.BuildDependencyGraphAsync(filesForDependencyAnalysis);
-                            var analysisId = Guid.NewGuid().ToString();
-                            await _dependencyGraphService.StoreDependencyGraphAsync(analysisId, dependencyGraph);
-                            
-                            // Enrich file results with dependency impact
-                            await EnrichResultsWithDependencyImpact(fileResults, dependencyGraph, analysisId);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to build dependency graph, continuing without dependency analysis");
-                    }
-                }
             }
             else
             {
-                // Fallback to individual processing only if batch is disabled or single file
-                _logger.LogInformation("Using individual file processing (batch disabled or single file)");
-                foreach (var file in filesToProcess)
-                {
-                    try
-                    {
-                        var fileResult = await AnalyzeIndividualFileAsync(file, analysisType);
-                        fileResults.Add(fileResult);
-
-                        // Aggregate project metrics
-                        result.TotalClasses += fileResult.StaticAnalysis.ClassCount;
-                        result.TotalMethods += fileResult.StaticAnalysis.MethodCount;
-                        result.TotalProperties += fileResult.StaticAnalysis.PropertyCount;
-                        result.TotalUsingStatements += fileResult.StaticAnalysis.UsingCount;
-
-                        _logger.LogDebug("Successfully analyzed file: {FileName}", file.Name);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Analysis failed for file: {FileName}", file.Name);
-
-                        fileResults.Add(new FileAnalysisResult
-                        {
-                            FileName = file.Name,
-                            FileSize = file.Size,
-                            Status = _defaultValues.Status.AnalysisFailed,
-                            ErrorMessage = $"Processing error: {ex.Message}",
-                            StaticAnalysis = new CodeAnalysisResult()
-                        });
-                    }
-                }
+                fileResults = await ProcessFilesIndividuallyAsync(filesToProcess, analysisType, progress: null);
             }
 
-            // Aggregate metrics from all file results
-            foreach (var fileResult in fileResults)
-            {
-                result.TotalClasses += fileResult.StaticAnalysis.ClassCount;
-                result.TotalMethods += fileResult.StaticAnalysis.MethodCount;
-                result.TotalProperties += fileResult.StaticAnalysis.PropertyCount;
-                result.TotalUsingStatements += fileResult.StaticAnalysis.UsingCount;
-            }
+            await TryEnrichWithDependencyImpactAsync(filesToProcess, fileResults);
+            ApplyFinalResultFromFileResults(result, fileResults, analysisType);
 
-            result.FileResults = fileResults;
-            result.OverallComplexityScore = _complexityCalculator.CalculateProjectComplexity(result);
-            result.OverallRiskLevel = _riskAssessment.DetermineRiskLevel(result.OverallComplexityScore);
-            result.KeyRecommendations = _recommendationGenerator.GenerateStrategicRecommendations(result, analysisType);
-            result.OverallAssessment = _recommendationGenerator.GenerateExecutiveAssessment(result, analysisType);
-            result.ProjectSummary = _recommendationGenerator.GenerateProjectSummary(result);
-
-            // Calculate API call reduction for logging
-            string apiCallReduction = _batchConfig.Enabled && filesToProcess.Count > 1 
-                ? "Batch processing enabled" 
+            string apiCallReduction = _batchConfig.Enabled && filesToProcess.Count > 1
+                ? "Batch processing enabled"
                 : "No reduction (individual processing)";
-
             _logger.LogInformation("Analysis completed for {FileCount} files. Overall complexity: {ComplexityScore}, Risk level: {RiskLevel}. API call optimization: {Optimization}",
                 result.TotalFiles, result.OverallComplexityScore, result.OverallRiskLevel, apiCallReduction);
-
             return result;
         }
 
@@ -259,86 +187,109 @@ namespace PoC1_LegacyAnalyzer_Web.Services
         public async Task<MultiFileAnalysisResult> AnalyzeMultipleFilesWithProgressAsync(List<IBrowserFile> files, string analysisType, IProgress<AnalysisProgress> progress = null)
         {
             _logger.LogInformation("Starting optimized batch analysis for {FileCount} files", files.Count);
-
-            var result = new MultiFileAnalysisResult
-            {
-                TotalFiles = files.Count
-            };
-
-            var fileResults = new List<FileAnalysisResult>();
+            var result = new MultiFileAnalysisResult { TotalFiles = files.Count };
+            var filesToProcess = files.ToList();
             var analysisProgress = new AnalysisProgress
             {
                 TotalFiles = files.Count,
                 CurrentAnalysisType = analysisType,
                 StartTime = DateTime.Now
             };
+            List<FileAnalysisResult> fileResults;
 
-            // NOTE: File count limit removed - batching handles any number of files
-            var filesToProcess = files.ToList();
-
-            // Use batch processing if enabled
             if (_batchConfig.Enabled && filesToProcess.Count > 1)
             {
                 _logger.LogInformation("Using optimized batch processing: {FileCount} files will be processed in batches", filesToProcess.Count);
                 analysisProgress.Status = $"Preparing {filesToProcess.Count} files for batch analysis...";
                 progress?.Report(analysisProgress);
-                
                 fileResults = await _batchOrchestrator.AnalyzeFilesInBatchesAsync(filesToProcess, analysisType, analysisProgress, progress);
             }
             else
             {
-                // Fallback to individual processing
-                _logger.LogInformation("Using individual file processing (batch disabled or single file)");
-                for (int i = 0; i < filesToProcess.Count; i++)
-                {
-                    var file = filesToProcess[i];
-
-                    analysisProgress.CurrentFile = file.Name;
-                    analysisProgress.CompletedFiles = i;
-                    analysisProgress.Status = $"Analyzing file {i + 1}/{filesToProcess.Count}: {file.Name}...";
-                    progress?.Report(analysisProgress);
-
-                    await Task.Delay(200);
-
-                    try
-                    {
-                        var fileResult = await AnalyzeIndividualFileAsync(file, analysisType);
-                        fileResults.Add(fileResult);
-
-                        result.TotalClasses += fileResult.StaticAnalysis.ClassCount;
-                        result.TotalMethods += fileResult.StaticAnalysis.MethodCount;
-                        result.TotalProperties += fileResult.StaticAnalysis.PropertyCount;
-                        result.TotalUsingStatements += fileResult.StaticAnalysis.UsingCount;
-
-                        analysisProgress.CompletedFiles = i + 1;
-                        progress?.Report(analysisProgress);
-
-                        _logger.LogDebug("Completed analysis for: {FileName}", file.Name);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Analysis failed for file: {FileName}", file.Name);
-                        fileResults.Add(new FileAnalysisResult
-                        {
-                            FileName = file.Name,
-                            FileSize = file.Size,
-                            Status = _defaultValues.Status.AnalysisFailed,
-                            ErrorMessage = $"Processing error: {ex.Message}",
-                            StaticAnalysis = new CodeAnalysisResult()
-                        });
-                        
-                        analysisProgress.CompletedFiles = i + 1;
-                        progress?.Report(analysisProgress);
-                    }
-                }
+                fileResults = await ProcessFilesIndividuallyAsync(filesToProcess, analysisType, progress);
             }
 
-            // Final progress update
             analysisProgress.CompletedFiles = fileResults.Count;
             analysisProgress.Status = _defaultValues.Status.AnalysisCompletedGeneratingInsights;
             progress?.Report(analysisProgress);
 
-            // Aggregate metrics from all file results
+            await TryEnrichWithDependencyImpactAsync(filesToProcess, fileResults);
+            ApplyFinalResultFromFileResults(result, fileResults, analysisType);
+
+            _logger.LogInformation("Analysis completed for {FileCount} files. API calls optimized: {BatchMode}",
+                result.TotalFiles, _batchConfig.Enabled ? "Yes" : "No");
+            return result;
+        }
+
+        /// <summary>Processes files one-by-one and returns results; optionally reports progress. No aggregation into result.</summary>
+        private async Task<List<FileAnalysisResult>> ProcessFilesIndividuallyAsync(
+            List<IBrowserFile> filesToProcess,
+            string analysisType,
+            IProgress<AnalysisProgress> progress)
+        {
+            _logger.LogInformation("Using individual file processing (batch disabled or single file)");
+            var fileResults = new List<FileAnalysisResult>();
+            var analysisProgress = new AnalysisProgress
+            {
+                TotalFiles = filesToProcess.Count,
+                CurrentAnalysisType = analysisType,
+                StartTime = DateTime.Now
+            };
+            for (int i = 0; i < filesToProcess.Count; i++)
+            {
+                var file = filesToProcess[i];
+                analysisProgress.CurrentFile = file.Name;
+                analysisProgress.CompletedFiles = i;
+                analysisProgress.Status = $"Analyzing file {i + 1}/{filesToProcess.Count}: {file.Name}...";
+                progress?.Report(analysisProgress);
+                await Task.Delay(200);
+
+                try
+                {
+                    var fileResult = await AnalyzeIndividualFileAsync(file, analysisType);
+                    fileResults.Add(fileResult);
+                    _logger.LogDebug("Completed analysis for: {FileName}", file.Name);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Analysis failed for file: {FileName}", file.Name);
+                    fileResults.Add(new FileAnalysisResult
+                    {
+                        FileName = file.Name,
+                        FileSize = file.Size,
+                        Status = _defaultValues.Status.AnalysisFailed,
+                        ErrorMessage = $"Processing error: {ex.Message}",
+                        StaticAnalysis = new CodeAnalysisResult()
+                    });
+                }
+                analysisProgress.CompletedFiles = i + 1;
+                progress?.Report(analysisProgress);
+            }
+            return fileResults;
+        }
+
+        /// <summary>Builds dependency graph and enriches file results when cross-file analyzer is available. No-op on failure.</summary>
+        private async Task TryEnrichWithDependencyImpactAsync(List<IBrowserFile> filesToProcess, List<FileAnalysisResult> fileResults)
+        {
+            if (_crossFileAnalyzer == null || _dependencyGraphService == null || filesToProcess.Count <= 1)
+                return;
+            try
+            {
+                _logger.LogInformation("Building dependency graph for {FileCount} files", filesToProcess.Count);
+                var dependencyGraph = await _crossFileAnalyzer.BuildDependencyGraphAsync(filesToProcess.ToList());
+                var analysisId = Guid.NewGuid().ToString();
+                await _dependencyGraphService.StoreDependencyGraphAsync(analysisId, dependencyGraph);
+                await EnrichResultsWithDependencyImpact(fileResults, dependencyGraph, analysisId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to build dependency graph, continuing without dependency analysis");
+            }
+        }
+
+        /// <summary>Aggregates file results into result and sets complexity, risk, recommendations, and summary.</summary>
+        private void ApplyFinalResultFromFileResults(MultiFileAnalysisResult result, List<FileAnalysisResult> fileResults, string analysisType)
+        {
             foreach (var fileResult in fileResults)
             {
                 result.TotalClasses += fileResult.StaticAnalysis.ClassCount;
@@ -346,17 +297,12 @@ namespace PoC1_LegacyAnalyzer_Web.Services
                 result.TotalProperties += fileResult.StaticAnalysis.PropertyCount;
                 result.TotalUsingStatements += fileResult.StaticAnalysis.UsingCount;
             }
-
             result.FileResults = fileResults;
             result.OverallComplexityScore = _complexityCalculator.CalculateProjectComplexity(result);
             result.OverallRiskLevel = _riskAssessment.DetermineRiskLevel(result.OverallComplexityScore);
             result.KeyRecommendations = _recommendationGenerator.GenerateStrategicRecommendations(result, analysisType);
             result.OverallAssessment = _recommendationGenerator.GenerateExecutiveAssessment(result, analysisType);
             result.ProjectSummary = _recommendationGenerator.GenerateProjectSummary(result);
-
-            _logger.LogInformation("Analysis completed for {FileCount} files. API calls optimized: {BatchMode}", 
-                result.TotalFiles, _batchConfig.Enabled ? "Yes" : "No");
-            return result;
         }
 
         public BusinessMetrics CalculateBusinessMetrics(MultiFileAnalysisResult result)

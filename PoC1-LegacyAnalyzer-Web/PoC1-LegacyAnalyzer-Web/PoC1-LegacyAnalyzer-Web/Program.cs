@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using PoC1_LegacyAnalyzer_Web.Services;
 using PoC1_LegacyAnalyzer_Web.Services.Infrastructure;
+using PoC1_LegacyAnalyzer_Web.Services.Persistence;
 using PoC1_LegacyAnalyzer_Web.Middleware;
 using PoC1_LegacyAnalyzer_Web.Extensions;
 using PoC1_LegacyAnalyzer_Web.HealthChecks;
@@ -103,6 +104,8 @@ public class Program
         builder.Services.Configure<CostTrackingConfiguration>(builder.Configuration.GetSection("CostTracking"));
         builder.Services.Configure<TracingConfiguration>(builder.Configuration.GetSection("Tracing"));
         builder.Services.Configure<PoC1_LegacyAnalyzer_Web.Services.Caching.AgentCacheConfiguration>(builder.Configuration.GetSection("AgentCache"));
+        builder.Services.Configure<ClientPersistenceConfiguration>(builder.Configuration.GetSection("ClientPersistence"));
+        builder.Services.Configure<ClientCryptoConfiguration>(builder.Configuration.GetSection("ClientCrypto"));
         // Configure with validation - catch binding errors early
         try
         {
@@ -181,6 +184,7 @@ public class Program
         builder.Services.AddMultiAgentOrchestration(builder.Configuration);
         builder.Services.AddSemanticKernel(builder.Configuration);
         builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.Reporting.ITeamReportService, PoC1_LegacyAnalyzer_Web.Services.Reporting.TeamReportService>();
+        builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.Reporting.IExecutiveReportService, PoC1_LegacyAnalyzer_Web.Services.Reporting.ExecutiveReportService>();
         
         // Register rate limiting service
         builder.Services.AddSingleton<PoC1_LegacyAnalyzer_Web.Services.Infrastructure.IRateLimitService, PoC1_LegacyAnalyzer_Web.Services.Infrastructure.RateLimitService>();
@@ -212,6 +216,15 @@ public class Program
         // Register determinism measurement service
         builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.Determinism.IDeterminismMeasurementService,
             PoC1_LegacyAnalyzer_Web.Services.Determinism.DeterminismMeasurementService>();
+
+        // Register client persistence (browser SQLite + encryption); service no-ops when ClientPersistence:Enabled is false
+        builder.Services.AddScoped<ISecureClientInterop, SecureClientInterop>();
+        builder.Services.AddScoped<IEncryptionKeyStrategy, GeneratedPerBrowserKeyStrategy>();
+        builder.Services.AddScoped<IBrowserAnalysisRepository, BrowserAnalysisRepository>();
+        builder.Services.AddScoped<IBrowserAgentSessionRepository, BrowserAgentSessionRepository>();
+        builder.Services.AddScoped<IBrowserPreferencesRepository, BrowserPreferencesRepository>();
+        builder.Services.AddScoped<IBrowserStorageService, BrowserStorageService>();
+        builder.Services.AddScoped<PoC1_LegacyAnalyzer_Web.Services.MultiAgent.ILastTeamResultStore, PoC1_LegacyAnalyzer_Web.Services.MultiAgent.LastTeamResultStore>();
 
         // Create logger using LoggerFactory with Application Insights support
         using var loggerFactory = LoggerFactory.Create(logging =>

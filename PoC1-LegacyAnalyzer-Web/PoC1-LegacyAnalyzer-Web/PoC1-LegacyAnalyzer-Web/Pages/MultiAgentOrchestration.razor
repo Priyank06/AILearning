@@ -1,4 +1,4 @@
-﻿@page "/multiagent"
+@page "/multiagent"
 @using PoC1_LegacyAnalyzer_Web.Models.AgentCommunication
 @using PoC1_LegacyAnalyzer_Web.Models.MultiAgent
 @using PoC1_LegacyAnalyzer_Web.Models
@@ -13,7 +13,11 @@
 @using Microsoft.AspNetCore.Components.Web
 @using PoC1_LegacyAnalyzer_Web.Services.Infrastructure
 @using PoC1_LegacyAnalyzer_Web.Services.Reporting
+@using PoC1_LegacyAnalyzer_Web.Services.Persistence
+@using PoC1_LegacyAnalyzer_Web.Services.MultiAgent
 @inject IAgentOrchestrationService OrchestrationService
+@inject IBrowserStorageService BrowserStorageService
+@inject ILastTeamResultStore LastResultStore
 @inject ICodeAnalysisService CodeAnalysisService
 @inject IFilePreProcessingService FilePreProcessingService
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnvironment
@@ -21,6 +25,7 @@
 @inject IFileDownloadService FileDownloadService
 @inject ITeamReportService TeamReportService
 @inject Microsoft.Extensions.Options.IOptions<PoC1_LegacyAnalyzer_Web.Models.FilePreProcessingOptions> PreProcessingOptions
+@implements IDisposable
 
 <PageTitle>Multi-Agent Team Analysis</PageTitle>
 
@@ -34,65 +39,115 @@
         </div>
     </div>
 
+    <!-- Recent agent analyses (browser storage) -->
+    @if (agentStorageAvailable && recentAgentSessions.Any())
+    {
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-clock-history"></i> Recent agent analyses</span>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="LoadRecentAgentSessions">Refresh</button>
+                    </div>
+                    <div class="card-body py-2">
+                        <ul class="list-group list-group-flush">
+                            @foreach (var s in recentAgentSessions.Take(10))
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                                    <span>@(s.UserFriendlyName ?? s.CreatedAt.ToString("g")) — @s.BusinessObjective, @s.SelectedAgents.Count agents</span>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" @onclick="() => LoadAgentSession(s.Id)">Load</button>
+                                        <button class="btn btn-outline-danger" @onclick="() => DeleteAgentSession(s.Id)" title="Remove from history">Delete</button>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
     <!-- Single-column content layout -->
     <div class="row gy-4">
         <!-- Configuration Section (full width) -->
         <div class="col-12">
             <TeamConfigurationPanel @ref="configPanel"
+                IsAnalyzingFromParent="@isAnalyzing"
                 MaxFiles="10000"
                 MaxFileSizeMB="10"
                 OnAnalysisStarted="HandleAnalysisStarted"
                 OnPhaseChanged="HandlePhaseChanged" />
         </div>
 
+        <!-- Fallback: if analysis completed but UI didn't update (e.g. circuit dropped), user can load results from server -->
+        @if (isAnalyzing)
+        {
+            <div class="col-12">
+                <div class="alert alert-warning py-2 mb-0">
+                    <small><i class="bi bi-exclamation-triangle"></i> If analysis completed but results didn't appear, <a href="#" @onclick="TryLoadLastCompletedResult" @onclick:preventDefault>click here to load results</a>.</small>
+                </div>
+            </div>
+        }
+
         <!-- Results Section with right sidebar -->
         @if (teamResult is not null)
         {
-            <div class="col-12">
-                <div class="row">
-                    <!-- Main Content -->
-                    <div class="col-12 col-xl-9">
-                        <AnalysisResultsContainer 
-                            TeamResult="@teamResult"
-                            BusinessObjective="@lastBusinessObjective"
-                            CustomObjective="@lastCustomObjective"
-                            SelectedAgents="@lastSelectedAgents"
-                            ProjectSummary="@projectSummary"
-                            EstimatedInputTokens="@lastAiInputCharCount"
-                            IsAnalyzing="@isAnalyzing"
-                            OnDownloadReport="@DownloadTeamReport" />
+            <div id="multiagent-results" class="col-12">
+                @if (showFullResults)
+                {
+                    <div class="row">
+                        <!-- Main Content -->
+                        <div class="col-12 col-xl-9">
+                            <AnalysisResultsContainer 
+                                TeamResult="@teamResult"
+                                BusinessObjective="@lastBusinessObjective"
+                                CustomObjective="@lastCustomObjective"
+                                SelectedAgents="@lastSelectedAgents"
+                                ProjectSummary="@projectSummary"
+                                EstimatedInputTokens="@lastAiInputCharCount"
+                                IsAnalyzing="@isAnalyzing"
+                                OnDownloadReport="@DownloadTeamReport" />
+                        </div>
+                        <!-- Right Sidebar (desktop) -->
+                        <div class="col-xl-3 d-none d-xl-block position-relative quick-nav-desktop">
+                            <QuickNavigationSidebar 
+                                TeamResult="@teamResult"
+                                OnDownloadReport="@DownloadTeamReport" />
+                        </div>
                     </div>
-                    <!-- Right Sidebar (desktop) -->
-                    <div class="col-xl-3 d-none d-xl-block position-relative quick-nav-desktop">
-                        <QuickNavigationSidebar 
-                            TeamResult="@teamResult"
-                            OnDownloadReport="@DownloadTeamReport" />
+
+                    <!-- Mobile Navigation Toggle (only visible on small screens) -->
+                    <div class="d-xl-none position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
+                        <button class="btn btn-primary rounded-circle shadow-lg" 
+                                style="width: 56px; height: 56px;"
+                                @onclick="ToggleMobileNav">
+                            <i class="bi bi-list" style="font-size: 1.5rem;"></i>
+                        </button>
                     </div>
-                </div>
-            </div>
 
-            <!-- Mobile Navigation Toggle (only visible on small screens) -->
-            <div class="d-xl-none position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
-                <button class="btn btn-primary rounded-circle shadow-lg" 
-                        style="width: 56px; height: 56px;"
-                        @onclick="ToggleMobileNav">
-                    <i class="bi bi-list" style="font-size: 1.5rem;"></i>
-                </button>
-            </div>
-
-            <!-- Mobile Navigation Panel -->
-            <div class="mobile-nav-overlay @(showMobileNav ? "show" : "")" @onclick="ToggleMobileNav"></div>
-            <div class="mobile-nav-panel @(showMobileNav ? "show" : "")">
-                <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
-                    <h6 class="mb-0">Quick Navigation</h6>
-                    <button class="btn-close" @onclick="ToggleMobileNav"></button>
-                </div>
-                <div class="p-2">
-                    <QuickNavigationSidebar 
-                        TeamResult="@teamResult"
-                        OnDownloadReport="@DownloadTeamReport"
-                        OnNavigate="@(() => showMobileNav = false)" />
-                </div>
+                    <!-- Mobile Navigation Panel -->
+                    <div class="mobile-nav-overlay @(showMobileNav ? "show" : "")" @onclick="ToggleMobileNav"></div>
+                    <div class="mobile-nav-panel @(showMobileNav ? "show" : "")">
+                        <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
+                            <h6 class="mb-0">Quick Navigation</h6>
+                            <button class="btn-close" @onclick="ToggleMobileNav"></button>
+                        </div>
+                        <div class="p-2">
+                            <QuickNavigationSidebar 
+                                TeamResult="@teamResult"
+                                OnDownloadReport="@DownloadTeamReport"
+                                OnNavigate="@(() => showMobileNav = false)" />
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-success mb-0">
+                        <h5 class="alert-heading"><i class="bi bi-check-circle"></i> Analysis complete</h5>
+                        <p class="mb-0">Loading results...</p>
+                    </div>
+                }
             </div>
         }
         else if (!isAnalyzing)
@@ -115,6 +170,7 @@
     private PoC1_LegacyAnalyzer_Web.Models.AgentCommunication.TeamAnalysisResult? teamResult;
     private PoC1_LegacyAnalyzer_Web.Services.ProjectSummary? projectSummary;
     private bool isAnalyzing = false;
+    private bool showFullResults = false;
     private int currentPhase = 0;
     private int lastAiInputCharCount = 0;
     private bool showMobileNav = false;
@@ -124,6 +180,10 @@
     private string lastBusinessObjective = "";
     private string? lastCustomObjective;
     private List<string> lastSelectedAgents = new();
+
+    // Browser persistence for agent sessions
+    private bool agentStorageAvailable;
+    private IReadOnlyList<SavedAgentSession> recentAgentSessions = Array.Empty<SavedAgentSession>();
 
     protected override void OnInitialized()
     {
@@ -142,6 +202,21 @@
         base.OnInitialized();
     }
 
+    protected override async Task OnInitializedAsync()
+    {
+        // Do not call LoadRecentAgentSessions here: it uses JS interop (browser storage).
+        // During ServerPrerendered, JS is not available and can disconnect the circuit.
+        // Load after first client render in OnAfterRenderAsync.
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadRecentAgentSessions();
+        }
+    }
+
     private async Task HandleAnalysisStarted(AnalysisConfiguration config)
     {
         Console.WriteLine($"[MultiAgentOrchestration] HandleAnalysisStarted called with {config.Files.Count} files, {config.SelectedAgents.Count} agents");
@@ -155,7 +230,8 @@
 
             isAnalyzing = true;
             currentPhase = 0;
-            
+            StartPollingForCompletedResult();
+
             // Store configuration for results display
             lastBusinessObjective = config.BusinessObjective;
             lastCustomObjective = config.CustomObjective;
@@ -187,9 +263,36 @@
                 CancellationToken.None);
 
             Console.WriteLine($"[MultiAgentOrchestration] Analysis completed successfully. Results: {teamResult?.IndividualAnalyses?.Count ?? 0} analyses");
-            
-            // Analysis completed successfully
+
+            // Save agent session to browser storage when available
+            if (teamResult != null && agentStorageAvailable)
+            {
+                try
+                {
+                    await BrowserStorageService.SaveAgentSessionAsync(teamResult, lastBusinessObjective, lastCustomObjective, lastSelectedAgents, userFriendlyName: null);
+                    await LoadRecentAgentSessions();
+                }
+                catch { /* ignore persistence errors */ }
+            }
+
+            // Store in scoped result store so "Load results" fallback and timer can pick it up if the UI push is missed
+            if (teamResult != null)
+                LastResultStore.SetLastResult(teamResult, lastBusinessObjective ?? "", lastCustomObjective, lastSelectedAgents ?? new List<string>());
+
+            // Phase 1: Stop analyzing and show small "Analysis complete - Loading results..." so first render batch is small (fixes UI not updating after long async)
+            isAnalyzing = false;
+            showFullResults = false;
+            _pollTimer?.Dispose();
+            _pollTimer = null;
             configPanel?.CompleteAnalysis();
+            await InvokeAsync(StateHasChanged);
+
+            // Phase 2: After a short delay, show full results (second render batch)
+            await Task.Delay(200);
+            showFullResults = true;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(100);
+            try { await JSRuntime.InvokeVoidAsync("scrollToElement", "multiagent-results"); } catch { /* ignore */ }
         }
         catch (Exception ex)
         {
@@ -202,8 +305,10 @@
         finally
         {
             isAnalyzing = false;
+            _pollTimer?.Dispose();
+            _pollTimer = null;
             Console.WriteLine($"[MultiAgentOrchestration] Finally block: isAnalyzing = false");
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -240,6 +345,104 @@
             Console.WriteLine($"Failed to download report: {ex.Message}");
         }
     }
+
+    private async Task LoadRecentAgentSessions()
+    {
+        try
+        {
+            agentStorageAvailable = await BrowserStorageService.IsAvailableAsync();
+            if (agentStorageAvailable)
+            {
+                await BrowserStorageService.PurgeExpiredSessionsAsync();
+                recentAgentSessions = await BrowserStorageService.GetRecentAgentSessionsAsync(20);
+            }
+        }
+        catch
+        {
+            agentStorageAvailable = false;
+            recentAgentSessions = Array.Empty<SavedAgentSession>();
+        }
+        StateHasChanged();
+    }
+
+    private async Task DeleteAgentSession(string sessionId)
+    {
+        try
+        {
+            await BrowserStorageService.DeleteAgentSessionAsync(sessionId);
+            await LoadRecentAgentSessions();
+        }
+        catch { /* ignore */ }
+    }
+
+    private async Task LoadAgentSession(string sessionId)
+    {
+        try
+        {
+            var session = await BrowserStorageService.GetAgentSessionByIdAsync(sessionId);
+            if (session != null)
+            {
+                teamResult = session.TeamResult;
+                showFullResults = true;
+                lastBusinessObjective = session.BusinessObjective;
+                lastCustomObjective = session.CustomObjective;
+                lastSelectedAgents = session.SelectedAgents?.ToList() ?? new List<string>();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load agent session: {ex.Message}");
+        }
+    }
+
+    private System.Threading.Timer? _pollTimer;
+
+    private void StartPollingForCompletedResult()
+    {
+        _pollTimer?.Dispose();
+        _pollTimer = new System.Threading.Timer(_ =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                if (!isAnalyzing || teamResult != null) return;
+                var entry = LastResultStore.TryGetLastResult();
+                if (entry != null)
+                {
+                    teamResult = entry.Result;
+                    lastBusinessObjective = entry.BusinessObjective;
+                    lastCustomObjective = entry.CustomObjective;
+                    lastSelectedAgents = entry.SelectedAgents?.ToList() ?? new List<string>();
+                    showFullResults = true;
+                    isAnalyzing = false;
+                    configPanel?.CompleteAnalysis();
+                    _pollTimer?.Dispose();
+                    _pollTimer = null;
+                    StateHasChanged();
+                }
+            });
+        }, null, 3000, 3000);
+    }
+
+    private void TryLoadLastCompletedResult()
+    {
+        var entry = LastResultStore.TryGetLastResult();
+        if (entry != null)
+        {
+            teamResult = entry.Result;
+            lastBusinessObjective = entry.BusinessObjective;
+            lastCustomObjective = entry.CustomObjective;
+            lastSelectedAgents = entry.SelectedAgents?.ToList() ?? new List<string>();
+            showFullResults = true;
+            isAnalyzing = false;
+            configPanel?.CompleteAnalysis();
+            _pollTimer?.Dispose();
+            _pollTimer = null;
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose() => _pollTimer?.Dispose();
 
 }
 
