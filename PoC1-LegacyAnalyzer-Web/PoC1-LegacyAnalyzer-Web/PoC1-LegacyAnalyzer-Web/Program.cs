@@ -13,6 +13,7 @@ using PoC1_LegacyAnalyzer_Web.Middleware;
 using PoC1_LegacyAnalyzer_Web.Extensions;
 using PoC1_LegacyAnalyzer_Web.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.SignalR;
 
 public class Program
 {
@@ -150,7 +151,36 @@ public class Program
             }
         });
         builder.Services.AddRazorPages();
-        builder.Services.AddServerSideBlazor();
+        
+        // Configure Blazor Server with extended timeouts for long-running analysis operations
+        builder.Services.AddServerSideBlazor(options =>
+        {
+            // Increase timeout for long-running operations (e.g., code analysis)
+            // Default is 30 seconds, we increase to 10 minutes for AI analysis
+            options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(10);
+            
+            // Maximum number of circuits to retain in memory after disconnect
+            // This allows users to reconnect after temporary network issues
+            options.DetailedErrors = builder.Environment.IsDevelopment();
+            
+            // Increase the maximum receive message size for large file uploads
+            options.MaxBufferedUnacknowledgedRenderBatches = 10;
+        })
+        .AddHubOptions(options =>
+        {
+            // Increase SignalR message size limits for large analysis results
+            options.MaximumReceiveMessageSize = 10 * 1024 * 1024; // 10 MB
+            
+            // Increase timeouts for long-running operations
+            // Client timeout - how long the client will wait for a response
+            options.ClientTimeoutInterval = TimeSpan.FromMinutes(5);
+            
+            // Keep alive interval - how often to send keep-alive pings
+            options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+            
+            // Handshake timeout
+            options.HandshakeTimeout = TimeSpan.FromSeconds(30);
+        });
         
         // Add health checks
         builder.Services.AddHealthChecks()

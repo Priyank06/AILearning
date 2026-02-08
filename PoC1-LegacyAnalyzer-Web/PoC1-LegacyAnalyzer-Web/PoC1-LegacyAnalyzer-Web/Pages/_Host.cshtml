@@ -1,13 +1,67 @@
-﻿@page "/"
+@page "/"
 @namespace PoC1_LegacyAnalyzer_Web.Pages
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 @{
     Layout = "_Layout";
 }
 
+<!-- Blazor reconnection UI -->
+<div id="blazor-error-ui" class="alert alert-danger" role="alert" style="display: none;">
+    <strong>Connection lost!</strong> The application is attempting to reconnect...
+    <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="location.reload()">Reload</button>
+</div>
+
+<style>
+    #blazor-error-ui {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 9999;
+        margin: 0;
+        border-radius: 0;
+        text-align: center;
+        padding: 1rem;
+    }
+</style>
+
 <!-- Add this to your _Host.cshtml after the existing Chart.js script -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script src="~/js/scroll-helper.js"></script>
+
+<script>
+    // Blazor reconnection handler
+    window.Blazor = window.Blazor || {};
+    window.Blazor.defaultReconnectionHandler = new class {
+        constructor() {
+            this._currentAttempt = 0;
+        }
+        onConnectionDown(options, error) {
+            console.warn('Blazor connection down:', error);
+            document.getElementById('blazor-error-ui').style.display = 'block';
+            return true; // Always attempt to reconnect
+        }
+        onConnectionUp() {
+            console.log('Blazor connection restored');
+            document.getElementById('blazor-error-ui').style.display = 'none';
+            this._currentAttempt = 0;
+        }
+        async reconnect(reconnection) {
+            this._currentAttempt++;
+            console.log(`Reconnection attempt ${this._currentAttempt}...`);
+            
+            // Retry with increasing delays: 0s, 2s, 10s, 30s, then every 60s
+            const delays = [0, 2000, 10000, 30000];
+            const delay = this._currentAttempt <= delays.length 
+                ? delays[this._currentAttempt - 1] 
+                : 60000;
+            
+            await new Promise(resolve => setTimeout(resolve, delay));
+            
+            return reconnection.reconnect();
+        }
+    };
+</script>
 
 <script>    
     window.createSimpleChart = function(canvasId, chartType, labels, data, title) {
