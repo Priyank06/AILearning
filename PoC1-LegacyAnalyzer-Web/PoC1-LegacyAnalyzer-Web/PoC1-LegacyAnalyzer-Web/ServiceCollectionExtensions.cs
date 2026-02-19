@@ -109,6 +109,9 @@ namespace PoC1_LegacyAnalyzer_Web
             
             // Register finding validation service
             services.AddScoped<Services.Validation.IFindingValidationService, Services.Validation.FindingValidationService>();
+
+            // Register marketplace CSV validation service
+            services.AddSingleton<Services.Validation.IMarketplaceCsvValidationService, Services.Validation.MarketplaceCsvValidationService>();
             
             // Register robust JSON extractor service
             services.AddScoped<Services.AI.IRobustJsonExtractor, Services.AI.RobustJsonExtractor>();
